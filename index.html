@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1D3557">
-<title>AFRI-BAR Manager — Dépôt Boissons CI</title>
+<title>Sanix DistriPro ERP — Distribution Boissons CI</title>
 <style>
 /* ====================================================================
-   AFRI-BAR MANAGER — Charte graphique officielle
+   Sanix DistriPro ERP — Charte graphique officielle
    Vert Émeraude #0F8A5F · Orange Énergie #F28C28 · Bleu Nuit #1D3557
    ==================================================================== */
 :root{
@@ -316,12 +316,13 @@ table.tbl td .pill{display:inline-block;padding:2px 8px;border-radius:999px;
 
 <script>
 /* ====================================================================
-   AFRI-BAR MANAGER — Logique applicative
+   Sanix DistriPro ERP — Logique applicative
    ==================================================================== */
 "use strict";
 
 // ============ STORAGE LAYER (localStorage + fallback mémoire) ============
-const STORAGE_KEY = "afribar_v2";
+const STORAGE_KEY = "sanix_distripro_v2";
+const LEGACY_STORAGE_KEYS = ["afribar_v2"]; // migration depuis ancienne marque
 let _mem = null;
 function storageAvailable(){
   try{const k="__t__";localStorage.setItem(k,"1");localStorage.removeItem(k);return true;}catch(e){return false;}
@@ -330,7 +331,19 @@ const HAS_LS = storageAvailable();
 
 function loadState(){
   if(HAS_LS){
-    const raw = localStorage.getItem(STORAGE_KEY);
+    let raw = localStorage.getItem(STORAGE_KEY);
+    // Migration : essaye les anciennes clés si pas trouvé
+    if(!raw){
+      for(const k of LEGACY_STORAGE_KEYS){
+        const old = localStorage.getItem(k);
+        if(old){
+          raw = old;
+          localStorage.setItem(STORAGE_KEY, old); // copie sous la nouvelle clé
+          localStorage.removeItem(k);
+          break;
+        }
+      }
+    }
     if(raw){try{return JSON.parse(raw);}catch(e){console.warn("State corrupted, reset.");}}
   } else if (_mem) return _mem;
   return null;
@@ -339,9 +352,13 @@ function saveState(){
   const data = JSON.stringify(STATE);
   if(HAS_LS) localStorage.setItem(STORAGE_KEY, data);
   else _mem = JSON.parse(data);
+  if(typeof markSyncDirty === 'function') markSyncDirty();
 }
 function nuke(){
-  if(HAS_LS) localStorage.removeItem(STORAGE_KEY);
+  if(HAS_LS){
+    localStorage.removeItem(STORAGE_KEY);
+    LEGACY_STORAGE_KEYS.forEach(k=>localStorage.removeItem(k));
+  }
   _mem = null;
 }
 
@@ -441,7 +458,7 @@ function seedDemo(){
   };
   return {
     config: {
-      depot: { nom:"AFRI-BAR Dépôt Pilote", nif:"CI-D456789D", regime:"Réel Normal", tva:18,
+      depot: { nom:"Dépôt Pilote Sanix", nif:"CI-D456789D", regime:"Réel Normal", tva:18,
                adresse:"Treichville Zone Portuaire — Abidjan", telephone:"+225 27 21 75 30 00",
                manager:"Aboubacar Konaté", numero_rccm:"CI-ABJ-2024-A-12345" },
       fne: { active:true, api_url:"https://fne.dgi.gouv.ci/api", api_key:"", nif_emetteur:"CI-D456789D",
@@ -827,7 +844,7 @@ const NAV = [
 
 function renderSidebar(){
   const sb = $("#sidebar");
-  let html = `<div class="brand"><div class="logo">AB</div><div>AFRI-BAR<br><span style="font-size:11px;font-weight:500;color:#7b8aa3">Manager v2.0</span></div></div>`;
+  let html = `<div class="brand"><div class="logo">SD</div><div>Sanix DistriPro<br><span style="font-size:11px;font-weight:500;color:#7b8aa3">ERP v2.4</span></div></div>`;
   NAV.forEach(g=>{
     html += `<div class="grp">${g.group}</div>`;
     g.items.forEach(it=>{
@@ -835,7 +852,7 @@ function renderSidebar(){
       html += `<a class="nav-item${a}" data-view="${it.v}" onclick="route('${it.v}')"><span class="ico">${it.ic}</span><span>${it.l}</span></a>`;
     });
   });
-  html += `<div class="foot">📍 ${escapeHtml(STATE.config.depot.nom)}<br>NIF : ${escapeHtml(STATE.config.depot.nif)}<br>${HAS_LS?"💾 localStorage actif":"⚠️ mode mémoire"}</div>`;
+  html += `<div class="foot">📍 ${escapeHtml(STATE.config.depot.nom)}<br>NIF : ${escapeHtml(STATE.config.depot.nif)}<br>${HAS_LS?"💾 localStorage actif":"⚠️ mode mémoire"}<br><span id="syncBadge" style="display:inline-block;margin-top:6px;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer" onclick="route('parametrage')">⏸ Non connecté</span><br><br><span style="opacity:.7">Sanix Africa Division Technologies<br>Cyrille KESSIE · +225 07 79 18 10 75</span></div>`;
   sb.innerHTML = html;
 }
 function renderBnav(){
@@ -1611,6 +1628,88 @@ VIEWS.parametrage = function(){
           <input type="file" accept=".json" style="display:none" onchange="importData(event)">
         </label>
         <div class="hint mt-1">Stockage actif : ${HAS_LS?'<span class="success">localStorage ✓</span>':'<span class="warn">Mémoire (non persistant)</span>'}</div>
+      </div>
+
+      <div class="card" style="border-color:var(--structure)">
+        <h3>☁️ Synchronisation Cloud Supabase</h3>
+        <p class="f13" style="color:var(--muted)">
+          Architecture hybride : <strong>localStorage reste la source primaire</strong> (offline-first), Supabase sert de sauvegarde cloud et permet le multi-device. <strong>Authentification requise</strong> pour synchroniser.
+        </p>
+        <div class="card" style="background:var(--bg);padding:10px;margin-top:10px">
+          <div class="flex between"><span class="f12 muted">Utilisateur :</span><span id="sync_user" class="b700 f13">🔒 Non connecté</span></div>
+          <div class="flex between mt-1"><span class="f12 muted">Rôle :</span><span id="sync_role" class="f13">—</span></div>
+          <div class="flex between mt-1"><span class="f12 muted">État de la connexion :</span><span id="sync_state" class="b700 f13">⏸ Non testée</span></div>
+          <div class="flex between mt-1"><span class="f12 muted">Dernière synchronisation :</span><span id="sync_last" class="f13">${STATE.config._lastSync ? fmtDateTime(STATE.config._lastSync) : 'Jamais'}</span></div>
+          <div class="flex between mt-1"><span class="f12 muted">ID de cet appareil :</span><span class="f12 mono">${escapeHtml(getDeviceId())}</span></div>
+          <div class="flex between mt-1"><span class="f12 muted">Projet Supabase :</span><span class="f12 mono" style="opacity:.7">${SUPABASE_URL.replace('https://','').split('.')[0]}</span></div>
+        </div>
+        <div class="row row-2 mt-2">
+          <button class="btn block" onclick="openModal('auth')" id="syncBtnLogin">🔐 Se connecter</button>
+          <button class="btn block ghost" onclick="doSignOut()" id="syncBtnLogout" style="display:none">🚪 Se déconnecter</button>
+          <button class="btn block ghost" onclick="doSyncTest()">🔌 Tester</button>
+        </div>
+        <div class="row row-2 mt-1">
+          <button class="btn block" onclick="doSyncPush()" style="background:var(--structure)">⬆️ Pousser</button>
+          <button class="btn block ghost" onclick="doSyncPull()">⬇️ Récupérer</button>
+        </div>
+      </div>
+
+      <div class="card" style="border-color:var(--alert)">
+        <h3>🔄 Synchronisation automatique</h3>
+        <p class="f13" style="color:var(--muted)">
+          Quand activée, l'app pousse silencieusement vers Supabase à intervalle régulier dès qu'il y a des changements et que la connexion est active.
+        </p>
+        <div class="fld mt-2">
+          <label class="flex" style="cursor:pointer">
+            <input type="checkbox" id="cfg_autosync_en" ${STATE.config.auto_sync_enabled?'checked':''} onchange="toggleAutoSync(this.checked)">
+            <span class="f13">Activer la synchronisation automatique en arrière-plan</span>
+          </label>
+        </div>
+        <div class="fld">
+          <label>Intervalle (minutes)</label>
+          <select id="cfg_autosync_int" onchange="updateAutoSyncInterval(parseInt(this.value))">
+            <option value="2"  ${(STATE.config.auto_sync_interval_min||5)==2?'selected':''}>2 minutes</option>
+            <option value="5"  ${(STATE.config.auto_sync_interval_min||5)==5?'selected':''}>5 minutes (recommandé)</option>
+            <option value="10" ${(STATE.config.auto_sync_interval_min||5)==10?'selected':''}>10 minutes</option>
+            <option value="15" ${(STATE.config.auto_sync_interval_min||5)==15?'selected':''}>15 minutes</option>
+            <option value="30" ${(STATE.config.auto_sync_interval_min||5)==30?'selected':''}>30 minutes</option>
+            <option value="60" ${(STATE.config.auto_sync_interval_min||5)==60?'selected':''}>1 heure</option>
+          </select>
+        </div>
+        <div class="hint">
+          <strong>Détection de conflits :</strong> si un autre appareil pousse entre temps, l'auto-sync s'arrête et attend votre décision (le badge passe en ⚠ Conflit).
+        </div>
+      </div>
+
+      <div class="card" style="border-color:#7c3aed">
+        <h3>📊 Sync relationnelle (BI / exports SQL)</h3>
+        <p class="f13" style="color:var(--muted)">
+          En plus de la sauvegarde JSONB, alimente les tables normalisées (factures, clients, encaissements...) pour faire des requêtes SQL natives, dashboards externes (Metabase, Grafana), exports CSV.
+        </p>
+        <div class="fld mt-2">
+          <label class="flex" style="cursor:pointer">
+            <input type="checkbox" id="cfg_relational_en" ${STATE.config.relational_sync!==false?'checked':''} onchange="STATE.config.relational_sync=this.checked;saveState();_syncDirty=false;updateSyncBadge();">
+            <span class="f13">Activer le push relationnel parallèle (à chaque ⬆️ Pousser)</span>
+          </label>
+        </div>
+        <button class="btn block ghost mt-2" onclick="doSyncPushRelational()" style="border-color:#7c3aed;color:#7c3aed">📊 Pousser maintenant vers tables relationnelles</button>
+        <div class="hint mt-2">
+          Nécessite l'application de <code>supabase_relational_schema.sql</code>. Les vues SQL disponibles : <code>v_soldes_clients</code>, <code>v_ca_journalier</code>, <code>v_top_clients</code>, <code>v_consignations_actives</code>, <code>v_performance_livreurs</code>.
+        </div>
+      </div>
+
+      <div class="card" style="background:linear-gradient(135deg, var(--structure), var(--structure-2));color:#fff">
+        <h3 style="color:#fff">ℹ️ À propos de Sanix DistriPro ERP</h3>
+        <p class="f13" style="opacity:.95">
+          Solution ERP de gestion de distribution boissons conçue pour le marché ivoirien.
+          Conforme DGI Côte d'Ivoire (FNE, TVA 18%, consigne d'emballage hors TVA).
+        </p>
+        <div class="f13" style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15)">
+          <strong>🏢 Concepteur :</strong> Sanix Africa Division Technologies<br>
+          <strong>👤 Auteur :</strong> Cyrille KESSIE<br>
+          <strong>📞 Contact :</strong> <a href="tel:+22507791810750" style="color:#fff;text-decoration:underline">+225 07 79 18 10 75</a><br>
+          <strong>📦 Version :</strong> ERP v2.4 — Juin 2026
+        </div>
       </div>
 
       <div class="card" style="border-color:var(--danger);background:#fffafa">
@@ -2477,6 +2576,7 @@ MODALS.detailFacture = (id)=>{
         ${f.fne_certifie?`Certification FNE : ${f.fne_code} · API DGI Côte d'Ivoire`:'⚠️ Facture non certifiée FNE'}
         <br>${f.statut==='Payée'?'✓ Réglée intégralement':'Reste à payer : '+fmtFCFA(f.reste_a_payer)}
         ${cons_nette>0?`<br>⚠️ Consignation ouverte : ${fmtFCFA(cons_nette)} en emballages à rapporter`:''}
+        <br><br><span style="opacity:.6;font-size:9px">Émis avec Sanix DistriPro ERP · Sanix Africa Division Technologies · Cyrille KESSIE · +225 07 79 18 10 75</span>
       </div>
     </div>
 
@@ -2698,7 +2798,7 @@ function exportData(){
   const blob = new Blob([JSON.stringify(STATE,null,2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = `afribar_export_${today()}.json`; a.click();
+  a.href = url; a.download = `sanix_distripro_export_${today()}.json`; a.click();
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
   toast("Export JSON téléchargé","success");
 }
@@ -4018,7 +4118,7 @@ VIEWS.badges = function(){
 function renderBadge(c){
   return `<div class="card" style="padding:0;overflow:hidden;cursor:pointer" onclick="printBadge('${c.id}')">
     <div style="background:linear-gradient(135deg,var(--primary),#0a6e4c);color:#fff;padding:10px 12px;display:flex;justify-content:space-between;align-items:center">
-      <div><div style="font-weight:900;font-size:13px">🍺 AFRI-BAR</div><div style="font-size:9px;opacity:.85">Badge client</div></div>
+      <div><div style="font-weight:900;font-size:13px">🍺 Sanix DistriPro</div><div style="font-size:9px;opacity:.85">Badge client</div></div>
       ${genIdenticon(c.id, 36)}
     </div>
     <div style="padding:10px 12px">
@@ -4051,14 +4151,14 @@ window.printBadge = function(clientId){
       svg{display:block}
     </style></head><body>
     <div class="badge">
-      <div class="hd"><div><div class="lo">🍺 AFRI-BAR</div><div class="sub">Badge d'identification client</div></div>${genIdenticon(c.id, 34)}</div>
+      <div class="hd"><div><div class="lo">🍺 Sanix DistriPro</div><div class="sub">Badge d'identification client</div></div>${genIdenticon(c.id, 34)}</div>
       <div class="body">
         <div class="nm">${escapeHtml(c.nom)}</div>
         <div class="info">${escapeHtml(c.type||"")} · ${escapeHtml(c.adresse||"")}</div>
         <div class="code">${escapeHtml(c.code_badge||"")}</div>
         <div class="info" style="text-align:center;margin-top:4px">📞 ${escapeHtml(c.telephone||"")}</div>
       </div>
-      <div class="ft">Dépôt : ${escapeHtml(STATE.config.depot.nom)} · NIF ${escapeHtml(STATE.config.depot.nif)}</div>
+      <div class="ft">Dépôt : ${escapeHtml(STATE.config.depot.nom)} · NIF ${escapeHtml(STATE.config.depot.nif)}<br><span style="font-size:7px;opacity:.6">Sanix DistriPro ERP · +225 07 79 18 10 75</span></div>
     </div>
     </body></html>`);
   win.document.close();
@@ -4069,16 +4169,16 @@ window.printAllBadges = function(){
   const win = window.open("","_blank","width=800,height=900");
   const badges = STATE.clients.map(c=>`
     <div class="badge">
-      <div class="hd"><div><div class="lo">🍺 AFRI-BAR</div><div class="sub">Badge client</div></div>${genIdenticon(c.id, 34)}</div>
+      <div class="hd"><div><div class="lo">🍺 Sanix DistriPro</div><div class="sub">Badge client</div></div>${genIdenticon(c.id, 34)}</div>
       <div class="body">
         <div class="nm">${escapeHtml(c.nom)}</div>
         <div class="info">${escapeHtml(c.type||"")} · ${escapeHtml(c.adresse||"")}</div>
         <div class="code">${escapeHtml(c.code_badge||"")}</div>
         <div class="info" style="text-align:center;margin-top:4px">📞 ${escapeHtml(c.telephone||"")}</div>
       </div>
-      <div class="ft">Dépôt : ${escapeHtml(STATE.config.depot.nom)}</div>
+      <div class="ft">Dépôt : ${escapeHtml(STATE.config.depot.nom)}<br><span style="font-size:7px;opacity:.6">Sanix DistriPro ERP</span></div>
     </div>`).join("");
-  win.document.write(`<!doctype html><html><head><title>Badges AFRI-BAR</title>
+  win.document.write(`<!doctype html><html><head><title>Badges Sanix DistriPro</title>
     <style>
       body{margin:0;padding:8mm;font-family:Arial,sans-serif;color:#1D3557;display:flex;flex-wrap:wrap;gap:4mm}
       .badge{width:74mm;height:52mm;border:1px dashed #ccc;display:flex;flex-direction:column;background:#fff;page-break-inside:avoid}
@@ -4453,6 +4553,9 @@ window.printBordereau = function(tId){
     <div style="margin-top:14px;text-align:right;font-weight:900">
       Total tournée : ${fmtFCFA(tourneeStats(t).prevu_ttc)}<br>
       <span style="font-weight:500;font-size:10px;color:#666">${t.livraisons.length} livraison(s)</span>
+    </div>
+    <div style="margin-top:18px;padding-top:8px;border-top:1px dashed #ccc;font-size:9px;color:#999;text-align:center">
+      Émis avec Sanix DistriPro ERP · Sanix Africa Division Technologies · Cyrille KESSIE · +225 07 79 18 10 75
     </div>
     <div class="noprint" style="margin-top:20px;text-align:center"><button onclick="window.print()" style="padding:10px 20px;background:#0F8A5F;color:#fff;border:none;border-radius:6px;cursor:pointer">🖨 Imprimer</button></div>
     </body></html>`;
@@ -5032,6 +5135,7 @@ MODALS.detailRetour = (id)=>{
         <strong>Application :</strong> ${escapeHtml(modeAppliLabel(r.mode_application))}${r.reduction_appliquee?` (réduction effective : ${fmtFCFA(r.reduction_appliquee)})`:''}<br>
         <strong>Destination :</strong> ${r.destination==="reaffectation" ? "🔁 Réaffectée à "+escapeHtml(destCl?.nom||"")+(destFac?` (facture ${escapeHtml(destFac.numero)})`:'') : "🏬 Stock du dépôt"}
         ${r.fne_certifie?`<br>Certification : ${r.fne_code}`:'<br>⚠️ Non certifié FNE'}
+        <br><br><span style="opacity:.6;font-size:9px">Émis avec Sanix DistriPro ERP · Sanix Africa Division Technologies · Cyrille KESSIE · +225 07 79 18 10 75</span>
       </div>
     </div>
 
@@ -5064,6 +5168,755 @@ window.renderRetourLignes = renderRetourLignes;
 window.recomputeRetour = recomputeRetour;
 
 /* ====================================================================
+   ============ MODULE SYNCHRONISATION SUPABASE (v2.4) ============
+   Architecture hybride : localStorage = source primaire (offline-first)
+                          Supabase    = sauvegarde cloud + multi-device
+   Stratégie : push complet du STATE en JSONB (last-write-wins par device)
+   ==================================================================== */
+
+const SUPABASE_URL = "https://ypwsoltjfnpjavhucxwz.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_2L9rpDdpho3NEKy-uz2Jbg_hVfjAIf1";
+const SUPABASE_PROJECT_REF = "ypwsoltjfnpjavhucxwz";
+let _supaClient = null;
+let _supaLoading = false;
+let _authUser = null;
+let _authRole = null;          // 'admin'|'manager'|'livreur'|'comptable'|null
+let _pendingAfterAuth = null;
+let _syncDirty = false;        // changements non synchronisés depuis dernier push réussi
+let _autoSyncTimer = null;
+let _lastAutoSyncAttempt = 0;
+let _lastCloudVersion = null;  // dernière version connue du cloud (pour détecter conflits)
+
+// Marquage "données modifiées" — appelé depuis saveState
+function markSyncDirty(){
+  _syncDirty = true;
+  updateSyncBadge();
+}
+
+// Badge de sync dans la sidebar (état temps réel)
+function updateSyncBadge(){
+  const badge = document.getElementById('syncBadge');
+  if(!badge) return;
+  if(!_authUser){
+    badge.innerHTML = '🔐 Non connecté';
+    badge.style.background = 'transparent';
+    badge.style.color = 'var(--muted)';
+  } else if(!navigator.onLine){
+    badge.innerHTML = '🔴 Hors-ligne';
+    badge.style.background = 'rgba(220,38,38,.1)';
+    badge.style.color = 'var(--danger)';
+  } else if(_syncDirty){
+    badge.innerHTML = '🟠 Sync en attente';
+    badge.style.background = 'rgba(242,140,40,.15)';
+    badge.style.color = 'var(--alert)';
+  } else {
+    badge.innerHTML = '🟢 Synchronisé';
+    badge.style.background = 'rgba(15,138,95,.15)';
+    badge.style.color = 'var(--primary)';
+  }
+}
+window.addEventListener('online', updateSyncBadge);
+window.addEventListener('offline', updateSyncBadge);
+
+// Récupère ou génère un device_id unique pour cet appareil
+function getDeviceId(){
+  let id = localStorage.getItem('sanix_device_id');
+  if(!id){
+    id = 'dev_' + Math.random().toString(36).slice(2,10) + '_' + Date.now().toString(36).slice(-4);
+    localStorage.setItem('sanix_device_id', id);
+  }
+  return id;
+}
+
+// Charge la lib Supabase à la demande (CDN)
+async function loadSupabaseLib(){
+  if(window.supabase && window.supabase.createClient) return true;
+  if(_supaLoading) return new Promise(r=>setTimeout(()=>r(loadSupabaseLib()), 100));
+  _supaLoading = true;
+  return new Promise((resolve)=>{
+    const s = document.createElement('script');
+    s.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js";
+    s.onload = () => { _supaLoading = false; resolve(true); };
+    s.onerror = () => { _supaLoading = false; resolve(false); };
+    document.head.appendChild(s);
+  });
+}
+
+// Obtient (ou crée) le client Supabase
+async function ensureSupabase(){
+  if(_supaClient) return _supaClient;
+  const loaded = await loadSupabaseLib();
+  if(!loaded){
+    toast("Lib Supabase non chargée — vérifiez la connexion internet","error");
+    return null;
+  }
+  try{
+    _supaClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storageKey: 'sb-' + SUPABASE_PROJECT_REF + '-auth-token'
+      }
+    });
+    _supaClient.auth.onAuthStateChange(async (event, session)=>{
+      _authUser = session ? session.user : null;
+      _authRole = null;
+      if(_authUser){
+        try{
+          const { data } = await _supaClient.from('profiles').select('role,full_name').eq('id', _authUser.id).maybeSingle();
+          _authRole = data?.role || 'manager';
+          _authUser._profile_name = data?.full_name;
+        }catch(e){ _authRole = 'manager'; }
+        if(event === 'SIGNED_IN'){
+          _supaClient.from('profiles').update({
+            derniere_connexion: new Date().toISOString(),
+            device_id_last: getDeviceId()
+          }).eq('id', _authUser.id).then(()=>{});
+        }
+      }
+      updateSyncUI();
+      updateSyncBadge();
+    });
+    const { data } = await _supaClient.auth.getSession();
+    if(data?.session){
+      _authUser = data.session.user;
+      try{
+        const { data: p } = await _supaClient.from('profiles').select('role,full_name').eq('id', _authUser.id).maybeSingle();
+        _authRole = p?.role || 'manager';
+        _authUser._profile_name = p?.full_name;
+      }catch(e){ _authRole = 'manager'; }
+      updateSyncBadge();
+    }
+    return _supaClient;
+  }catch(e){
+    toast("Erreur création client Supabase : "+e.message,"error");
+    return null;
+  }
+}
+
+async function requireAuth(callback){
+  const sb = await ensureSupabase();
+  if(!sb) return null;
+  if(_authUser) return sb;
+  _pendingAfterAuth = callback;
+  openModal('auth');
+  return null;
+}
+
+// Vérifie si le rôle courant peut écrire
+function canWrite(){ return _authRole && ['admin','manager','livreur'].includes(_authRole); }
+function canManage(){ return _authRole && ['admin','manager'].includes(_authRole); }
+
+// Récupère la version courante du cloud (pour détecter les conflits)
+async function getCloudVersion(){
+  const sb = _supaClient || await ensureSupabase();
+  if(!sb) return null;
+  try{
+    const { data, error } = await sb.from('app_state').select('version,device_id,updated_at,size_bytes').eq('id','main').maybeSingle();
+    if(error) return null;
+    return data;
+  }catch(e){ return null; }
+}
+
+// ============================================================================
+// PUSH avec détection de conflits
+// ============================================================================
+async function doSyncPush(opts){
+  opts = opts || {};
+  const silent = !!opts.silent;
+  const force = !!opts.force;
+  if(!silent){
+    const sb_check = await requireAuth(()=>doSyncPush({}));
+    if(!sb_check) return;
+  } else {
+    if(!_authUser) return;
+  }
+  if(!canWrite()){
+    if(!silent) toast(`Rôle "${_authRole||'?'}" ne permet pas d'écrire`,"error");
+    return;
+  }
+
+  // Détection de conflit : la version cloud actuelle est-elle plus récente que ce que nous avons vu ?
+  if(!force && _lastCloudVersion !== null){
+    const cloud = await getCloudVersion();
+    if(cloud && cloud.version > _lastCloudVersion && cloud.device_id !== getDeviceId()){
+      // Conflit ! Un autre device a poussé entre temps
+      if(silent){
+        console.warn('[auto-sync] conflit détecté, sync différée');
+        if(document.getElementById('sync_state')){
+          document.getElementById('sync_state').innerHTML = '⚠ Conflit détecté';
+          document.getElementById('sync_state').style.color = 'var(--alert)';
+        }
+        return; // ne pas pousser silencieusement en cas de conflit
+      }
+      // Ouvre le modal de résolution de conflit
+      openConflictModal(cloud);
+      return;
+    }
+  }
+
+  const elState = document.getElementById('sync_state');
+  if(!silent && elState){ elState.innerHTML = '⏳ Envoi…'; elState.style.color = 'var(--alert)'; }
+  if(!silent) toast("Envoi en cours…","info");
+
+  const sb = await ensureSupabase();
+  if(!sb) return;
+  const t0 = Date.now();
+  const deviceId = getDeviceId();
+  const userId = _authUser?.id || null;
+  const payload = JSON.stringify(STATE);
+  const sizeBytes = new Blob([payload]).size;
+  const newVersion = Math.floor(Date.now()/1000);
+
+  try{
+    const { error } = await sb.from('app_state').upsert({
+      id: 'main',
+      data: STATE,
+      device_id: deviceId,
+      user_id: userId,
+      version: newVersion,
+      size_bytes: sizeBytes,
+      notes: `Sync par ${_authUser?.email||'?'} · ${STATE.factures?.length||0} factures · ${STATE.tournees?.length||0} tournées · ${STATE.retours_marchandise?.length||0} retours`,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+    const ms = Date.now() - t0;
+
+    sb.from('sync_log').insert({
+      device_id: deviceId, user_id: userId, direction: 'push',
+      status: error ? 'error' : 'success',
+      records_count: 1, size_bytes: sizeBytes, duration_ms: ms,
+      error_msg: error ? error.message : null
+    }).then(()=>{});
+
+    if(error){
+      if(!silent && elState){ elState.innerHTML = '❌ ' + escapeHtml(error.message.slice(0,50)); elState.style.color = 'var(--danger)'; }
+      if(!silent) toast("Erreur push : "+error.message,"error");
+      return;
+    }
+    _lastCloudVersion = newVersion;
+    _syncDirty = false;
+    STATE.config._lastSync = new Date().toISOString();
+    STATE.config._lastCloudVersion = newVersion;
+    saveState();
+    _syncDirty = false; // saveState le remet à true, on l'éteint car le push EST la sauvegarde
+    updateSyncBadge();
+    const elLast = document.getElementById('sync_last');
+    if(elLast) elLast.textContent = fmtDateTime(STATE.config._lastSync);
+    if(!silent && elState){ elState.innerHTML = `✓ Poussé (${ms} ms · ${(sizeBytes/1024).toFixed(1)} Ko)`; elState.style.color = 'var(--primary)'; }
+    if(!silent) toast(`Sauvegarde cloud réussie (${(sizeBytes/1024).toFixed(1)} Ko en ${ms} ms)`,"success");
+
+    // Push relationnel parallèle (best-effort, ne bloque pas l'UI)
+    if(STATE.config.relational_sync !== false){
+      doSyncPushRelational({silent:true}).then(()=>{});
+    }
+  }catch(e){
+    if(!silent && elState){ elState.innerHTML = '❌ Réseau'; elState.style.color = 'var(--danger)'; }
+    if(!silent) toast("Erreur réseau : "+e.message,"error");
+  }
+}
+
+// ============================================================================
+// PULL (récupère le cloud → écrase le local)
+// ============================================================================
+async function doSyncPull(){
+  const sb = await requireAuth(doSyncPull);
+  if(!sb) return;
+  const elState = document.getElementById('sync_state');
+  if(elState){ elState.innerHTML = '⏳ Téléchargement…'; elState.style.color = 'var(--alert)'; }
+  try{
+    const t0 = Date.now();
+    const { data, error } = await sb.from('app_state').select('*').eq('id','main').maybeSingle();
+    const ms = Date.now() - t0;
+    if(error){
+      if(elState){ elState.innerHTML = '❌ ' + escapeHtml(error.message.slice(0,50)); elState.style.color = 'var(--danger)'; }
+      toast("Erreur pull : "+error.message,"error");
+      return;
+    }
+    if(!data){
+      if(elState){ elState.innerHTML = '⚠ Aucune donnée cloud'; elState.style.color = 'var(--alert)'; }
+      toast("Aucune donnée trouvée dans Supabase — faites un Push d'abord","warn");
+      return;
+    }
+    const remoteDate = new Date(data.updated_at).toLocaleString('fr-FR');
+    const remoteDevice = data.device_id || 'inconnu';
+    const sizeKo = data.size_bytes ? (data.size_bytes/1024).toFixed(1) : '?';
+    const stats = `Factures: ${data.data.factures?.length||0} · Tournées: ${data.data.tournees?.length||0} · Retours: ${data.data.retours_marchandise?.length||0}`;
+    if(!confirm(`⚠️ Remplacer les données locales par la version cloud ?\n\nVersion cloud :\n• Mise à jour : ${remoteDate}\n• Appareil source : ${remoteDevice}\n• Taille : ${sizeKo} Ko\n• ${stats}\n\nCette action est IRRÉVERSIBLE (sauvegarder local d'abord si besoin).`)){
+      if(elState){ elState.innerHTML = '⏸ Annulé'; elState.style.color = 'var(--muted)'; }
+      return;
+    }
+
+    sb.from('sync_log').insert({
+      device_id: getDeviceId(), user_id: _authUser?.id || null, direction: 'pull',
+      status: 'success', records_count: 1, size_bytes: data.size_bytes, duration_ms: ms
+    }).then(()=>{});
+
+    STATE = data.data;
+    _lastCloudVersion = data.version;
+    STATE.config._lastSync = new Date().toISOString();
+    STATE.config._lastCloudVersion = data.version;
+    saveState();
+    _syncDirty = false;
+    toast(`Données restaurées depuis le cloud (${sizeKo} Ko)`,"success");
+    setTimeout(()=>location.reload(), 800);
+  }catch(e){
+    if(elState){ elState.innerHTML = '❌ Réseau'; elState.style.color = 'var(--danger)'; }
+    toast("Erreur réseau : "+e.message,"error");
+  }
+}
+
+// ============================================================================
+// MODAL DE RÉSOLUTION DE CONFLIT
+// ============================================================================
+function openConflictModal(cloud){
+  const sizeKo = cloud.size_bytes ? (cloud.size_bytes/1024).toFixed(1) : '?';
+  const remoteDate = new Date(cloud.updated_at).toLocaleString('fr-FR');
+  const localCount = (STATE.factures?.length||0) + (STATE.tournees?.length||0) + (STATE.encaissements?.length||0);
+  MODALS.syncConflict = ()=> modalShell("⚠️ Conflit de synchronisation détecté", `
+    <div class="card" style="background:#fff3e0;border-color:var(--alert)">
+      <strong style="color:var(--alert)">📡 Un autre appareil a modifié les données cloud depuis votre dernière sync.</strong>
+      <p class="f12 mt-1">Vous devez choisir comment résoudre ce conflit. Aucune des options n'est mauvaise — choisissez selon votre situation.</p>
+    </div>
+
+    <div class="grid grid-2 mt-2">
+      <div class="card" style="background:var(--primary-light);border-color:var(--primary)">
+        <h3 style="color:var(--primary)">💻 Votre version locale</h3>
+        <div class="f12">Appareil : <strong>${escapeHtml(getDeviceId())}</strong></div>
+        <div class="f12">Dernière modification : maintenant</div>
+        <div class="f12">Contenu : ~${localCount} entrées</div>
+      </div>
+      <div class="card" style="background:#fff3e0;border-color:var(--alert)">
+        <h3 style="color:var(--alert)">☁️ Version cloud</h3>
+        <div class="f12">Appareil source : <strong>${escapeHtml(cloud.device_id||"?")}</strong></div>
+        <div class="f12">Modifiée le : ${remoteDate}</div>
+        <div class="f12">Taille : ${sizeKo} Ko</div>
+      </div>
+    </div>
+
+    <div class="section-title">Quelle version voulez-vous garder ?</div>
+
+    <div class="card mb-1" style="cursor:pointer;border-color:var(--primary)" onclick="resolveConflict('force-local')">
+      <strong>1️⃣ Forcer ma version locale</strong> <span class="pill ok">Recommandé si vous avez beaucoup travaillé localement</span>
+      <p class="f12 muted mt-1">Pousse votre état actuel vers le cloud, écrase la version distante. Les modifications de l'autre appareil seront PERDUES.</p>
+    </div>
+
+    <div class="card mb-1" style="cursor:pointer;border-color:var(--alert)" onclick="resolveConflict('take-remote')">
+      <strong>2️⃣ Prendre la version cloud</strong> <span class="pill warn">Recommandé si l'autre appareil est la "source de vérité"</span>
+      <p class="f12 muted mt-1">Remplace votre état local par celui du cloud. Vos modifications locales seront PERDUES.</p>
+    </div>
+
+    <div class="card mb-1" style="cursor:pointer;border-color:var(--structure)" onclick="resolveConflict('export-then-pull')">
+      <strong>3️⃣ Exporter local, puis prendre cloud</strong> <span class="pill info">Le plus sûr</span>
+      <p class="f12 muted mt-1">Télécharge votre état local en JSON (sauvegarde), PUIS remplace par le cloud. Vous pourrez réintégrer manuellement si besoin.</p>
+    </div>
+
+    <div class="card mb-1" style="cursor:pointer;opacity:.7" onclick="closeModal()">
+      <strong>↩️ Annuler</strong>
+      <p class="f12 muted mt-1">Ne rien faire pour l'instant. Vous restez en désynchronisation jusqu'à la prochaine décision.</p>
+    </div>
+  `, `<button class="btn ghost" onclick="closeModal()">Fermer</button>`);
+  openModal('syncConflict');
+}
+
+window.resolveConflict = async function(choice){
+  closeModal();
+  if(choice === 'force-local'){
+    await doSyncPush({force:true});
+  } else if(choice === 'take-remote'){
+    await doSyncPull();
+  } else if(choice === 'export-then-pull'){
+    exportJSON();
+    await new Promise(r=>setTimeout(r, 500));
+    await doSyncPull();
+  }
+};
+
+// ============================================================================
+// PUSH RELATIONNEL (alimente les tables normalisées pour BI/exports)
+// ============================================================================
+async function doSyncPushRelational(opts){
+  opts = opts || {};
+  const silent = !!opts.silent;
+  const sb = silent ? (_supaClient || await ensureSupabase()) : await requireAuth(()=>doSyncPushRelational({}));
+  if(!sb || !_authUser) return;
+  if(!canWrite()) {
+    if(!silent) toast("Rôle insuffisant pour écrire","error");
+    return;
+  }
+
+  // Ordre : parents → enfants pour respecter les FK
+  const PUSH_ORDER = [
+    ['concessionnaires','concessionnaires'],
+    ['fournisseurs','fournisseurs'],
+    ['depots','depots'],
+    ['articles','articles'],
+    ['clients','clients'],
+    ['achats','achats'],
+    ['transferts','transferts'],
+    ['factures','factures'],
+    ['encaissements','encaissements'],
+    ['consignations','consignations'],
+    ['mouvements','mouvements'],
+    ['tournees','tournees'],
+    ['retours_marchandise','retours_marchandise'],
+    ['ristournes_contrats','ristournes_contrats'],
+  ];
+  const results = [];
+  let totalOk = 0, totalFail = 0, totalSkip = 0;
+  const t0 = Date.now();
+
+  for(const [tableName, stateKey] of PUSH_ORDER){
+    const data = STATE[stateKey] || [];
+    if(data.length === 0){
+      results.push({table: tableName, count: 0, status: 'skipped'});
+      totalSkip++;
+      continue;
+    }
+    try{
+      // Nettoie les champs JS-only (références circulaires, _seedExtras, etc.)
+      const cleaned = data.map(d => {
+        const obj = {};
+        for(const k in d){
+          if(k.startsWith('_')) continue;
+          obj[k] = d[k];
+        }
+        return obj;
+      });
+      const { error } = await sb.from(tableName).upsert(cleaned, {onConflict:'id'});
+      if(error){
+        results.push({table: tableName, count: cleaned.length, status: 'error', error: error.message});
+        totalFail++;
+      } else {
+        results.push({table: tableName, count: cleaned.length, status: 'ok'});
+        totalOk++;
+      }
+    }catch(e){
+      results.push({table: tableName, count: data.length, status: 'error', error: e.message});
+      totalFail++;
+    }
+  }
+  const ms = Date.now() - t0;
+
+  if(silent){
+    console.log(`[relational-sync] ${ms}ms · ok:${totalOk} fail:${totalFail} skip:${totalSkip}`, results);
+    return {ok: totalFail === 0, results, ms};
+  }
+  // Affichage du rapport
+  let report = `<div class="card" style="background:var(--bg)"><strong>📊 Sync relationnelle — ${ms} ms</strong><br>
+    <span class="f12">✓ ${totalOk} tables peuplées · ⏭ ${totalSkip} vides · ❌ ${totalFail} erreurs</span></div>
+    <table class="tbl mt-2"><thead><tr><th>Table</th><th>Lignes</th><th>Statut</th></tr></thead><tbody>`;
+  results.forEach(r=>{
+    const ico = r.status==='ok'?'✓':(r.status==='skipped'?'⏭':'❌');
+    const cls = r.status==='ok'?'ok':(r.status==='skipped'?'muted':'bad');
+    report += `<tr><td>${escapeHtml(r.table)}</td><td>${r.count}</td><td><span class="pill ${cls}">${ico} ${r.status}${r.error?': '+escapeHtml(r.error.slice(0,40)):''}</span></td></tr>`;
+  });
+  report += '</tbody></table>';
+  if(totalFail > 0){
+    report += `<div class="hint mt-2">💡 Erreurs fréquentes : tables relationnelles non créées (appliquez <code>supabase_relational_schema.sql</code>), ou contraintes FK violées. L'app continue de fonctionner avec app_state — les tables relationnelles sont un bonus pour le BI.</div>`;
+  }
+  MODALS.relReport = ()=> modalShell("📊 Rapport de synchronisation relationnelle", report,
+    `<button class="btn" onclick="closeModal()">Fermer</button>`);
+  openModal('relReport');
+  return {ok: totalFail === 0, results, ms};
+}
+
+// ============================================================================
+// AUTO-SYNC EN ARRIÈRE-PLAN
+// ============================================================================
+async function autoSyncTick(){
+  // Conditions : connecté + en ligne + dirty + dernier tick > 30s
+  if(!_authUser || !navigator.onLine || !_syncDirty) return;
+  if(Date.now() - _lastAutoSyncAttempt < 30000) return;
+  if(!canWrite()) return;
+  _lastAutoSyncAttempt = Date.now();
+  console.log('[auto-sync] tick → push silencieux');
+  await doSyncPush({silent:true});
+}
+
+function startAutoSync(){
+  if(_autoSyncTimer){ clearInterval(_autoSyncTimer); _autoSyncTimer = null; }
+  if(!STATE.config.auto_sync_enabled) return;
+  const intMin = STATE.config.auto_sync_interval_min || 5;
+  _autoSyncTimer = setInterval(autoSyncTick, intMin * 60 * 1000);
+  console.log(`[auto-sync] activé · intervalle ${intMin} min`);
+}
+
+function stopAutoSync(){
+  if(_autoSyncTimer){ clearInterval(_autoSyncTimer); _autoSyncTimer = null; }
+  console.log('[auto-sync] désactivé');
+}
+
+window.startAutoSync = startAutoSync;
+window.stopAutoSync = stopAutoSync;
+window.doSyncPushRelational = doSyncPushRelational;
+window.canWrite = canWrite;
+window.canManage = canManage;
+
+// MAJ de l'interface de la carte sync selon état auth
+function updateSyncUI(){
+  const elState = document.getElementById('sync_state');
+  const elUser  = document.getElementById('sync_user');
+  const elRole  = document.getElementById('sync_role');
+  const btnLogin = document.getElementById('syncBtnLogin');
+  const btnLogout = document.getElementById('syncBtnLogout');
+  if(_authUser){
+    if(elUser) elUser.innerHTML = `✓ <strong>${escapeHtml(_authUser.email)}</strong>`;
+    if(elRole){
+      const roleIcons = {admin:'👑', manager:'🏢', livreur:'🚚', comptable:'📊'};
+      const roleColors = {admin:'#dc2626', manager:'#0F8A5F', livreur:'#F28C28', comptable:'#7c3aed'};
+      const r = _authRole || '?';
+      elRole.innerHTML = `<span class="pill" style="background:${roleColors[r]||'var(--muted)'};color:#fff">${roleIcons[r]||'❓'} ${r}</span>`;
+    }
+    if(elState && elState.textContent.includes('Non testée')){
+      elState.innerHTML = '🟢 Prêt à synchroniser';
+      elState.style.color = 'var(--primary)';
+    }
+    if(btnLogin) btnLogin.style.display = 'none';
+    if(btnLogout) btnLogout.style.display = '';
+  } else {
+    if(elUser) elUser.innerHTML = '🔒 Non connecté';
+    if(elRole) elRole.innerHTML = '—';
+    if(elState && !elState.textContent.includes('Erreur') && !elState.textContent.includes('Connecté')){
+      elState.innerHTML = '⏸ Non connecté';
+      elState.style.color = 'var(--muted)';
+    }
+    if(btnLogin) btnLogin.style.display = '';
+    if(btnLogout) btnLogout.style.display = 'none';
+  }
+  updateSyncBadge();
+}
+
+window.toggleAutoSync = function(enabled){
+  STATE.config.auto_sync_enabled = !!enabled;
+  saveState();
+  _syncDirty = false; // saveState met dirty, on annule (c'est juste un toggle de config)
+  if(enabled){
+    if(!_authUser){
+      toast("Connectez-vous d'abord pour activer l'auto-sync","warn");
+      $("#cfg_autosync_en").checked = false;
+      STATE.config.auto_sync_enabled = false;
+      saveState();
+      _syncDirty = false;
+      return;
+    }
+    startAutoSync();
+    toast("Auto-sync activée — toutes les " + (STATE.config.auto_sync_interval_min||5) + " minutes","success");
+  } else {
+    stopAutoSync();
+    toast("Auto-sync désactivée","info");
+  }
+  updateSyncBadge();
+};
+
+window.updateAutoSyncInterval = function(min){
+  STATE.config.auto_sync_interval_min = min;
+  saveState();
+  _syncDirty = false;
+  if(STATE.config.auto_sync_enabled){
+    startAutoSync(); // redémarre avec nouvelle interval
+    toast("Intervalle mis à jour : " + min + " min","success");
+  }
+};
+
+// --- Connexion email/password ---
+async function doSignIn(){
+  const email = $("#auth_signin_email").value.trim();
+  const password = $("#auth_signin_pwd").value;
+  if(!email || !password){ toast("Email et mot de passe requis","error"); return; }
+  const sb = await ensureSupabase();
+  if(!sb) return;
+  const btn = $("#auth_signin_btn");
+  if(btn){ btn.disabled = true; btn.textContent = "⏳ Connexion…"; }
+  try{
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if(error){
+      toast("Échec : "+error.message,"error");
+      if(btn){ btn.disabled = false; btn.textContent = "Se connecter"; }
+      return;
+    }
+    _authUser = data.user;
+    toast("Connecté ✓","success");
+    closeModal();
+    if(_pendingAfterAuth){ const fn = _pendingAfterAuth; _pendingAfterAuth = null; setTimeout(fn, 200); }
+    else { route("parametrage"); }
+  }catch(e){
+    toast("Erreur : "+e.message,"error");
+    if(btn){ btn.disabled = false; btn.textContent = "Se connecter"; }
+  }
+}
+
+// --- Inscription email/password ---
+async function doSignUp(){
+  const email = $("#auth_signup_email").value.trim();
+  const password = $("#auth_signup_pwd").value;
+  const confirm = $("#auth_signup_pwd2").value;
+  const fullName = $("#auth_signup_name").value.trim();
+  if(!email || !password){ toast("Email et mot de passe requis","error"); return; }
+  if(password.length < 6){ toast("Mot de passe : 6 caractères minimum","error"); return; }
+  if(password !== confirm){ toast("Mots de passe différents","error"); return; }
+  const sb = await ensureSupabase();
+  if(!sb) return;
+  const btn = $("#auth_signup_btn");
+  if(btn){ btn.disabled = true; btn.textContent = "⏳ Création…"; }
+  try{
+    const { data, error } = await sb.auth.signUp({
+      email, password,
+      options: {
+        data: { full_name: fullName || email.split('@')[0], role: 'manager' },
+        emailRedirectTo: window.location.href
+      }
+    });
+    if(error){
+      toast("Échec : "+error.message,"error");
+      if(btn){ btn.disabled = false; btn.textContent = "Créer le compte"; }
+      return;
+    }
+    if(data.user && !data.session){
+      toast("Compte créé. Vérifiez votre email pour confirmer.","success");
+    } else {
+      _authUser = data.user;
+      toast("Compte créé et connecté ✓","success");
+    }
+    closeModal();
+    if(_pendingAfterAuth){ const fn = _pendingAfterAuth; _pendingAfterAuth = null; setTimeout(fn, 200); }
+  }catch(e){
+    toast("Erreur : "+e.message,"error");
+    if(btn){ btn.disabled = false; btn.textContent = "Créer le compte"; }
+  }
+}
+
+// --- Magic Link (lien envoyé par email) ---
+async function doMagicLink(){
+  const email = $("#auth_ml_email").value.trim();
+  if(!email){ toast("Email requis","error"); return; }
+  const sb = await ensureSupabase();
+  if(!sb) return;
+  const btn = $("#auth_ml_btn");
+  if(btn){ btn.disabled = true; btn.textContent = "⏳ Envoi…"; }
+  try{
+    const { error } = await sb.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: window.location.href,
+        shouldCreateUser: true
+      }
+    });
+    if(error){
+      toast("Échec : "+error.message,"error");
+      if(btn){ btn.disabled = false; btn.textContent = "📩 Envoyer le lien"; }
+      return;
+    }
+    toast(`Lien envoyé à ${email} · vérifiez votre boîte mail`,"success");
+    $("#auth_ml_result").innerHTML = `<div class="card mt-2" style="background:var(--primary-light);border-color:var(--primary)">
+      ✉️ <strong>Lien envoyé !</strong><br>
+      <span class="f12">1. Ouvrez votre boîte mail sur ce même appareil</span><br>
+      <span class="f12">2. Cliquez sur le lien dans l'email reçu de Supabase</span><br>
+      <span class="f12">3. Vous serez redirigé ici, connecté automatiquement</span>
+    </div>`;
+    if(btn){ btn.disabled = false; btn.textContent = "📩 Renvoyer le lien"; }
+  }catch(e){
+    toast("Erreur : "+e.message,"error");
+    if(btn){ btn.disabled = false; btn.textContent = "📩 Envoyer le lien"; }
+  }
+}
+
+// --- Déconnexion ---
+async function doSignOut(){
+  if(!confirm("Se déconnecter de Supabase ?\n\nVos données locales restent intactes.")) return;
+  const sb = await ensureSupabase();
+  if(!sb) return;
+  await sb.auth.signOut();
+  _authUser = null;
+  toast("Déconnecté","success");
+  updateSyncUI();
+}
+
+// --- Switch entre les onglets du modal auth ---
+window.switchAuthTab = function(tab){
+  ['signin','signup','magiclink'].forEach(t=>{
+    const tb = document.getElementById('auth_tab_'+t);
+    const pn = document.getElementById('auth_pane_'+t);
+    if(tb) tb.classList.toggle('active', t===tab);
+    if(pn) pn.style.display = (t===tab) ? 'block' : 'none';
+  });
+};
+
+// --- Modal d'authentification ---
+MODALS.auth = ()=> modalShell("🔐 Connexion Supabase", `
+  <div style="display:flex;gap:4px;margin-bottom:12px;border-bottom:1px solid var(--border)">
+    <button id="auth_tab_signin" class="tab active" onclick="switchAuthTab('signin')" style="flex:1;padding:8px;background:none;border:none;border-bottom:2px solid var(--primary);font-weight:700;cursor:pointer;color:var(--primary)">🔑 Connexion</button>
+    <button id="auth_tab_signup" class="tab" onclick="switchAuthTab('signup')" style="flex:1;padding:8px;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--muted)">✨ Inscription</button>
+    <button id="auth_tab_magiclink" class="tab" onclick="switchAuthTab('magiclink')" style="flex:1;padding:8px;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--muted)">📩 Lien magique</button>
+  </div>
+
+  <div id="auth_pane_signin">
+    <div class="fld"><label>Email</label><input type="email" id="auth_signin_email" autocomplete="email" placeholder="exemple@sanix.ci"></div>
+    <div class="fld"><label>Mot de passe</label><input type="password" id="auth_signin_pwd" autocomplete="current-password" placeholder="••••••••"></div>
+    <button id="auth_signin_btn" class="btn block mt-2" onclick="doSignIn()">Se connecter</button>
+    <div class="hint mt-2">Si vous n'avez pas de compte, créez-en un dans l'onglet <strong>Inscription</strong>.</div>
+  </div>
+
+  <div id="auth_pane_signup" style="display:none">
+    <div class="fld"><label>Nom complet</label><input id="auth_signup_name" placeholder="Cyrille KESSIE"></div>
+    <div class="fld"><label>Email</label><input type="email" id="auth_signup_email" autocomplete="email" placeholder="exemple@sanix.ci"></div>
+    <div class="fld"><label>Mot de passe (min 6 caractères)</label><input type="password" id="auth_signup_pwd" autocomplete="new-password" placeholder="••••••••"></div>
+    <div class="fld"><label>Confirmer le mot de passe</label><input type="password" id="auth_signup_pwd2" autocomplete="new-password" placeholder="••••••••"></div>
+    <button id="auth_signup_btn" class="btn block mt-2" style="background:var(--structure)" onclick="doSignUp()">Créer le compte</button>
+    <div class="hint mt-2">Un email de confirmation peut être envoyé selon la config Supabase. Confirmez-le pour activer le compte.</div>
+  </div>
+
+  <div id="auth_pane_magiclink" style="display:none">
+    <div class="fld"><label>Email</label><input type="email" id="auth_ml_email" autocomplete="email" placeholder="exemple@sanix.ci"></div>
+    <button id="auth_ml_btn" class="btn block mt-2" onclick="doMagicLink()">📩 Envoyer le lien</button>
+    <div id="auth_ml_result"></div>
+    <div class="hint mt-2">
+      <strong>Comment ça marche :</strong><br>
+      Pas de mot de passe à mémoriser. Saisissez votre email → recevez un lien par email → cliquez dessus → vous êtes connecté.<br><br>
+      <strong>⚠️ Important :</strong> ouvrez le lien sur <strong>ce même appareil et navigateur</strong>, sinon la session ne sera pas créée ici.
+    </div>
+  </div>
+`, `<button class="btn ghost" onclick="closeModal()">Annuler</button>`);
+
+window.doSignIn = doSignIn;
+window.doSignUp = doSignUp;
+window.doMagicLink = doMagicLink;
+window.doSignOut = doSignOut;
+
+// Test de connexion
+async function doSyncTest(){
+  const elState = document.getElementById('sync_state');
+  if(elState){ elState.innerHTML = '⏳ Test en cours…'; elState.style.color = 'var(--alert)'; }
+  toast("Test de connexion Supabase…","info");
+  const sb = await ensureSupabase();
+  if(!sb){
+    if(elState){ elState.innerHTML = '❌ Lib non chargée'; elState.style.color = 'var(--danger)'; }
+    return;
+  }
+  try{
+    const t0 = Date.now();
+    const { error } = await sb.from('app_state').select('id').limit(1);
+    const ms = Date.now() - t0;
+    if(error){
+      if(elState){ elState.innerHTML = '❌ Erreur : ' + escapeHtml(error.message.slice(0,50)); elState.style.color = 'var(--danger)'; }
+      toast("Erreur : "+error.message,"error");
+      return;
+    }
+    if(elState){ elState.innerHTML = `✓ Connecté (${ms} ms)`; elState.style.color = 'var(--primary)'; }
+    toast(`Connexion Supabase OK (${ms} ms)`,"success");
+  }catch(e){
+    if(elState){ elState.innerHTML = '❌ ' + escapeHtml(e.message.slice(0,50)); elState.style.color = 'var(--danger)'; }
+    toast("Erreur réseau : "+e.message,"error");
+  }
+}
+
+
+window.doSyncTest = doSyncTest;
+window.doSyncPush = doSyncPush;
+window.doSyncPull = doSyncPull;
+window.getDeviceId = getDeviceId;
+
+/* ====================================================================
    BOOT
    ==================================================================== */
 window.addEventListener("DOMContentLoaded", ()=>{
@@ -5071,12 +5924,53 @@ window.addEventListener("DOMContentLoaded", ()=>{
   renderSidebar();
   renderBnav();
   route("dashboard");
-  if(firstLaunch) toast("Bienvenue ! Données de démo chargées 🍺","success");
+  if(firstLaunch) toast("Bienvenue sur Sanix DistriPro ERP · Données démo chargées 🍺","success");
   if(!HAS_LS) toast("⚠️ localStorage indisponible — mode mémoire (données perdues à la fermeture)","warn");
   // hooks après render dynamique des modaux
   document.body.addEventListener("input", (e)=>{
     if(e.target.id==="m_rc" || e.target.id==="m_rb") recomputeFac();
   });
+
+  // Magic Link : si l'URL contient un token, charge Supabase pour le traiter
+  if(window.location.hash.includes('access_token=') || window.location.hash.includes('type=magiclink')){
+    toast("⏳ Traitement du lien magique…","info");
+    ensureSupabase().then(sb=>{
+      if(!sb) return;
+      setTimeout(async ()=>{
+        const { data } = await sb.auth.getSession();
+        if(data?.session){
+          _authUser = data.session.user;
+          toast("✓ Connecté via lien magique : "+_authUser.email,"success");
+          history.replaceState(null,'',window.location.pathname);
+          route("parametrage");
+        } else {
+          toast("Lien magique non reconnu — réessayez","error");
+        }
+      }, 500);
+    });
+  } else {
+    // Sinon, vérifie silencieusement si une session existe (Supabase persiste dans localStorage)
+    const sessKey = 'sb-' + SUPABASE_PROJECT_REF + '-auth-token';
+    if(localStorage.getItem(sessKey)){
+      // Pré-charge Supabase pour initialiser _authUser et démarrer auto-sync
+      // (charge la lib mais ne crash pas si offline)
+      ensureSupabase().then(()=>{
+        updateSyncBadge();
+        // Démarre l'auto-sync si elle est activée
+        if(STATE.config.auto_sync_enabled && _authUser){
+          startAutoSync();
+        }
+      });
+    }
+  }
+
+  // Restaure la dernière version cloud connue
+  if(STATE.config._lastCloudVersion){
+    _lastCloudVersion = STATE.config._lastCloudVersion;
+  }
+
+  // Initialise le badge (état non connecté par défaut)
+  setTimeout(updateSyncBadge, 100);
 });
 
 // expose helpers pour modaux dynamiques chargés via onclick=""
