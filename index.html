@@ -1698,6 +1698,47 @@ VIEWS.parametrage = function(){
         </div>
       </div>
 
+      <div class="card" style="border-color:#0ea5e9">
+        <h3>📡 Realtime — Notifications cloud temps réel</h3>
+        <p class="f13" style="color:var(--muted)">
+          Quand activé, vous êtes notifié immédiatement (bandeau en haut + toast) dès qu'un autre appareil modifie les données dans le cloud. Permet le travail collaboratif PC + tablette livreur sans timer.
+        </p>
+        <div class="card" style="background:var(--bg);padding:8px;margin-top:10px">
+          <div class="flex between"><span class="f12 muted">État :</span><span id="realtime_state" class="b700 f13">⏸ Realtime inactif</span></div>
+        </div>
+        <div class="row row-2 mt-2">
+          <button class="btn block" onclick="startRealtime()" style="background:#0ea5e9">▶ Activer Realtime</button>
+          <button class="btn block ghost" onclick="stopRealtime()">⏸ Désactiver</button>
+        </div>
+        <div class="hint mt-2">
+          Nécessite que la table <code>app_state</code> soit ajoutée à la publication Realtime de Supabase (Dashboard → Database → Replication → activer pour <code>app_state</code>).
+        </div>
+      </div>
+
+      <div class="card" style="border-color:#dc2626">
+        <h3>🔐 Audit Log signé cryptographiquement</h3>
+        <p class="f13" style="color:var(--muted)">
+          Chaque modification critique (factures, encaissements, retours, consignations) est tracée dans un journal d'audit où <strong>chaque entrée signe la précédente</strong> via SHA-256. Une modification a posteriori casse la chaîne et est immédiatement détectable.
+        </p>
+        <button class="btn block ghost mt-2" onclick="verifyAuditChain()" style="border-color:#dc2626;color:#dc2626">🔍 Vérifier l'intégrité de la chaîne</button>
+        <div class="hint mt-2">
+          Nécessite l'application de <code>supabase_audit_migration.sql</code>. Les triggers DB enregistrent automatiquement les changements. Utilisez la fonction SQL <code>verify_audit_chain('tenant_id')</code> pour valider l'intégrité.
+        </div>
+      </div>
+
+      <div class="card" style="border-color:#f59e0b">
+        <h3>🏢 Multi-tenant (multi-dépôts)</h3>
+        <p class="f13" style="color:var(--muted)">
+          Une seule instance Sanix DistriPro peut servir plusieurs dépôts indépendants. Chaque utilisateur appartient à un tenant et ne voit que ses données.
+        </p>
+        <div class="card" style="background:var(--bg);padding:8px;margin-top:10px">
+          <div class="flex between"><span class="f12 muted">Votre tenant :</span><span id="mt_tenant" class="b700 f13">—</span></div>
+        </div>
+        <div class="hint mt-2">
+          Nécessite l'application de <code>supabase_multitenant_migration.sql</code>. Pour créer un nouveau dépôt, voir la doc d'intégration. La création de tenant se fait via SQL (admin uniquement).
+        </div>
+      </div>
+
       <div class="card" style="background:linear-gradient(135deg, var(--structure), var(--structure-2));color:#fff">
         <h3 style="color:#fff">ℹ️ À propos de Sanix DistriPro ERP</h3>
         <p class="f13" style="opacity:.95">
@@ -4024,6 +4065,7 @@ VIEWS.modeLivreur = function(){
               ${pending.map(l=>{const cl=getClient(l.client_id);return `<option value="${l.id}">${escapeHtml(cl?.nom||"?")} (${escapeHtml(cl?.code_badge||"")})</option>`;}).join("")}
             </select></div>
         </div>
+        <button class="btn block mt-2" style="background:var(--structure)" onclick="openQRScanner(code=>{document.getElementById('mlv_code').value=code;mlvSearchCode();})">📷 Scanner un badge avec la caméra</button>
       </div>
 
       <h3 class="mb-1">⏸ Livraisons restantes (${pending.length})</h3>
@@ -4105,6 +4147,7 @@ VIEWS.badges = function(){
     <div class="view-head">
       <div><h2>🪪 Badges clients <span class="sub">Cartes d'identification à imprimer et remettre aux clients</span></h2></div>
       <div class="view-actions">
+        <button class="btn" style="background:var(--structure)" onclick="openQRScanner()">📷 Scanner un badge</button>
         <button class="btn ghost" onclick="printAllBadges()">🖨 Imprimer tous</button>
       </div>
     </div>
@@ -4125,6 +4168,7 @@ function renderBadge(c){
       <div style="font-weight:700;font-size:13px">${escapeHtml(c.nom)}</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px">${escapeHtml(c.type||"")} · ${escapeHtml(c.adresse||"")}</div>
       <div class="mono b700" style="font-size:18px;text-align:center;letter-spacing:.05em;padding:6px;background:var(--bg);border-radius:6px">${escapeHtml(c.code_badge||"-")}</div>
+      <div style="display:flex;justify-content:center;margin-top:8px">${genQRSvg(c.code_badge||"",80)}</div>
       <div style="font-size:10px;color:var(--muted);margin-top:4px;text-align:center">${escapeHtml(c.telephone||"")}</div>
     </div>
     <div style="background:var(--structure-light);padding:6px;text-align:center;font-size:10px;color:var(--muted)">Cliquez pour imprimer</div>
@@ -5652,6 +5696,299 @@ window.stopAutoSync = stopAutoSync;
 window.doSyncPushRelational = doSyncPushRelational;
 window.canWrite = canWrite;
 window.canManage = canManage;
+
+/* ====================================================================
+   ============ MODULE REALTIME (v2.8) ============
+   Notifications push depuis le cloud quand un autre device modifie
+   ==================================================================== */
+
+let _realtimeChannel = null;
+
+async function startRealtime(){
+  if(_realtimeChannel) return; // déjà actif
+  const sb = await ensureSupabase();
+  if(!sb || !_authUser) return;
+
+  _realtimeChannel = sb
+    .channel('app_state_changes')
+    .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'app_state' },
+        (payload) => handleRealtimeChange(payload)
+    )
+    .subscribe((status) => {
+      console.log('[realtime] subscribe status:', status);
+      if(status === 'SUBSCRIBED'){
+        updateRealtimeBadge('connected');
+      } else if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT'){
+        updateRealtimeBadge('error');
+      }
+    });
+}
+
+function stopRealtime(){
+  if(!_realtimeChannel) return;
+  _realtimeChannel.unsubscribe();
+  _realtimeChannel = null;
+  updateRealtimeBadge('off');
+}
+
+function updateRealtimeBadge(state){
+  const el = document.getElementById('realtime_state');
+  if(!el) return;
+  const map = {
+    connected: { txt: '🟢 Realtime actif', color: 'var(--primary)' },
+    off: { txt: '⏸ Realtime inactif', color: 'var(--muted)' },
+    error: { txt: '❌ Erreur Realtime', color: 'var(--danger)' }
+  };
+  const s = map[state] || map.off;
+  el.textContent = s.txt;
+  el.style.color = s.color;
+}
+
+function handleRealtimeChange(payload){
+  const newRow = payload.new;
+  const oldRow = payload.old;
+  console.log('[realtime] change:', payload.eventType, newRow);
+
+  // Ignore les changements venant de ce device
+  if(newRow && newRow.device_id === getDeviceId()) return;
+
+  // Quelqu'un d'autre a modifié le cloud — notifie
+  const sourceDevice = newRow?.device_id || 'autre appareil';
+  const sourceUser = newRow?.notes?.match(/par ([^·]+)/)?.[1]?.trim() || 'utilisateur inconnu';
+  toast(`🔔 Mise à jour cloud par ${escapeHtml(sourceUser)} · cliquez pour récupérer`, 'info');
+
+  // Marque pour conflit potentiel à la prochaine push
+  if(newRow?.version){
+    // On NE met pas à jour _lastCloudVersion pour que la détection de conflit fonctionne
+    // Le user doit explicitement pull pour récupérer ces changements
+  }
+
+  // Affiche un bandeau persistant
+  showRealtimeBanner(sourceUser, newRow?.updated_at);
+}
+
+function showRealtimeBanner(user, date){
+  let banner = document.getElementById('realtimeBanner');
+  if(!banner){
+    banner = document.createElement('div');
+    banner.id = 'realtimeBanner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:linear-gradient(90deg,#1D3557,#0F8A5F);color:#fff;padding:10px 20px;z-index:9999;display:flex;justify-content:space-between;align-items:center;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.2);cursor:pointer';
+    banner.onclick = ()=>{ doSyncPull(); banner.remove(); };
+    document.body.prepend(banner);
+  }
+  const dateStr = date ? new Date(date).toLocaleTimeString('fr-FR') : '?';
+  banner.innerHTML = `
+    <span>🔔 <strong>${escapeHtml(user)}</strong> a modifié les données cloud à ${dateStr} — cliquez pour synchroniser</span>
+    <span><button onclick="event.stopPropagation();this.parentNode.parentNode.remove()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer">✕ Plus tard</button></span>
+  `;
+  // Auto-disparition après 60s
+  setTimeout(()=>{ if(banner.parentNode) banner.remove(); }, 60000);
+}
+
+window.startRealtime = startRealtime;
+window.stopRealtime = stopRealtime;
+
+/* ====================================================================
+   ============ MODULE QR SCANNER (v2.8) ============
+   Scanner caméra natif pour identifier les clients par badge
+   Lib jsQR (~80 Ko) chargée à la demande
+   ==================================================================== */
+
+let _qrStream = null;
+let _qrAnimFrame = null;
+let _qrLibLoaded = false;
+let _qrCallback = null;
+
+async function loadQRLib(){
+  if(_qrLibLoaded || window.jsQR) { _qrLibLoaded = true; return true; }
+  return new Promise(resolve=>{
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+    s.onload = ()=>{ _qrLibLoaded = true; resolve(true); };
+    s.onerror = ()=>resolve(false);
+    document.head.appendChild(s);
+  });
+}
+
+async function openQRScanner(callback){
+  _qrCallback = callback;
+  const loaded = await loadQRLib();
+  if(!loaded){
+    toast("Lib jsQR non chargée — vérifiez la connexion internet","error");
+    return;
+  }
+  openModal('qrScanner');
+  setTimeout(startQRCamera, 300);
+}
+
+async function startQRCamera(){
+  const video = document.getElementById('qrVideo');
+  const canvas = document.getElementById('qrCanvas');
+  const status = document.getElementById('qrStatus');
+  if(!video || !canvas) return;
+
+  try {
+    _qrStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' }
+    });
+    video.srcObject = _qrStream;
+    video.setAttribute('playsinline', true);
+    await video.play();
+    if(status) status.textContent = '📷 Scan en cours… Pointez vers un badge';
+    requestAnimationFrame(tickQRScan);
+  } catch(e){
+    if(status) status.textContent = '❌ Caméra non accessible : ' + e.message;
+    toast("Caméra non accessible — vérifiez les permissions","error");
+  }
+}
+
+function tickQRScan(){
+  const video = document.getElementById('qrVideo');
+  const canvas = document.getElementById('qrCanvas');
+  if(!video || !canvas) return;
+  if(video.readyState !== video.HAVE_ENOUGH_DATA){
+    _qrAnimFrame = requestAnimationFrame(tickQRScan);
+    return;
+  }
+  const ctx = canvas.getContext('2d');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const code = window.jsQR(imageData.data, imageData.width, imageData.height, {
+    inversionAttempts: 'dontInvert'
+  });
+  if(code && code.data){
+    // QR détecté !
+    handleQRDetected(code.data);
+    return;
+  }
+  _qrAnimFrame = requestAnimationFrame(tickQRScan);
+}
+
+function handleQRDetected(text){
+  console.log('[qr] détecté:', text);
+  // Beep visuel/sonore
+  const status = document.getElementById('qrStatus');
+  if(status){ status.textContent = '✓ Détecté : ' + text; status.style.color = 'var(--primary)'; }
+  stopQRCamera();
+  setTimeout(()=>{
+    closeModal();
+    // Format attendu : "SANIX:<code_badge>" ou juste le code badge
+    let codeBadge = text.trim();
+    if(codeBadge.startsWith('SANIX:')) codeBadge = codeBadge.slice(6);
+    if(_qrCallback){
+      _qrCallback(codeBadge);
+      _qrCallback = null;
+    } else {
+      // Recherche client par code et ouvre sa fiche
+      const cl = findClientByCode(codeBadge);
+      if(cl){
+        toast('Client trouvé : ' + cl.nom, 'success');
+        // Si on est en mode livreur et tournée en cours, ouvre la livraison
+        const t = STATE.tournees.find(x=>x.statut==='en_cours');
+        if(t){
+          const liv = t.livraisons.find(l=>l.client_id===cl.id && (l.statut==='pending'||!l.statut));
+          if(liv){ openModal('effectuerLivraison', t.id+'::'+liv.id); return; }
+        }
+        openModal('detailClient', cl.id);
+      } else {
+        toast('Code badge inconnu : ' + codeBadge, 'error');
+      }
+    }
+  }, 200);
+}
+
+function stopQRCamera(){
+  if(_qrAnimFrame){ cancelAnimationFrame(_qrAnimFrame); _qrAnimFrame = null; }
+  if(_qrStream){
+    _qrStream.getTracks().forEach(t=>t.stop());
+    _qrStream = null;
+  }
+}
+
+MODALS.qrScanner = ()=> modalShell("📷 Scanner un badge client", `
+  <div class="card" style="padding:0;overflow:hidden;background:#000">
+    <div style="position:relative;width:100%;aspect-ratio:1;background:#000">
+      <video id="qrVideo" autoplay playsinline style="width:100%;height:100%;object-fit:cover"></video>
+      <canvas id="qrCanvas" style="display:none"></canvas>
+      <!-- viseur cible -->
+      <div style="position:absolute;inset:25%;border:3px solid #0F8A5F;border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.4);pointer-events:none"></div>
+    </div>
+  </div>
+  <div id="qrStatus" class="text-center mt-2 b700" style="font-size:14px">⏳ Demande d'accès caméra…</div>
+  <div class="hint mt-2">
+    Pointez l'appareil photo vers le QR code du badge. Le scan se fait automatiquement dès qu'un code est détecté.
+  </div>
+`, `<button class="btn ghost" onclick="stopQRCamera();closeModal()">Annuler</button>`);
+
+window.openQRScanner = openQRScanner;
+window.stopQRCamera = stopQRCamera;
+
+/* ====================================================================
+   ============ QR ENCODER (génération de badges scannables) ============
+   Encodeur QR minimal — version 4 (33x33), correction L
+   ==================================================================== */
+// Source : algorithme QR standard simplifié
+// Génère un SVG QR à partir d'un texte court (~25 chars max pour version 3)
+
+function genQRSvg(text, size){
+  size = size || 120;
+  // Pour ce prototype, on utilise une URL CDN qui génère le QR côté serveur
+  // (l'app peut le pré-télécharger une fois et le cacher)
+  // En production : embedder un encodeur QR pur-JS (~25 Ko) pour fonctionner offline
+  const payload = "SANIX:" + text;
+  const url = "https://api.qrserver.com/v1/create-qr-code/?size="+size+"x"+size+"&data="+encodeURIComponent(payload)+"&format=svg&margin=2";
+  return `<img src="${url}" width="${size}" height="${size}" style="display:block;border-radius:4px;background:#fff" alt="QR ${escapeHtml(text)}" loading="lazy">`;
+}
+
+window.genQRSvg = genQRSvg;
+
+/* ====================================================================
+   ============ AUDIT LOG côté client ============
+   Wrapper pour logger des événements vers Supabase
+   ==================================================================== */
+
+async function logAuditEvent(action, tableName, recordId, payload, notes){
+  if(!_authUser || !_supaClient) return;
+  try {
+    await _supaClient.rpc('log_audit_event', {
+      p_action: action,
+      p_table_name: tableName || null,
+      p_record_id: recordId || null,
+      p_payload: payload || null,
+      p_device_id: getDeviceId(),
+      p_notes: notes || null
+    });
+  } catch(e) {
+    console.warn('[audit] échec log :', e.message);
+  }
+}
+
+async function verifyAuditChain(){
+  if(!_supaClient){
+    toast("Connectez-vous d'abord","error");
+    return;
+  }
+  toast("Vérification de la chaîne d'audit…","info");
+  try {
+    const { data, error } = await _supaClient.rpc('verify_audit_chain', { p_tenant_id: 'sanix_main' });
+    if(error){ toast("Erreur : "+error.message,"error"); return; }
+    const r = data?.[0];
+    if(!r){ toast("Aucun résultat","warn"); return; }
+    if(r.ok){
+      alert(`✅ Chaîne d'audit INTÈGRE\n\n${r.total_entries} entrées vérifiées · aucune modification détectée a posteriori.\n\nLes données sont prouvées non-altérées depuis leur enregistrement.`);
+    } else {
+      alert(`❌ CHAÎNE D'AUDIT COMPROMISE\n\nEntrée corrompue : #${r.first_corruption}\nMessage : ${r.message}\n\nQuelqu'un a modifié l'audit_log après-coup, ou il y a eu une erreur technique. À investiguer.`);
+    }
+  } catch(e){
+    toast("Erreur : "+e.message,"error");
+  }
+}
+
+window.logAuditEvent = logAuditEvent;
+window.verifyAuditChain = verifyAuditChain;
 
 // MAJ de l'interface de la carte sync selon état auth
 function updateSyncUI(){
