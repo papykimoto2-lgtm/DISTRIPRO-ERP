@@ -512,6 +512,8 @@ function seedDemo(){
     ristournes_applications: [], // utilisations (déductions, virements, etc.)
     tournees: [],              // tournées de livraison
     retours_marchandise: [],   // avoirs de retour de produits (différent retour emballage)
+    ecritures: [],             // écritures comptables SYSCOHADA
+    plan_comptable: [],        // chargé au boot depuis PLAN_COMPTABLE_SYSCOHADA
     _seedExtras: { arts, cl, depotIds, sdIds, concIds }, // exposed for follow-up seeding
   };
 }
@@ -768,6 +770,9 @@ if(STATE && !STATE.config.livreurs){
 }
 // Migration v2.4 : retours marchandise
 if(STATE && !STATE.retours_marchandise){ STATE.retours_marchandise = []; saveState(); }
+// Migration v2.9 : module comptabilité
+if(STATE && !STATE.ecritures){ STATE.ecritures = []; saveState(); }
+if(STATE && !STATE.plan_comptable){ STATE.plan_comptable = []; }
 
 // ============ ROUTER ============
 let CURRENT_VIEW = "dashboard";
@@ -837,6 +842,12 @@ const NAV = [
     {v:"reseau",ic:"🌐",l:"Réseau distribution"},
     {v:"depots",ic:"🏬",l:"Dépôts & sous-dépôts"},
   ]},
+  { group:"COMPTABILITÉ", items:[
+    {v:"dashboardCompta",ic:"📊",l:"Tableau de bord"},
+    {v:"ecritures",ic:"📚",l:"Journal d'écritures"},
+    {v:"planComptable",ic:"📋",l:"Plan comptable"},
+    {v:"auditLog",ic:"🔍",l:"Journal d'audit"},
+  ]},
   { group:"SYSTÈME", items:[
     {v:"parametrage",ic:"⚙️",l:"Paramétrage"},
   ]},
@@ -844,7 +855,7 @@ const NAV = [
 
 function renderSidebar(){
   const sb = $("#sidebar");
-  let html = `<div class="brand"><div class="logo">SD</div><div>Sanix DistriPro<br><span style="font-size:11px;font-weight:500;color:#7b8aa3">ERP v2.4</span></div></div>`;
+  let html = `<div class="brand"><div class="logo">SD</div><div>Sanix DistriPro<br><span style="font-size:11px;font-weight:500;color:#7b8aa3">ERP v2.9 — Comptabilité SYSCOHADA</span></div></div>`;
   NAV.forEach(g=>{
     html += `<div class="grp">${g.group}</div>`;
     g.items.forEach(it=>{
@@ -6254,6 +6265,811 @@ window.doSyncPull = doSyncPull;
 window.getDeviceId = getDeviceId;
 
 /* ====================================================================
+   ============ MODULE COMPTABILITÉ SYSCOHADA (v2.9) ============
+   Plan comptable + écritures auto + journal + dashboard + audit log enrichi
+   ==================================================================== */
+
+// Plan comptable SYSCOHADA pré-rempli (chargé au boot dans STATE.plan_comptable)
+const PLAN_COMPTABLE_SYSCOHADA = [
+  // Classe 1 — Capitaux
+  {numero:"101", intitule:"Capital social", classe:1, type:"passif", sens:"credit"},
+  {numero:"12",  intitule:"Report à nouveau", classe:1, type:"passif", sens:"credit"},
+  {numero:"131", intitule:"Résultat net de l'exercice", classe:1, type:"passif", sens:"credit"},
+  {numero:"16",  intitule:"Emprunts et dettes assimilées", classe:1, type:"passif", sens:"credit"},
+  // Classe 2 — Immobilisations
+  {numero:"244", intitule:"Matériel et mobilier", classe:2, type:"actif", sens:"debit"},
+  {numero:"2451",intitule:"Matériel de transport", classe:2, type:"actif", sens:"debit"},
+  // Classe 3 — Stocks
+  {numero:"311", intitule:"Marchandises (boissons)", classe:3, type:"actif", sens:"debit"},
+  {numero:"326", intitule:"Emballages consignés (stock dépôt)", classe:3, type:"actif", sens:"debit"},
+  // Classe 4 — Tiers
+  {numero:"401", intitule:"Fournisseurs d'exploitation", classe:4, type:"passif", sens:"credit", collectif:true},
+  {numero:"4011",intitule:"Fournisseurs concessionnaires", classe:4, type:"passif", sens:"credit", collectif:true},
+  {numero:"411", intitule:"Clients", classe:4, type:"actif", sens:"debit", collectif:true},
+  {numero:"416", intitule:"Clients douteux", classe:4, type:"actif", sens:"debit", collectif:true},
+  {numero:"4194",intitule:"Clients - Emballages consignés", classe:4, type:"passif", sens:"credit", collectif:true},
+  {numero:"421", intitule:"Personnel - Rémunérations dues", classe:4, type:"passif", sens:"credit"},
+  {numero:"4431",intitule:"État - TVA facturée (collectée)", classe:4, type:"passif", sens:"credit"},
+  {numero:"4452",intitule:"État - TVA récupérable sur achats", classe:4, type:"actif", sens:"debit"},
+  // Classe 5 — Trésorerie
+  {numero:"521", intitule:"Banques locales", classe:5, type:"actif", sens:"debit"},
+  {numero:"5211",intitule:"Banque - compte courant", classe:5, type:"actif", sens:"debit"},
+  {numero:"5311",intitule:"Wave Mobile Money", classe:5, type:"actif", sens:"debit"},
+  {numero:"5312",intitule:"Orange Money", classe:5, type:"actif", sens:"debit"},
+  {numero:"5313",intitule:"MTN MoMo", classe:5, type:"actif", sens:"debit"},
+  {numero:"5314",intitule:"Moov Money", classe:5, type:"actif", sens:"debit"},
+  {numero:"571", intitule:"Caisse principale (espèces)", classe:5, type:"actif", sens:"debit"},
+  // Classe 6 — Charges
+  {numero:"601", intitule:"Achats de marchandises (boissons)", classe:6, type:"charge", sens:"debit"},
+  {numero:"6019",intitule:"RRR obtenus sur achats", classe:6, type:"charge", sens:"credit"},
+  {numero:"611", intitule:"Transports sur achats", classe:6, type:"charge", sens:"debit"},
+  {numero:"622", intitule:"Locations", classe:6, type:"charge", sens:"debit"},
+  {numero:"626", intitule:"Carburants", classe:6, type:"charge", sens:"debit"},
+  {numero:"658", intitule:"Charges diverses d'exploitation", classe:6, type:"charge", sens:"debit"},
+  {numero:"661", intitule:"Charges de personnel", classe:6, type:"charge", sens:"debit"},
+  {numero:"671", intitule:"Frais financiers (banque)", classe:6, type:"charge", sens:"debit"},
+  // Classe 7 — Produits
+  {numero:"701", intitule:"Ventes de marchandises (boissons)", classe:7, type:"produit", sens:"credit"},
+  {numero:"7019",intitule:"RRR accordés sur ventes", classe:7, type:"produit", sens:"debit"},
+  {numero:"708", intitule:"Produits accessoires (consigne)", classe:7, type:"produit", sens:"credit"},
+  {numero:"758", intitule:"Produits divers", classe:7, type:"produit", sens:"credit"},
+];
+
+function loadPlanComptable(){
+  if(!STATE.plan_comptable || STATE.plan_comptable.length===0){
+    STATE.plan_comptable = PLAN_COMPTABLE_SYSCOHADA.map(c=>({...c}));
+  }
+}
+loadPlanComptable();
+
+// Mapping mode de paiement → compte trésorerie
+function compteTresorerie(mode){
+  const m = {
+    "Espèces":"571","Wave":"5311","Orange Money":"5312",
+    "MTN MoMo":"5313","Moov Money":"5314","Chèque":"5211","Virement":"5211"
+  };
+  return m[mode] || "571";
+}
+
+// Génère un numéro d'écriture séquentiel pour un journal
+function genNumeroEcriture(journalCode){
+  const year = new Date().getFullYear();
+  const seq = STATE.ecritures.filter(e=>e.journal_code===journalCode &&
+                                          (e.numero||"").startsWith(journalCode+"-"+year)).length + 1;
+  return journalCode+"-"+year+"-"+String(seq).padStart(5,"0");
+}
+
+// Crée une écriture comptable (avec contrôle équilibre débit/crédit)
+function creerEcriture({date, journal, libelle, reference, lignes, source_table, source_id, auto}){
+  const totD = lignes.reduce((s,l)=>s+(l.debit||0), 0);
+  const totC = lignes.reduce((s,l)=>s+(l.credit||0), 0);
+  if(Math.abs(totD-totC) > 1){
+    console.warn(`[compta] Écriture déséquilibrée ${reference||libelle} · D=${totD} C=${totC} écart=${totD-totC}`);
+    return null;
+  }
+  // Si totD = totC = 0, on saute (écriture vide inutile)
+  if(totD === 0 && totC === 0){
+    return null;
+  }
+  const id = uid("ec_");
+  const ecriture = {
+    id,
+    journal_code: journal,
+    numero: genNumeroEcriture(journal),
+    date_ecriture: (date || new Date().toISOString()).slice(0,10),
+    libelle, reference,
+    source_table, source_id,
+    statut: "brouillon",
+    auto_generated: !!auto,
+    saisi_par: _authUser?.id || null,
+    created_at: now(),
+    lignes: lignes.map((l,i)=>({
+      id: uid("el_"),
+      ordre: i+1,
+      compte: l.compte,
+      compte_aux: l.compte_aux || null,
+      libelle: l.libelle || libelle,
+      debit: l.debit || 0,
+      credit: l.credit || 0,
+      lettrage: l.lettrage || null
+    }))
+  };
+  STATE.ecritures.push(ecriture);
+  saveState();
+  return ecriture;
+}
+
+// ==================== AUTO-GÉNÉRATION DES ÉCRITURES ====================
+
+// Vente (facture FNE) → écriture vente
+// IMPORTANT : on calcule le TTC depuis HT+TVA+consigne (garantit l'équilibre)
+// Cela couvre aussi les vieilles factures qui ne stockent que montant_ht
+function genEcritureVente(facture){
+  if(STATE.ecritures.find(e=>e.source_table==="factures" && e.source_id===facture.id)) return null;
+  // Skip les avoirs (générés par genEcritureRetour)
+  if(facture.statut === "Avoir") return null;
+  const cl = getClient(facture.client_id);
+  // Récupère les composants avec fallbacks pour formats legacy
+  const ht   = facture.montant_liquide_ht ?? facture.montant_ht ?? 0;
+  const tva  = facture.montant_tva ?? 0;
+  const cons = facture.montant_consigne_nette ?? facture.montant_consigne ?? 0;
+  const ttc_calc = ht + tva + cons;
+  // Si rien à comptabiliser, skip
+  if(ttc_calc <= 0) return null;
+  const libelle = `Vente ${facture.numero||""} - ${cl?.nom||""}`.trim();
+  const lignes = [];
+  lignes.push({ compte:"411", compte_aux:facture.client_id, debit:ttc_calc, libelle });
+  if(ht > 0)   lignes.push({ compte:"701",  credit:ht,   libelle:"Ventes liquide HT" });
+  if(tva > 0)  lignes.push({ compte:"4431", credit:tva,  libelle:"TVA collectée 18%" });
+  if(cons > 0) lignes.push({ compte:"4194", compte_aux:facture.client_id, credit:cons, libelle:"Emballages consignés" });
+  // Si une ristourne a réduit le TTC stocké, on enregistre la différence en 7019
+  const ttc_reel = facture.montant_ttc ?? ttc_calc;
+  const ecart_ristourne = ttc_calc - ttc_reel;
+  if(ecart_ristourne > 1){
+    // Le client doit moins que la décomposition → ristourne accordée
+    lignes.push({ compte:"7019", debit:ecart_ristourne, libelle:"Ristourne accordée" });
+    // Et le débit 411 réel est ttc_reel, pas ttc_calc → on réajuste
+    lignes[0].debit = ttc_reel;
+  }
+  return creerEcriture({
+    date: facture.date, journal:"VTE", libelle, reference: facture.numero,
+    lignes, source_table:"factures", source_id:facture.id, auto:true
+  });
+}
+
+// Encaissement → écriture règlement
+function genEcritureEncaissement(enc){
+  if(STATE.ecritures.find(e=>e.source_table==="encaissements" && e.source_id===enc.id)) return null;
+  if(!enc.montant || enc.montant === 0) return null;
+  const cl = getClient(enc.client_id);
+  const compteTreso = compteTresorerie(enc.mode);
+  const journal = enc.mode==="Espèces" ? "CAI" :
+                  enc.mode==="Wave" ? "WAV" :
+                  enc.mode==="Orange Money" ? "OM" :
+                  enc.mode==="MTN MoMo" ? "MTN" : "BNQ";
+  const libelle = `Règlement ${enc.mode||""} - ${cl?.nom||""} - ${enc.reference||""}`.trim();
+  const montant = Math.abs(enc.montant);
+  const isRemb = enc.montant < 0;
+  const lignes = isRemb ? [
+    { compte:compteTreso, credit: montant, libelle },
+    { compte:"411", compte_aux:enc.client_id, debit: montant, libelle }
+  ] : [
+    { compte:compteTreso, debit: montant, libelle },
+    { compte:"411", compte_aux:enc.client_id, credit: montant, libelle }
+  ];
+  return creerEcriture({
+    date: enc.date, journal, libelle, reference: enc.reference,
+    lignes, source_table:"encaissements", source_id:enc.id, auto:true
+  });
+}
+
+// Achat → écriture achat (TTC calculé depuis HT+TVA pour garantir l'équilibre)
+function genEcritureAchat(achat){
+  if(STATE.ecritures.find(e=>e.source_table==="achats" && e.source_id===achat.id)) return null;
+  const conc = achat.concessionnaire_id ? STATE.concessionnaires.find(c=>c.id===achat.concessionnaire_id) : null;
+  const four = achat.fournisseur_id ? STATE.fournisseurs.find(f=>f.id===achat.fournisseur_id) : null;
+  const partenaire = conc || four;
+  const compteTiers = conc ? "4011" : "401";
+  const libelle = `Achat ${achat.numero||""} - ${partenaire?.nom||""}`.trim();
+  const ht = achat.montant_ht || 0;
+  const tva = achat.montant_tva || 0;
+  // Recalcule le TTC pour garantir l'équilibre (ignore montant_ttc stocké qui peut diverger)
+  const ttc = ht + tva;
+  if(ttc <= 0) return null;
+  const lignes = [];
+  if(ht > 0)  lignes.push({ compte:"601",  debit:ht,  libelle:"Achats marchandises HT" });
+  if(tva > 0) lignes.push({ compte:"4452", debit:tva, libelle:"TVA déductible" });
+  lignes.push({ compte:compteTiers, compte_aux: partenaire?.id, credit:ttc, libelle });
+  return creerEcriture({
+    date: achat.date, journal:"ACH", libelle, reference: achat.bl_numero,
+    lignes, source_table:"achats", source_id:achat.id, auto:true
+  });
+}
+
+// Retour marchandise → écriture contre-passation
+// Idem : on recalcule le TTC depuis les composants
+function genEcritureRetour(retour){
+  if(STATE.ecritures.find(e=>e.source_table==="retours_marchandise" && e.source_id===retour.id)) return null;
+  const cl = getClient(retour.client_id);
+  const libelle = `Avoir ${retour.numero||""} - ${cl?.nom||""}`.trim();
+  const ht   = retour.montant_liquide_ht_total ?? 0;
+  const tva  = retour.montant_tva_total ?? 0;
+  const cons = retour.montant_consigne_total ?? 0;
+  const ttc_calc = ht + tva + cons;
+  if(ttc_calc <= 0) return null;
+  const lignes = [];
+  lignes.push({ compte:"411", compte_aux:retour.client_id, credit:ttc_calc, libelle });
+  if(ht > 0)   lignes.push({ compte:"701",  debit:ht,   libelle:"Annulation vente HT" });
+  if(tva > 0)  lignes.push({ compte:"4431", debit:tva,  libelle:"Annulation TVA" });
+  if(cons > 0) lignes.push({ compte:"4194", compte_aux:retour.client_id, debit:cons, libelle:"Annulation consigne" });
+  return creerEcriture({
+    date: retour.date, journal:"VTE", libelle, reference: retour.numero,
+    lignes, source_table:"retours_marchandise", source_id:retour.id, auto:true
+  });
+}
+
+// Régénération massive (rétroactif sur les données existantes)
+function regenererToutesEcritures(){
+  if(!confirm("Régénérer toutes les écritures comptables depuis les opérations existantes ?\n\nLes écritures auto-générées existantes seront remplacées (les manuelles seront préservées).")) return;
+  STATE.ecritures = STATE.ecritures.filter(e=>!e.auto_generated);
+  let cnt = 0;
+  (STATE.factures||[]).forEach(f=>{ if(genEcritureVente(f)) cnt++; });
+  (STATE.encaissements||[]).forEach(e=>{ if(genEcritureEncaissement(e)) cnt++; });
+  (STATE.achats||[]).forEach(a=>{ if(genEcritureAchat(a)) cnt++; });
+  (STATE.retours_marchandise||[]).forEach(r=>{ if(genEcritureRetour(r)) cnt++; });
+  saveState();
+  toast(`${cnt} écritures générées automatiquement`, "success");
+  route("ecritures");
+}
+
+// ==================== KPI / SOLDES ====================
+
+function comptaKPI(){
+  let creances=0, dettes=0, consignations=0, caisse=0, banque=0, mm=0;
+  let tva_coll=0, tva_ded=0, ca_ht=0, charges=0, produits=0;
+  (STATE.ecritures||[]).forEach(e=>{
+    e.lignes.forEach(l=>{
+      const c = l.compte||"";
+      const d = l.debit||0, cr = l.credit||0;
+      if(c.startsWith("411") && !c.startsWith("4194")) creances += d - cr;
+      if(c.startsWith("40")) dettes += cr - d;
+      if(c.startsWith("4194")) consignations += cr - d;
+      if(c.startsWith("57")) caisse += d - cr;
+      if(c.startsWith("52")) banque += d - cr;
+      if(c.startsWith("53")) mm += d - cr;
+      if(c.startsWith("4431")) tva_coll += cr - d;
+      if(c.startsWith("4452")) tva_ded += d - cr;
+      if(c.startsWith("701")) ca_ht += cr - d;
+      if(c.startsWith("6")) charges += d - cr;
+      if(c.startsWith("7")) produits += cr - d;
+    });
+  });
+  return { creances, dettes, consignations, caisse, banque, mm, tva_coll, tva_ded, ca_ht, charges, produits, resultat: produits - charges };
+}
+
+function soldeCompte(compte, compte_aux){
+  let d=0, cr=0;
+  (STATE.ecritures||[]).forEach(e=>{
+    e.lignes.forEach(l=>{
+      if(l.compte === compte && (!compte_aux || l.compte_aux===compte_aux)){
+        d += l.debit||0;
+        cr += l.credit||0;
+      }
+    });
+  });
+  return { debit:d, credit:cr, solde: d-cr };
+}
+
+function topDebiteurs(n){
+  const map = {};
+  (STATE.ecritures||[]).forEach(e=>{
+    e.lignes.forEach(l=>{
+      if((l.compte||"").startsWith("411") && !(l.compte||"").startsWith("4194") && l.compte_aux){
+        if(!map[l.compte_aux]) map[l.compte_aux] = 0;
+        map[l.compte_aux] += (l.debit||0) - (l.credit||0);
+      }
+    });
+  });
+  return Object.entries(map)
+    .map(([id,solde])=>({client:getClient(id), solde}))
+    .filter(x=>x.solde>0)
+    .sort((a,b)=>b.solde-a.solde)
+    .slice(0,n||10);
+}
+
+function topCreanciers(n){
+  const map = {};
+  (STATE.ecritures||[]).forEach(e=>{
+    e.lignes.forEach(l=>{
+      if((l.compte||"").startsWith("40") && l.compte_aux){
+        if(!map[l.compte_aux]) map[l.compte_aux] = 0;
+        map[l.compte_aux] += (l.credit||0) - (l.debit||0);
+      }
+    });
+  });
+  return Object.entries(map)
+    .map(([id,solde])=>{
+      const part = STATE.fournisseurs.find(f=>f.id===id) || STATE.concessionnaires.find(c=>c.id===id);
+      return {partenaire:part, solde};
+    })
+    .filter(x=>x.solde>0)
+    .sort((a,b)=>b.solde-a.solde)
+    .slice(0,n||10);
+}
+
+// ==================== VUE : DASHBOARD COMPTABLE ====================
+
+VIEWS.dashboardCompta = function(){
+  const w = document.createElement("div");
+  const k = comptaKPI();
+  const topD = topDebiteurs(5);
+  const topC = topCreanciers(5);
+  w.innerHTML = `
+    <div class="view-head">
+      <div><h2>📊 Tableau de bord comptable <span class="sub">Indicateurs SYSCOHADA · ${STATE.ecritures.length} écritures</span></h2></div>
+      <div class="view-actions">
+        <button class="btn" onclick="regenererToutesEcritures()">🔄 Régénérer écritures</button>
+        <button class="btn ghost" onclick="route('ecritures')">📚 Journal</button>
+      </div>
+    </div>
+    <div class="grid grid-4 kpis mb-3">
+      <div class="kpi info"><span class="ico">💰</span><span class="lbl">Chiffre d'affaires HT</span><span class="val">${fmtFCFA(k.ca_ht)}</span></div>
+      <div class="kpi ${k.creances>500000?'warn':'info'}"><span class="ico">📥</span><span class="lbl">Créances clients</span><span class="val">${fmtFCFA(k.creances)}</span></div>
+      <div class="kpi ${k.dettes>500000?'warn':'info'}"><span class="ico">📤</span><span class="lbl">Dettes fournisseurs</span><span class="val">${fmtFCFA(k.dettes)}</span></div>
+      <div class="kpi ${k.resultat>0?'ok':'bad'}"><span class="ico">📈</span><span class="lbl">Résultat provisoire</span><span class="val">${k.resultat>=0?'+':''}${fmtFCFA(k.resultat)}</span></div>
+    </div>
+    <div class="grid grid-4 kpis mb-3">
+      <div class="kpi info"><span class="ico">💵</span><span class="lbl">Solde caisse</span><span class="val">${fmtFCFA(k.caisse)}</span></div>
+      <div class="kpi info"><span class="ico">🏦</span><span class="lbl">Solde banque</span><span class="val">${fmtFCFA(k.banque)}</span></div>
+      <div class="kpi info"><span class="ico">📱</span><span class="lbl">Solde Mobile Money</span><span class="val">${fmtFCFA(k.mm)}</span></div>
+      <div class="kpi warn"><span class="ico">🧾</span><span class="lbl">Consignations dues</span><span class="val">${fmtFCFA(k.consignations)}</span></div>
+    </div>
+    <div class="grid grid-2 kpis mb-3">
+      <div class="kpi info"><span class="ico">📊</span><span class="lbl">TVA collectée (à reverser)</span><span class="val">${fmtFCFA(k.tva_coll)}</span></div>
+      <div class="kpi info"><span class="ico">📊</span><span class="lbl">TVA déductible (à récupérer)</span><span class="val">${fmtFCFA(k.tva_ded)}</span></div>
+    </div>
+
+    <div class="grid grid-2">
+      <div>
+        <h3>🏆 Top débiteurs (clients devant le plus)</h3>
+        ${topD.length===0?'<div class="empty f12"><span class="ico">📋</span>Aucune créance</div>':
+          `<table class="tbl"><thead><tr><th>#</th><th>Client</th><th>Solde dû</th></tr></thead><tbody>
+            ${topD.map((t,i)=>`<tr>
+              <td class="b700">${i+1}</td>
+              <td><strong>${escapeHtml(t.client?.nom||"?")}</strong><br><span class="f10 muted">${escapeHtml(t.client?.telephone||"")}</span></td>
+              <td class="b700" style="color:var(--alert)">${fmtFCFA(t.solde)}</td>
+            </tr>`).join("")}
+          </tbody></table>`}
+      </div>
+      <div>
+        <h3>🏆 Top créanciers (à qui on doit le plus)</h3>
+        ${topC.length===0?'<div class="empty f12"><span class="ico">📋</span>Aucune dette fournisseur</div>':
+          `<table class="tbl"><thead><tr><th>#</th><th>Partenaire</th><th>Solde dû</th></tr></thead><tbody>
+            ${topC.map((t,i)=>`<tr>
+              <td class="b700">${i+1}</td>
+              <td><strong>${escapeHtml(t.partenaire?.nom||"?")}</strong></td>
+              <td class="b700" style="color:var(--alert)">${fmtFCFA(t.solde)}</td>
+            </tr>`).join("")}
+          </tbody></table>`}
+      </div>
+    </div>
+
+    <div class="hint mt-3">
+      💡 Les écritures sont générées <strong>automatiquement</strong> à chaque opération (vente, encaissement, achat, retour).
+      Statuts : <strong>brouillon</strong> (saisi) → <strong>validée</strong> (comptable) → <strong>validation finale</strong> (chef comptable) → <strong>clôturée</strong>.
+    </div>
+  `;
+  return w;
+};
+
+// ==================== VUE : JOURNAL D'ÉCRITURES (filtrable + export) ====================
+
+let _ecFilters = { journal:"", compte:"", q:"", df:"", dt:"", statut:"" };
+
+VIEWS.ecritures = function(){
+  const w = document.createElement("div");
+  const journals = [...new Set((STATE.ecritures||[]).map(e=>e.journal_code))].filter(Boolean).sort();
+  let list = (STATE.ecritures||[]).slice();
+  if(_ecFilters.journal) list = list.filter(e=>e.journal_code===_ecFilters.journal);
+  if(_ecFilters.statut) list = list.filter(e=>e.statut===_ecFilters.statut);
+  if(_ecFilters.df) list = list.filter(e=>e.date_ecriture >= _ecFilters.df);
+  if(_ecFilters.dt) list = list.filter(e=>e.date_ecriture <= _ecFilters.dt);
+  if(_ecFilters.compte) list = list.filter(e=>e.lignes.some(l=>(l.compte||"").startsWith(_ecFilters.compte)));
+  if(_ecFilters.q){
+    const q = _ecFilters.q.toLowerCase();
+    list = list.filter(e=>
+      (e.libelle||"").toLowerCase().includes(q) ||
+      (e.numero||"").toLowerCase().includes(q) ||
+      (e.reference||"").toLowerCase().includes(q)
+    );
+  }
+  list.sort((a,b)=>new Date(b.date_ecriture)-new Date(a.date_ecriture));
+  const totD = list.reduce((s,e)=>s+e.lignes.reduce((ss,l)=>ss+(l.debit||0),0), 0);
+  const totC = list.reduce((s,e)=>s+e.lignes.reduce((ss,l)=>ss+(l.credit||0),0), 0);
+
+  w.innerHTML = `
+    <div class="view-head">
+      <div><h2>📚 Journal d'écritures <span class="sub">${list.length} écriture(s) · ${list.reduce((s,e)=>s+e.lignes.length,0)} ligne(s)</span></h2></div>
+      <div class="view-actions">
+        <button class="btn ghost" onclick="exportEcrituresCSV()">📤 Export CSV</button>
+        <button class="btn" onclick="openModal('nouvelleEcriture')">➕ Nouvelle</button>
+      </div>
+    </div>
+
+    <div class="card mb-2" style="background:var(--bg)">
+      <div class="grid grid-4">
+        <div class="fld"><label>Journal</label>
+          <select onchange="_ecFilters.journal=this.value;route('ecritures')">
+            <option value="">Tous</option>
+            ${journals.map(j=>`<option value="${escapeHtml(j)}" ${_ecFilters.journal===j?'selected':''}>${escapeHtml(j)}</option>`).join("")}
+          </select></div>
+        <div class="fld"><label>Compte (préfixe)</label>
+          <input value="${escapeHtml(_ecFilters.compte)}" placeholder="ex: 411" onchange="_ecFilters.compte=this.value;route('ecritures')"></div>
+        <div class="fld"><label>Statut</label>
+          <select onchange="_ecFilters.statut=this.value;route('ecritures')">
+            <option value="">Tous</option>
+            <option value="brouillon"      ${_ecFilters.statut==='brouillon'?'selected':''}>📝 Brouillon</option>
+            <option value="validee"        ${_ecFilters.statut==='validee'?'selected':''}>✓ Validée</option>
+            <option value="validee_finale" ${_ecFilters.statut==='validee_finale'?'selected':''}>✓✓ Validation finale</option>
+            <option value="cloturee"       ${_ecFilters.statut==='cloturee'?'selected':''}>🔒 Clôturée</option>
+          </select></div>
+        <div class="fld"><label>Recherche</label>
+          <input value="${escapeHtml(_ecFilters.q)}" placeholder="N°, libellé, réf" onchange="_ecFilters.q=this.value;route('ecritures')"></div>
+      </div>
+      <div class="grid grid-2 mt-1">
+        <div class="fld"><label>Date du</label><input type="date" value="${_ecFilters.df}" onchange="_ecFilters.df=this.value;route('ecritures')"></div>
+        <div class="fld"><label>Date au</label><input type="date" value="${_ecFilters.dt}" onchange="_ecFilters.dt=this.value;route('ecritures')"></div>
+      </div>
+      <div class="flex between mt-2">
+        <button class="btn ghost sm" onclick="_ecFilters={journal:'',compte:'',q:'',df:'',dt:'',statut:''};route('ecritures')">🔄 Réinitialiser</button>
+        <div class="b700">Total débit : ${fmtFCFA(totD)} · Total crédit : ${fmtFCFA(totC)} <span style="color:${Math.abs(totD-totC)<1?'var(--primary)':'var(--danger)'}">${Math.abs(totD-totC)<1?'✓ équilibré':'⚠ écart '+fmtFCFA(Math.abs(totD-totC))}</span></div>
+      </div>
+    </div>
+
+    ${list.length===0?'<div class="empty"><span class="ico">📚</span>Aucune écriture<br><button class="btn mt-2" onclick="regenererToutesEcritures()">🔄 Générer depuis les opérations</button></div>':
+      `<table class="tbl"><thead><tr><th>N°</th><th>Date</th><th>Jrnl</th><th>Libellé</th><th>Réf.</th><th class="right">Débit</th><th class="right">Crédit</th><th>Statut</th></tr></thead><tbody>
+        ${list.slice(0,200).map(e=>{
+          const d = e.lignes.reduce((s,l)=>s+(l.debit||0),0);
+          const c = e.lignes.reduce((s,l)=>s+(l.credit||0),0);
+          const stIco = {brouillon:'📝',validee:'✓',validee_finale:'✓✓',cloturee:'🔒'}[e.statut]||'?';
+          const stCls = {brouillon:'muted',validee:'info',validee_finale:'ok',cloturee:'bad'}[e.statut]||'info';
+          return `<tr style="cursor:pointer" onclick="openModal('detailEcriture','${e.id}')">
+            <td><span class="mono b700">${escapeHtml(e.numero)}</span></td>
+            <td>${fmtDate(e.date_ecriture)}</td>
+            <td><span class="pill info">${escapeHtml(e.journal_code||'?')}</span></td>
+            <td>${escapeHtml(e.libelle)} ${e.auto_generated?'<span class="f10 muted">[auto]</span>':''}</td>
+            <td><span class="f12 mono">${escapeHtml(e.reference||'')}</span></td>
+            <td class="right b700">${fmtFCFA(d)}</td>
+            <td class="right b700">${fmtFCFA(c)}</td>
+            <td><span class="pill ${stCls}">${stIco} ${escapeHtml(e.statut)}</span></td>
+          </tr>`;
+        }).join("")}
+      </tbody></table>
+      ${list.length>200?`<div class="hint">Affichage limité aux 200 plus récentes · ${list.length-200} en plus avec filtres</div>`:''}`}
+  `;
+  return w;
+};
+
+// ==================== VUE : PLAN COMPTABLE ====================
+
+VIEWS.planComptable = function(){
+  const w = document.createElement("div");
+  const pc = (STATE.plan_comptable||[]).slice().sort((a,b)=>String(a.numero).localeCompare(String(b.numero)));
+  w.innerHTML = `
+    <div class="view-head">
+      <div><h2>📋 Plan comptable SYSCOHADA <span class="sub">${pc.length} comptes · standard OHADA/UEMOA</span></h2></div>
+    </div>
+    <table class="tbl"><thead><tr><th>N°</th><th>Intitulé</th><th>Classe</th><th>Type</th><th>Sens</th><th class="right">Débit</th><th class="right">Crédit</th><th class="right">Solde</th></tr></thead><tbody>
+      ${pc.map(c=>{
+        const s = soldeCompte(c.numero);
+        return `<tr>
+          <td><span class="mono b700">${escapeHtml(c.numero)}</span></td>
+          <td>${escapeHtml(c.intitule)} ${c.collectif?'<span class="f10 muted">[collectif]</span>':''}</td>
+          <td><span class="pill info">Cl. ${c.classe}</span></td>
+          <td>${escapeHtml(c.type)}</td>
+          <td>${c.sens==='debit'?'⬅ Débit':'➡ Crédit'}</td>
+          <td class="right ${s.debit>0?'b700':''}">${s.debit>0?fmtFCFA(s.debit):'-'}</td>
+          <td class="right ${s.credit>0?'b700':''}">${s.credit>0?fmtFCFA(s.credit):'-'}</td>
+          <td class="right b700" style="color:${s.solde>0?'var(--primary)':s.solde<0?'var(--alert)':'var(--muted)'}">${s.solde!==0?fmtFCFA(s.solde):'-'}</td>
+        </tr>`;
+      }).join("")}
+    </tbody></table>
+  `;
+  return w;
+};
+
+// ==================== VUE : AUDIT LOG ====================
+
+VIEWS.auditLog = function(){
+  const w = document.createElement("div");
+  w.innerHTML = `
+    <div class="view-head">
+      <div><h2>🔍 Journal d'audit <span class="sub">Traçabilité avec chaîne SHA-256</span></h2></div>
+      <div class="view-actions">
+        <button class="btn" onclick="verifyAuditChain()">🔐 Vérifier intégrité</button>
+        <button class="btn ghost" onclick="loadAuditFromCloud()">🔄 Charger</button>
+        <button class="btn ghost" onclick="exportAuditCSV()">📤 Export CSV</button>
+      </div>
+    </div>
+    <div id="auditLogContent">
+      <div class="empty"><span class="ico">📋</span>Cliquez sur "🔄 Charger" pour récupérer l'audit log depuis le cloud Supabase</div>
+    </div>
+  `;
+  return w;
+};
+
+// ==================== MODAL : DÉTAIL ÉCRITURE ====================
+
+MODALS.detailEcriture = (id)=>{
+  const e = (STATE.ecritures||[]).find(x=>x.id===id);
+  if(!e) return modalShell("Erreur","Écriture introuvable","");
+  const totD = e.lignes.reduce((s,l)=>s+(l.debit||0),0);
+  const totC = e.lignes.reduce((s,l)=>s+(l.credit||0),0);
+  const equilibree = Math.abs(totD-totC)<1;
+  const stLabel = {brouillon:'📝 Brouillon',validee:'✓ Validée',validee_finale:'✓✓ Validation finale',cloturee:'🔒 Clôturée'};
+  let actions = '';
+  if(e.statut==='brouillon') actions = `<button class="btn" onclick="validerEcriture('${e.id}','validee')">✓ Valider (comptable)</button>`;
+  else if(e.statut==='validee') actions = `<button class="btn" onclick="validerEcriture('${e.id}','validee_finale')" style="background:var(--structure)">✓✓ Validation finale (chef comptable)</button>`;
+  else if(e.statut==='validee_finale') actions = `<button class="btn" onclick="validerEcriture('${e.id}','cloturee')" style="background:var(--danger)">🔒 Clôturer</button>`;
+
+  return modalShell("📚 Écriture "+escapeHtml(e.numero), `
+    <div class="card" style="background:var(--primary-light)">
+      <div class="flex between">
+        <div>
+          <strong>${escapeHtml(e.libelle)}</strong><br>
+          <span class="f12 muted">Journal ${escapeHtml(e.journal_code||'?')} · ${fmtDate(e.date_ecriture)}${e.reference?' · Réf. '+escapeHtml(e.reference):''}</span>
+        </div>
+        <div class="right">
+          <span class="pill info">${stLabel[e.statut]||e.statut}</span>
+          ${e.auto_generated?'<br><span class="f10 muted mt-1">Auto-généré</span>':''}
+        </div>
+      </div>
+    </div>
+    <table class="tbl mt-2"><thead><tr><th>Compte</th><th>Libellé</th><th>Auxiliaire</th><th class="right">Débit</th><th class="right">Crédit</th></tr></thead><tbody>
+      ${e.lignes.map(l=>{
+        const cmpt = (STATE.plan_comptable||[]).find(c=>c.numero===l.compte);
+        const aux = l.compte_aux ? (getClient(l.compte_aux)?.nom || STATE.fournisseurs.find(f=>f.id===l.compte_aux)?.nom || STATE.concessionnaires.find(c=>c.id===l.compte_aux)?.nom || l.compte_aux) : '';
+        return `<tr>
+          <td><span class="mono b700">${escapeHtml(l.compte)}</span><br><span class="f10 muted">${escapeHtml(cmpt?.intitule||'')}</span></td>
+          <td class="f12">${escapeHtml(l.libelle||'')}</td>
+          <td class="f12">${escapeHtml(aux)}</td>
+          <td class="right b700">${l.debit>0?fmtFCFA(l.debit):'-'}</td>
+          <td class="right b700">${l.credit>0?fmtFCFA(l.credit):'-'}</td>
+        </tr>`;
+      }).join("")}
+    </tbody>
+    <tfoot><tr style="background:var(--bg);font-weight:700">
+      <td colspan="3">TOTAUX</td>
+      <td class="right">${fmtFCFA(totD)}</td>
+      <td class="right">${fmtFCFA(totC)}</td>
+    </tr></tfoot></table>
+    <div class="card mt-2" style="background:${equilibree?'var(--primary-light)':'#fee2e2'};border-color:${equilibree?'var(--primary)':'var(--danger)'}">
+      <strong>${equilibree?'✓ Équilibrée':'⚠ Déséquilibrée'}</strong> · Écart : ${fmtFCFA(Math.abs(totD-totC))}
+    </div>
+    ${e.created_at?`<div class="f12 muted mt-2">Saisie : ${fmtDateTime(e.created_at)}${e.valide_le?' · Validée : '+fmtDateTime(e.valide_le):''}${e.valide_final_le?' · Validation finale : '+fmtDateTime(e.valide_final_le):''}</div>`:''}
+  `, `
+    ${actions}
+    ${e.statut==='brouillon'?`<button class="btn ghost" style="border-color:var(--danger);color:var(--danger)" onclick="supprimerEcriture('${e.id}')">🗑 Supprimer</button>`:''}
+    <button class="btn ghost" onclick="closeModal()">Fermer</button>
+  `);
+};
+
+window.validerEcriture = function(id, niveau){
+  const e = STATE.ecritures.find(x=>x.id===id);
+  if(!e) return;
+  if(niveau==="validee"){
+    e.statut = "validee"; e.valide_par = _authUser?.id || null; e.valide_le = now();
+    toast("Écriture validée (niveau comptable)","success");
+  } else if(niveau==="validee_finale"){
+    e.statut = "validee_finale"; e.valide_final_par = _authUser?.id || null; e.valide_final_le = now();
+    toast("Validation finale OK (chef comptable)","success");
+  } else if(niveau==="cloturee"){
+    if(!confirm("Clôturer cette écriture ? Elle deviendra IMMUABLE.")) return;
+    e.statut = "cloturee";
+    toast("Écriture clôturée","success");
+  }
+  saveState();
+  closeModal();
+  route("ecritures");
+};
+
+window.supprimerEcriture = function(id){
+  if(!confirm("Supprimer cette écriture brouillon ? (irréversible)")) return;
+  STATE.ecritures = STATE.ecritures.filter(e=>e.id!==id);
+  saveState();
+  closeModal();
+  route("ecritures");
+  toast("Écriture supprimée","success");
+};
+
+// Export CSV des écritures filtrées
+window.exportEcrituresCSV = function(){
+  let list = (STATE.ecritures||[]).slice();
+  if(_ecFilters.journal) list = list.filter(e=>e.journal_code===_ecFilters.journal);
+  if(_ecFilters.statut) list = list.filter(e=>e.statut===_ecFilters.statut);
+  if(_ecFilters.df) list = list.filter(e=>e.date_ecriture >= _ecFilters.df);
+  if(_ecFilters.dt) list = list.filter(e=>e.date_ecriture <= _ecFilters.dt);
+  if(_ecFilters.compte) list = list.filter(e=>e.lignes.some(l=>(l.compte||"").startsWith(_ecFilters.compte)));
+
+  const rows = [["N°","Date","Journal","Compte","Intitulé compte","Auxiliaire","Libellé","Référence","Débit","Crédit","Statut"]];
+  list.forEach(e=>{
+    e.lignes.forEach(l=>{
+      const cmpt = (STATE.plan_comptable||[]).find(c=>c.numero===l.compte);
+      const aux = l.compte_aux ? (getClient(l.compte_aux)?.nom || STATE.fournisseurs.find(f=>f.id===l.compte_aux)?.nom || STATE.concessionnaires.find(c=>c.id===l.compte_aux)?.nom || l.compte_aux) : '';
+      rows.push([e.numero, e.date_ecriture, e.journal_code, l.compte, cmpt?.intitule||'', aux, e.libelle, e.reference||'', l.debit||0, l.credit||0, e.statut]);
+    });
+  });
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";")).join("\n");
+  const blob = new Blob(["\ufeff"+csv], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `journal_ecritures_${today()}.csv`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  toast(`${list.length} écritures exportées`,"success");
+};
+
+// Charge l'audit log depuis Supabase (vue v_audit_full)
+window.loadAuditFromCloud = async function(){
+  const sb = await requireAuth(loadAuditFromCloud);
+  if(!sb) return;
+  const cnt = document.getElementById('auditLogContent');
+  if(cnt) cnt.innerHTML = '<div class="empty"><span class="ico">⏳</span>Chargement…</div>';
+  try {
+    const { data, error } = await sb.from('v_audit_full').select('*').limit(200);
+    if(error){ if(cnt) cnt.innerHTML = '<div class="empty"><span class="ico">❌</span>'+escapeHtml(error.message)+'</div>'; return; }
+    if(!data || data.length===0){ if(cnt) cnt.innerHTML = '<div class="empty"><span class="ico">📋</span>Aucun événement</div>'; return; }
+    if(!cnt) return;
+    cnt.innerHTML = `<table class="tbl"><thead><tr><th>Date</th><th>Utilisateur</th><th>Rôle</th><th>Poste</th><th>Action</th><th>Table</th><th>ID</th><th>Hash</th></tr></thead><tbody>
+      ${data.map(r=>`<tr style="cursor:pointer" onclick="showAuditDiff(${data.indexOf(r)})">
+        <td class="f12">${fmtDateTime(r.ts)}</td>
+        <td>${escapeHtml(r.user_email||'?')}</td>
+        <td><span class="pill info">${escapeHtml(r.user_role||'?')}</span></td>
+        <td class="f12 mono">${escapeHtml(r.poste_travail||'?')}</td>
+        <td><span class="pill ${r.action==='INSERT'?'ok':r.action==='UPDATE'?'warn':r.action==='DELETE'?'bad':'info'}">${escapeHtml(r.action)}</span></td>
+        <td class="f12">${escapeHtml(r.table_name||'')}</td>
+        <td class="f12 mono">${escapeHtml((r.record_id||'').slice(0,12))}</td>
+        <td class="f12 mono">${escapeHtml(r.hash_court||'')}</td>
+      </tr>`).join("")}
+    </tbody></table>
+    <div class="hint mt-2">Cliquez sur une ligne pour voir l'ancienne valeur vs nouvelle valeur.</div>`;
+    window._auditCache = data;
+  } catch(e){ if(cnt) cnt.innerHTML = '<div class="empty"><span class="ico">❌</span>'+escapeHtml(e.message)+'</div>'; }
+};
+
+window.showAuditDiff = function(idx){
+  const r = (window._auditCache||[])[idx];
+  if(!r) return;
+  const av = r.ancienne_valeur ? JSON.stringify(r.ancienne_valeur,null,2) : '(aucune)';
+  const nv = r.nouvelle_valeur ? JSON.stringify(r.nouvelle_valeur,null,2) : '(aucune)';
+  MODALS.auditDiff = ()=>modalShell("📋 Détail audit log #"+r.id, `
+    <div class="grid grid-2">
+      <div>
+        <h3 style="color:var(--danger)">⬅ Ancienne valeur</h3>
+        <pre style="background:#fee2e2;padding:10px;border-radius:6px;font-size:11px;max-height:400px;overflow:auto">${escapeHtml(av)}</pre>
+      </div>
+      <div>
+        <h3 style="color:var(--primary)">➡ Nouvelle valeur</h3>
+        <pre style="background:var(--primary-light);padding:10px;border-radius:6px;font-size:11px;max-height:400px;overflow:auto">${escapeHtml(nv)}</pre>
+      </div>
+    </div>
+    <div class="card mt-2" style="background:var(--bg);font-size:12px">
+      <strong>Action :</strong> ${escapeHtml(r.action)} · <strong>Table :</strong> ${escapeHtml(r.table_name||'?')} · <strong>Record :</strong> ${escapeHtml(r.record_id||'?')}<br>
+      <strong>Par :</strong> ${escapeHtml(r.user_email||'?')} (${escapeHtml(r.user_role||'?')}) · <strong>Poste :</strong> ${escapeHtml(r.poste_travail||'?')}<br>
+      <strong>Le :</strong> ${fmtDateTime(r.ts)} · <strong>Hash :</strong> <span class="mono">${escapeHtml(r.hash_court||'')}</span>
+    </div>
+  `, `<button class="btn ghost" onclick="closeModal()">Fermer</button>`);
+  openModal('auditDiff');
+};
+
+window.exportAuditCSV = async function(){
+  const sb = await requireAuth(exportAuditCSV);
+  if(!sb) return;
+  try {
+    const { data, error } = await sb.from('v_audit_full').select('*').limit(5000);
+    if(error){ toast("Erreur : "+error.message,"error"); return; }
+    if(!data || data.length===0){ toast("Aucune donnée","warn"); return; }
+    const rows = [["ID","Date","Utilisateur","Rôle","Poste","Action","Table","Record ID","Ancienne","Nouvelle","Hash"]];
+    data.forEach(r=>{
+      rows.push([r.id, r.ts, r.user_email||'', r.user_role||'', r.poste_travail||'', r.action, r.table_name||'', r.record_id||'', JSON.stringify(r.ancienne_valeur||null), JSON.stringify(r.nouvelle_valeur||null), r.hash_court||'']);
+    });
+    const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";")).join("\n");
+    const blob = new Blob(["\ufeff"+csv], {type:"text/csv;charset=utf-8"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `audit_log_${today()}.csv`;
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+    toast(`${data.length} événements exportés`,"success");
+  } catch(e){ toast("Erreur : "+e.message,"error"); }
+};
+
+// ==================== MODAL : NOUVELLE ÉCRITURE MANUELLE ====================
+
+let _newEcLignes = [];
+MODALS.nouvelleEcriture = ()=>{
+  _newEcLignes = [{compte:"", debit:0, credit:0, libelle:""},{compte:"", debit:0, credit:0, libelle:""}];
+  return modalShell("➕ Nouvelle écriture comptable", `
+    <div class="row row-2">
+      <div class="fld"><label>Date</label><input type="date" id="nec_date" value="${today()}"></div>
+      <div class="fld"><label>Journal</label>
+        <select id="nec_journal">
+          <option value="OD">OD - Opérations Diverses</option>
+          <option value="VTE">VTE - Ventes</option>
+          <option value="ACH">ACH - Achats</option>
+          <option value="BNQ">BNQ - Banque</option>
+          <option value="CAI">CAI - Caisse</option>
+        </select></div>
+    </div>
+    <div class="fld"><label>Libellé</label><input id="nec_libelle" placeholder="Ex: Charge de loyer juin"></div>
+    <div class="fld"><label>Référence (pièce)</label><input id="nec_ref"></div>
+    <div class="section-title">Lignes (débit = crédit obligatoire)</div>
+    <div id="necLignes"></div>
+    <button class="btn ghost block mt-1" onclick="ajouterLigneEc()">➕ Ajouter une ligne</button>
+    <div class="card mt-2" style="background:var(--bg)">
+      <div class="flex between"><span>Total débit :</span><strong id="necTotD" class="b700">0 F</strong></div>
+      <div class="flex between"><span>Total crédit :</span><strong id="necTotC" class="b700">0 F</strong></div>
+      <div class="flex between mt-1"><strong>Écart :</strong><strong id="necEcart" class="b700">0 F</strong></div>
+    </div>
+  `, `
+    <button class="btn ghost" onclick="closeModal()">Annuler</button>
+    <button class="btn" onclick="saveNouvelleEcriture()">💾 Enregistrer</button>
+  `, ()=>{ renderNouvelleLignes(); });
+};
+
+function renderNouvelleLignes(){
+  const box = $("#necLignes");
+  if(!box) return;
+  const cpt = STATE.plan_comptable||[];
+  box.innerHTML = _newEcLignes.map((l,i)=>`<div class="row row-4 mb-1">
+    <div class="fld"><label>${i===0?'Compte':''}</label>
+      <select onchange="_newEcLignes[${i}].compte=this.value;recomputeNec()">
+        <option value="">— Compte —</option>
+        ${cpt.map(c=>`<option value="${escapeHtml(c.numero)}" ${l.compte===c.numero?'selected':''}>${escapeHtml(c.numero)} - ${escapeHtml(c.intitule)}</option>`).join("")}
+      </select></div>
+    <div class="fld"><label>${i===0?'Libellé':''}</label><input value="${escapeHtml(l.libelle||'')}" oninput="_newEcLignes[${i}].libelle=this.value"></div>
+    <div class="fld"><label>${i===0?'Débit':''}</label><input type="number" value="${l.debit||0}" oninput="_newEcLignes[${i}].debit=parseInt(this.value)||0;_newEcLignes[${i}].credit=0;recomputeNec()"></div>
+    <div class="fld"><label>${i===0?'Crédit':''}</label><input type="number" value="${l.credit||0}" oninput="_newEcLignes[${i}].credit=parseInt(this.value)||0;_newEcLignes[${i}].debit=0;recomputeNec()"></div>
+  </div>`).join("");
+}
+window.ajouterLigneEc = function(){ _newEcLignes.push({compte:"", debit:0, credit:0, libelle:""}); renderNouvelleLignes(); };
+window.recomputeNec = function(){
+  const td = _newEcLignes.reduce((s,l)=>s+(l.debit||0),0);
+  const tc = _newEcLignes.reduce((s,l)=>s+(l.credit||0),0);
+  if($("#necTotD")) $("#necTotD").textContent = fmtFCFA(td);
+  if($("#necTotC")) $("#necTotC").textContent = fmtFCFA(tc);
+  if($("#necEcart")){ $("#necEcart").textContent = fmtFCFA(Math.abs(td-tc)); $("#necEcart").style.color = Math.abs(td-tc)<1 ? "var(--primary)" : "var(--danger)"; }
+};
+window.saveNouvelleEcriture = function(){
+  const lignes = _newEcLignes.filter(l=>l.compte && ((l.debit||0)>0||(l.credit||0)>0));
+  if(lignes.length<2){ toast("Au moins 2 lignes requises","error"); return; }
+  const td = lignes.reduce((s,l)=>s+l.debit,0);
+  const tc = lignes.reduce((s,l)=>s+l.credit,0);
+  if(Math.abs(td-tc)>=1){ toast("Écriture non équilibrée","error"); return; }
+  creerEcriture({
+    date: $("#nec_date").value,
+    journal: $("#nec_journal").value,
+    libelle: ($("#nec_libelle").value||"").trim() || "Écriture manuelle",
+    reference: ($("#nec_ref").value||"").trim(),
+    lignes
+  });
+  closeModal();
+  route("ecritures");
+  toast("Écriture enregistrée en brouillon","success");
+};
+
+window.regenererToutesEcritures = regenererToutesEcritures;
+window.genEcritureVente = genEcritureVente;
+window.genEcritureEncaissement = genEcritureEncaissement;
+window.genEcritureAchat = genEcritureAchat;
+window.genEcritureRetour = genEcritureRetour;
+window.comptaKPI = comptaKPI;
+window.soldeCompte = soldeCompte;
+window.topDebiteurs = topDebiteurs;
+window.topCreanciers = topCreanciers;
+
+// HOOK GLOBAL : auto-génère les écritures comptables après chaque saveState (debounced 500ms)
+// Permet de ne pas modifier toutes les fonctions saveXxx existantes
+const _origSaveStateForCompta = saveState;
+saveState = function(){
+  _origSaveStateForCompta.apply(this, arguments);
+  if(window._comptaHookTimer) clearTimeout(window._comptaHookTimer);
+  window._comptaHookTimer = setTimeout(autoGenMissingEcritures, 500);
+};
+
+function autoGenMissingEcritures(){
+  if(!STATE.ecritures) return;
+  let cnt = 0;
+  (STATE.factures||[]).forEach(f=>{ if(genEcritureVente(f)) cnt++; });
+  (STATE.encaissements||[]).forEach(e=>{ if(genEcritureEncaissement(e)) cnt++; });
+  (STATE.achats||[]).forEach(a=>{ if(genEcritureAchat(a)) cnt++; });
+  (STATE.retours_marchandise||[]).forEach(r=>{ if(genEcritureRetour(r)) cnt++; });
+  if(cnt > 0) console.log(`[compta] ${cnt} écriture(s) auto-générée(s)`);
+}
+
+window.autoGenMissingEcritures = autoGenMissingEcritures;
+
+/* ====================================================================
    BOOT
    ==================================================================== */
 window.addEventListener("DOMContentLoaded", ()=>{
@@ -6267,6 +7083,16 @@ window.addEventListener("DOMContentLoaded", ()=>{
   document.body.addEventListener("input", (e)=>{
     if(e.target.id==="m_rc" || e.target.id==="m_rb") recomputeFac();
   });
+
+  // INIT COMPTABILITÉ : charge plan comptable et auto-génère les écritures manquantes
+  loadPlanComptable();
+  if(STATE.ecritures.length === 0 && (STATE.factures||[]).length > 0){
+    setTimeout(()=>{
+      autoGenMissingEcritures();
+      const c = STATE.ecritures.length;
+      if(c > 0) toast(`📊 Module comptabilité : ${c} écritures auto-générées depuis vos données`, "info");
+    }, 1000);
+  }
 
   // Magic Link : si l'URL contient un token, charge Supabase pour le traiter
   if(window.location.hash.includes('access_token=') || window.location.hash.includes('type=magiclink')){
