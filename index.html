@@ -289,34 +289,53 @@ table.tbl td .pill{display:inline-block;padding:2px 8px;border-radius:999px;
 </head>
 <body>
 <!-- ====================================================================
-     ÉCRAN DE LOGIN PLEINE PAGE (v2.10)
-     Affiché au démarrage si non connecté · masqué une fois auth OK
+     ÉCRAN DE LOGIN PLEINE PAGE — VERSION SIMPLE (v2.10)
+     Email + mot de passe uniquement
      ==================================================================== -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:9000;background:linear-gradient(135deg,#0F8A5F 0%,#1D3557 100%);align-items:center;justify-content:center;padding:20px;color:#fff;overflow-y:auto">
-  <div style="max-width:440px;width:100%;background:rgba(255,255,255,.08);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-radius:20px;padding:36px 28px;box-shadow:0 20px 60px rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.15)">
+  <div style="max-width:400px;width:100%;background:rgba(255,255,255,.1);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-radius:20px;padding:32px 28px;box-shadow:0 20px 60px rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.15)">
 
-    <div style="text-align:center;margin-bottom:28px">
+    <div style="text-align:center;margin-bottom:24px">
       <div style="background:#fff;color:#0F8A5F;width:72px;height:72px;border-radius:18px;display:inline-flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.25)">SD</div>
-      <h1 style="margin:0;font-size:22px;font-weight:900;letter-spacing:-.3px">Sanix DistriPro ERP</h1>
-      <p style="margin:6px 0 0;opacity:.85;font-size:13px;line-height:1.5">Gestion de dépôt boissons · Côte d'Ivoire<br>Connectez-vous pour synchroniser dans le cloud</p>
+      <h1 style="margin:0;font-size:22px;font-weight:900">Sanix DistriPro ERP</h1>
+      <p id="loginSubtitle" style="margin:6px 0 0;opacity:.85;font-size:13px">Connectez-vous pour synchroniser dans le cloud</p>
     </div>
 
-    <button onclick="openLoginMode('signin')" style="display:block;width:100%;background:#fff;color:#0F8A5F;border:none;padding:14px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;box-shadow:0 4px 12px rgba(0,0,0,.2)">🔐 Se connecter</button>
+    <!-- FORMULAIRE -->
+    <div class="login-fld" style="margin-bottom:12px">
+      <label style="display:block;margin-bottom:6px;font-size:12px;font-weight:600;opacity:.9">Email</label>
+      <input id="loginEmail" type="email" autocomplete="email" placeholder="exemple@sanix.ci" style="width:100%;padding:12px 14px;background:rgba(255,255,255,.95);color:#1D3557;border:none;border-radius:10px;font-size:15px;box-sizing:border-box">
+    </div>
 
-    <button onclick="openLoginMode('signup')" style="display:block;width:100%;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.35);padding:14px;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px">✨ Créer un compte</button>
+    <div class="login-fld" style="margin-bottom:12px">
+      <label style="display:block;margin-bottom:6px;font-size:12px;font-weight:600;opacity:.9">Mot de passe</label>
+      <input id="loginPwd" type="password" autocomplete="current-password" placeholder="••••••••" style="width:100%;padding:12px 14px;background:rgba(255,255,255,.95);color:#1D3557;border:none;border-radius:10px;font-size:15px;box-sizing:border-box" onkeypress="if(event.key==='Enter')doSimpleLogin()">
+    </div>
 
-    <button onclick="openLoginMode('magiclink')" style="display:block;width:100%;background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.25);padding:12px;border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:24px">📩 Lien magique par email</button>
+    <!-- Champ confirmation (visible en mode inscription seulement) -->
+    <div id="loginPwd2Wrap" class="login-fld" style="margin-bottom:12px;display:none">
+      <label style="display:block;margin-bottom:6px;font-size:12px;font-weight:600;opacity:.9">Confirmer le mot de passe</label>
+      <input id="loginPwd2" type="password" autocomplete="new-password" placeholder="••••••••" style="width:100%;padding:12px 14px;background:rgba(255,255,255,.95);color:#1D3557;border:none;border-radius:10px;font-size:15px;box-sizing:border-box" onkeypress="if(event.key==='Enter')doSimpleLogin()">
+    </div>
 
-    <div style="display:flex;align-items:center;gap:12px;margin:20px 0;color:rgba(255,255,255,.5);font-size:11px;font-weight:600;letter-spacing:.5px">
+    <div id="loginError" style="display:none;background:rgba(220,38,38,.2);border:1px solid rgba(220,38,38,.5);color:#fecaca;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+
+    <button id="loginBtn" onclick="doSimpleLogin()" style="display:block;width:100%;background:#fff;color:#0F8A5F;border:none;padding:14px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:14px;box-shadow:0 4px 12px rgba(0,0,0,.2)">🔐 Se connecter</button>
+
+    <div style="text-align:center;font-size:13px;margin-bottom:20px">
+      <span id="loginToggleText" style="opacity:.8">Pas encore de compte ?</span>
+      <a id="loginToggleLink" onclick="toggleLoginMode()" style="color:#fff;cursor:pointer;font-weight:600;margin-left:4px;text-decoration:underline">Créer un compte</a>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:12px;margin:18px 0;color:rgba(255,255,255,.4);font-size:11px;font-weight:600">
       <div style="flex:1;height:1px;background:rgba(255,255,255,.2)"></div>
       <span>OU</span>
       <div style="flex:1;height:1px;background:rgba(255,255,255,.2)"></div>
     </div>
 
-    <button onclick="skipLoginToOffline()" style="display:block;width:100%;background:transparent;color:rgba(255,255,255,.85);border:1px dashed rgba(255,255,255,.3);padding:12px;border-radius:12px;font-size:13px;font-weight:500;cursor:pointer">💾 Continuer en mode hors-ligne</button>
-    <p style="margin:8px 0 0;text-align:center;opacity:.55;font-size:11px;line-height:1.5">Vos données restent locales · pas de sauvegarde cloud</p>
+    <button onclick="skipLoginToOffline()" style="display:block;width:100%;background:transparent;color:rgba(255,255,255,.8);border:1px dashed rgba(255,255,255,.3);padding:11px;border-radius:10px;font-size:13px;cursor:pointer">💾 Continuer en mode hors-ligne</button>
 
-    <div style="text-align:center;margin-top:28px;padding-top:20px;border-top:1px solid rgba(255,255,255,.1);opacity:.6;font-size:11px;line-height:1.7">
+    <div style="text-align:center;margin-top:24px;padding-top:18px;border-top:1px solid rgba(255,255,255,.1);opacity:.55;font-size:10px;line-height:1.6">
       <strong>Sanix Africa Division Technologies</strong><br>
       Cyrille KESSIE · <a href="tel:+22507791810750" style="color:#fff;text-decoration:none">+225 07 79 18 10 75</a>
     </div>
@@ -7107,13 +7126,17 @@ function autoGenMissingEcritures(){
 window.autoGenMissingEcritures = autoGenMissingEcritures;
 
 /* ====================================================================
-   ============ SYSTÈME DE LOGIN PLEINE PAGE (v2.10) ============
-   Gating obligatoire au démarrage avec option offline
+   ============ SYSTÈME DE LOGIN PLEINE PAGE — SIMPLE (v2.10) ============
+   Email + mot de passe uniquement · Inscription via toggle
    ==================================================================== */
+
+var _loginMode = 'signin'; // 'signin' | 'signup'
 
 function showLoginScreen(){
   const ov = document.getElementById('loginOverlay');
   if(ov) ov.style.display = 'flex';
+  // Reset form
+  if(document.getElementById('loginError')) document.getElementById('loginError').style.display = 'none';
 }
 
 function hideLoginScreen(){
@@ -7121,23 +7144,109 @@ function hideLoginScreen(){
   if(ov) ov.style.display = 'none';
 }
 
-// L'utilisateur choisit "continuer hors-ligne" — on note la préférence
+// Bascule entre Connexion et Inscription
+window.toggleLoginMode = function(){
+  _loginMode = (_loginMode === 'signin') ? 'signup' : 'signin';
+  const isSignup = _loginMode === 'signup';
+  // Met à jour l'UI
+  document.getElementById('loginSubtitle').textContent = isSignup
+    ? "Créez votre compte pour activer la sauvegarde cloud"
+    : "Connectez-vous pour synchroniser dans le cloud";
+  document.getElementById('loginBtn').innerHTML = isSignup ? '✨ Créer mon compte' : '🔐 Se connecter';
+  document.getElementById('loginPwd2Wrap').style.display = isSignup ? 'block' : 'none';
+  document.getElementById('loginToggleText').textContent = isSignup ? 'Déjà un compte ?' : 'Pas encore de compte ?';
+  document.getElementById('loginToggleLink').textContent = isSignup ? 'Se connecter' : 'Créer un compte';
+  // Reset erreur
+  document.getElementById('loginError').style.display = 'none';
+};
+
+// Affiche une erreur dans la zone dédiée
+function showLoginError(msg){
+  const el = document.getElementById('loginError');
+  if(!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+// Bouton principal : se connecte OU crée un compte
+window.doSimpleLogin = async function(){
+  const email = (document.getElementById('loginEmail').value||"").trim();
+  const pwd   = document.getElementById('loginPwd').value;
+  const pwd2  = document.getElementById('loginPwd2').value;
+
+  // Validations basiques
+  if(!email || !email.includes('@')){ showLoginError("Email invalide"); return; }
+  if(!pwd || pwd.length < 6){ showLoginError("Mot de passe trop court (min 6 caractères)"); return; }
+  if(_loginMode === 'signup' && pwd !== pwd2){ showLoginError("Les deux mots de passe ne correspondent pas"); return; }
+
+  // Désactive le bouton pendant la requête
+  const btn = document.getElementById('loginBtn');
+  const originalTxt = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Patientez…';
+  btn.style.opacity = '.7';
+
+  try {
+    const sb = await ensureSupabase();
+    if(!sb){ showLoginError("Connexion Supabase impossible — vérifiez internet"); btn.disabled=false; btn.innerHTML=originalTxt; btn.style.opacity='1'; return; }
+
+    if(_loginMode === 'signin'){
+      // CONNEXION
+      const { data, error } = await sb.auth.signInWithPassword({ email, password: pwd });
+      if(error){
+        // Messages d'erreur traduits / simplifiés
+        let msg = error.message;
+        if(msg.toLowerCase().includes('invalid login credentials')) msg = "Email ou mot de passe incorrect";
+        if(msg.toLowerCase().includes('email not confirmed')) msg = "Email pas encore confirmé — vérifiez votre boîte mail";
+        showLoginError(msg);
+        btn.disabled = false; btn.innerHTML = originalTxt; btn.style.opacity = '1';
+        return;
+      }
+      toast("✓ Connexion réussie · "+email, "success");
+      hideLoginScreen();
+      localStorage.removeItem('sanix_login_skip');
+    } else {
+      // INSCRIPTION
+      const { data, error } = await sb.auth.signUp({
+        email,
+        password: pwd,
+        options: { data: { full_name: email.split('@')[0] } }
+      });
+      if(error){
+        let msg = error.message;
+        if(msg.toLowerCase().includes('already registered')) msg = "Cet email est déjà inscrit — connectez-vous";
+        if(msg.toLowerCase().includes('weak password')) msg = "Mot de passe trop faible — utilisez au moins 6 caractères";
+        showLoginError(msg);
+        btn.disabled = false; btn.innerHTML = originalTxt; btn.style.opacity = '1';
+        return;
+      }
+      // Si email_confirmation activée, data.session sera null
+      if(!data.session){
+        showLoginError("✓ Compte créé · Vérifiez votre email pour confirmer votre compte");
+        document.getElementById('loginError').style.background = 'rgba(15,138,95,.3)';
+        document.getElementById('loginError').style.borderColor = 'rgba(15,138,95,.6)';
+        document.getElementById('loginError').style.color = '#a7f3d0';
+        btn.disabled = false; btn.innerHTML = '🔐 Se connecter';
+        btn.style.opacity = '1';
+        _loginMode = 'signin';
+        toggleLoginMode(); toggleLoginMode(); // resync UI
+        return;
+      }
+      toast("✓ Compte créé · Bienvenue "+email, "success");
+      hideLoginScreen();
+      localStorage.removeItem('sanix_login_skip');
+    }
+  } catch(e){
+    showLoginError("Erreur : "+e.message);
+    btn.disabled = false; btn.innerHTML = originalTxt; btn.style.opacity = '1';
+  }
+};
+
+// L'utilisateur choisit "continuer hors-ligne"
 window.skipLoginToOffline = function(){
   localStorage.setItem('sanix_login_skip', '1');
   hideLoginScreen();
   toast("Mode hors-ligne actif — vos données restent locales (pas de sync cloud)", "info");
-};
-
-// Ouvre le modal auth sur le bon onglet selon le mode demandé
-window.openLoginMode = function(mode){
-  openModal('auth');
-  setTimeout(()=>{
-    if(typeof switchAuthTab === 'function'){
-      if(mode === 'signup')    switchAuthTab('signup');
-      else if(mode === 'magiclink') switchAuthTab('magiclink');
-      else                     switchAuthTab('signin');
-    }
-  }, 80);
 };
 
 // Étend updateSyncUI pour gérer l'écran de login
@@ -7145,9 +7254,8 @@ const _origUpdateSyncUI = typeof updateSyncUI === 'function' ? updateSyncUI : nu
 updateSyncUI = function(){
   if(_origUpdateSyncUI) _origUpdateSyncUI.apply(this, arguments);
   if(_authUser){
-    // Authentifié → cache l'écran de login si visible
     hideLoginScreen();
-    localStorage.removeItem('sanix_login_skip'); // si re-connexion, on annule le skip
+    localStorage.removeItem('sanix_login_skip');
   }
 };
 
@@ -7163,22 +7271,13 @@ if(_origDoSignOut){
 
 // Décide au boot si on doit afficher l'écran
 async function initLoginGate(){
-  // Si déjà connecté (session restaurée), on cache et on ne fait rien
-  // Si user a déjà choisi "skip", on respecte
-  if(_authUser) { hideLoginScreen(); return; }
-  if(localStorage.getItem('sanix_login_skip') === '1') { hideLoginScreen(); return; }
-
-  // Vérifie si une session Supabase existe en cache
+  if(_authUser){ hideLoginScreen(); return; }
+  if(localStorage.getItem('sanix_login_skip') === '1'){ hideLoginScreen(); return; }
   const sessKey = 'sb-' + SUPABASE_PROJECT_REF + '-auth-token';
   const hasSession = !!localStorage.getItem(sessKey);
-
   if(hasSession){
-    // Une session existe peut-être — laisse 1.5s à ensureSupabase pour la restaurer
-    setTimeout(()=>{
-      if(!_authUser) showLoginScreen();
-    }, 1500);
+    setTimeout(()=>{ if(!_authUser) showLoginScreen(); }, 1500);
   } else {
-    // Aucune session, montre tout de suite
     showLoginScreen();
   }
 }
