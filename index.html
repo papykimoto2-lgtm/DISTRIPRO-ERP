@@ -903,6 +903,7 @@ const NAV = [
     {v:"auditLog",ic:"🔍",l:"Journal d'audit"},
   ]},
   { group:"SYSTÈME", items:[
+    {v:"utilisateurs",ic:"👥",l:"Utilisateurs (admin)"},
     {v:"parametrage",ic:"⚙️",l:"Paramétrage"},
   ]},
 ];
@@ -7285,6 +7286,218 @@ async function initLoginGate(){
 window.showLoginScreen = showLoginScreen;
 window.hideLoginScreen = hideLoginScreen;
 window.initLoginGate = initLoginGate;
+
+/* ====================================================================
+   ============ GESTION DES UTILISATEURS (v2.11) ============
+   Admin uniquement · Création, listing, changement de rôle
+   ==================================================================== */
+
+const ROLES_DEF = {
+  admin:          { ico:'👑', label:'Admin',         desc:'Tout · paramétrage complet',                   color:'#dc2626' },
+  manager:        { ico:'🏢', label:'Manager',       desc:'Métier complet (sauf paramétrage admin)',     color:'#0F8A5F' },
+  livreur:        { ico:'🚚', label:'Livreur',       desc:'Terrain · tournées + livraisons',              color:'#F28C28' },
+  comptable:      { ico:'📊', label:'Comptable',     desc:'Saisie + validation niveau 1',                 color:'#7c3aed' },
+  chef_comptable: { ico:'🧮', label:'Chef comptable',desc:'Validation finale + clôture',                  color:'#0ea5e9' },
+  auditeur:       { ico:'🔍', label:'Auditeur',      desc:'Consultation uniquement (lecture seule)',      color:'#64748b' },
+};
+
+VIEWS.utilisateurs = function(){
+  const w = document.createElement("div");
+  if(_authRole !== 'admin'){
+    w.innerHTML = `<div class="empty" style="padding:60px"><span class="ico">🔒</span>
+      <h3>Accès admin requis</h3>
+      <p>Votre rôle actuel : <strong>${escapeHtml(_authRole||'non connecté')}</strong></p>
+      <p class="f12 muted">Seuls les administrateurs peuvent gérer les utilisateurs.</p>
+    </div>`;
+    return w;
+  }
+  w.innerHTML = `
+    <div class="view-head">
+      <div><h2>👥 Gestion des utilisateurs <span class="sub">Création de comptes · Assignation de rôles</span></h2></div>
+      <div class="view-actions">
+        <button class="btn ghost" onclick="loadUsersList()">🔄 Recharger</button>
+        <button class="btn" onclick="openModal('creerUtilisateur')" style="background:var(--structure)">➕ Créer un utilisateur</button>
+      </div>
+    </div>
+    <div class="card mb-2" style="background:var(--primary-light)">
+      <h3 style="margin:0">📋 Rôles disponibles</h3>
+      <div class="grid grid-3 mt-2">
+        ${Object.entries(ROLES_DEF).map(([k,r])=>`<div class="card" style="background:#fff;padding:10px">
+          <div style="font-weight:700;color:${r.color}">${r.ico} ${escapeHtml(r.label)}</div>
+          <div class="f12 muted mt-1">${escapeHtml(r.desc)}</div>
+        </div>`).join("")}
+      </div>
+    </div>
+    <div id="usersList"><div class="empty"><span class="ico">⏳</span>Chargement…</div></div>
+  `;
+  setTimeout(loadUsersList, 100);
+  return w;
+};
+
+window.loadUsersList = async function(){
+  const cnt = document.getElementById('usersList');
+  if(!cnt) return;
+  const sb = await ensureSupabase();
+  if(!sb || !_authUser){ cnt.innerHTML = '<div class="empty"><span class="ico">🔐</span>Connectez-vous d\'abord</div>'; return; }
+  cnt.innerHTML = '<div class="empty"><span class="ico">⏳</span>Chargement…</div>';
+  try {
+    const { data, error } = await sb.from('profiles').select('*').order('created_at',{ascending:false});
+    if(error){ cnt.innerHTML = '<div class="empty"><span class="ico">❌</span>'+escapeHtml(error.message)+'</div>'; return; }
+    if(!data || data.length===0){ cnt.innerHTML = '<div class="empty"><span class="ico">📋</span>Aucun utilisateur · Créez-en un avec le bouton ci-dessus</div>'; return; }
+    cnt.innerHTML = `<table class="tbl"><thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Tenant</th><th>Inscrit le</th><th>Dernière conn.</th><th>Actions</th></tr></thead><tbody>
+      ${data.map(u=>{
+        const r = ROLES_DEF[u.role] || {ico:'?',label:u.role||'?',color:'#64748b'};
+        const isMe = u.id === _authUser?.id;
+        return `<tr ${isMe?'style="background:var(--primary-light)"':''}>
+          <td><strong>${escapeHtml(u.full_name||'(sans nom)')}</strong> ${isMe?'<span class="pill ok" style="margin-left:6px">vous</span>':''}</td>
+          <td class="f12">${escapeHtml(u.email||'?')}</td>
+          <td><span class="pill" style="background:${r.color};color:#fff">${r.ico} ${escapeHtml(r.label)}</span></td>
+          <td class="f12 mono">${escapeHtml(u.tenant_id||'sanix_main')}</td>
+          <td class="f12">${u.created_at?fmtDate(u.created_at):'-'}</td>
+          <td class="f12">${u.derniere_connexion?fmtDateTime(u.derniere_connexion):'-'}</td>
+          <td>
+            ${!isMe?`<button class="btn sm" onclick="changeUserRole('${u.id}','${escapeHtml((u.full_name||u.email||'').replace(/'/g,'&apos;'))}','${u.role||'manager'}')">⚙ Rôle</button>`:''}
+          </td>
+        </tr>`;
+      }).join("")}
+    </tbody></table>
+    <div class="hint mt-2">💡 Les rôles modifient instantanément les permissions. Les utilisateurs verront le changement à leur prochaine action.</div>`;
+  } catch(e){ cnt.innerHTML = '<div class="empty"><span class="ico">❌</span>'+escapeHtml(e.message)+'</div>'; }
+};
+
+MODALS.creerUtilisateur = ()=>{
+  const suggestPwd = 'sanix' + Math.floor(Math.random()*9000+1000);
+  return modalShell("➕ Créer un utilisateur", `
+    <div class="hint mb-2">
+      💡 Vous restez connecté · L'utilisateur recevra ses identifiants par WhatsApp ou copier-coller pour se connecter.
+    </div>
+    <div class="fld"><label>Nom complet *</label><input id="cu_name" placeholder="Ex: Jean Kouassi"></div>
+    <div class="fld"><label>Email *</label><input id="cu_email" type="email" placeholder="ex: jean@sanix.ci" autocomplete="off"></div>
+    <div class="fld"><label>Mot de passe initial * (min 6 caractères)</label>
+      <div style="display:flex;gap:6px">
+        <input id="cu_pwd" type="text" value="${suggestPwd}" style="flex:1;font-family:var(--ff-mono);font-weight:700">
+        <button type="button" class="btn ghost sm" onclick="document.getElementById('cu_pwd').value='sanix'+Math.floor(Math.random()*9000+1000)">🎲 Générer</button>
+      </div>
+      <div class="f12 muted mt-1">L'utilisateur pourra le changer plus tard depuis son compte</div>
+    </div>
+    <div class="fld"><label>Rôle *</label>
+      <select id="cu_role">
+        <option value="manager">🏢 Manager (métier complet)</option>
+        <option value="livreur">🚚 Livreur (terrain)</option>
+        <option value="comptable">📊 Comptable (saisie + validation 1)</option>
+        <option value="chef_comptable">🧮 Chef comptable (validation finale + clôture)</option>
+        <option value="auditeur">🔍 Auditeur (lecture seule)</option>
+        <option value="admin">👑 Admin (tout)</option>
+      </select>
+    </div>
+  `, `
+    <button class="btn ghost" onclick="closeModal()">Annuler</button>
+    <button class="btn" onclick="doCreateUser()">💾 Créer le compte</button>
+  `);
+};
+
+window.doCreateUser = async function(){
+  const name  = ($("#cu_name").value||"").trim();
+  const email = ($("#cu_email").value||"").trim().toLowerCase();
+  const pwd   = $("#cu_pwd").value;
+  const role  = $("#cu_role").value;
+  if(!name || !email || !pwd){ toast("Tous les champs sont requis","error"); return; }
+  if(!email.includes('@')){ toast("Email invalide","error"); return; }
+  if(pwd.length < 6){ toast("Mot de passe trop court (min 6 caractères)","error"); return; }
+
+  const sb = await ensureSupabase();
+  if(!sb){ toast("Connexion Supabase impossible","error"); return; }
+
+  // 🔑 Astuce : client temporaire SANS persistance pour ne pas écraser la session admin
+  let tmpClient;
+  try {
+    tmpClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    });
+  } catch(e){
+    toast("Erreur création client temporaire : "+e.message, "error");
+    return;
+  }
+
+  toast("Création du compte…", "info");
+  try {
+    const { data, error } = await tmpClient.auth.signUp({
+      email, password: pwd,
+      options: { data: { full_name: name, role } }
+    });
+    if(error){
+      let msg = error.message;
+      if(msg.toLowerCase().includes('already registered')) msg = "Cet email est déjà inscrit dans la base";
+      toast("Erreur : "+msg, "error");
+      return;
+    }
+
+    // Met à jour le rôle dans profiles (le trigger handle_new_user prend par défaut "manager")
+    if(data.user?.id){
+      // Attente courte que le trigger crée le profile
+      await new Promise(r=>setTimeout(r,400));
+      const { error: e2 } = await sb.from('profiles').update({
+        role,
+        full_name: name
+      }).eq('id', data.user.id);
+      if(e2) console.warn("[users] Maj rôle/nom profile :", e2.message);
+    }
+
+    closeModal();
+
+    // Affiche les credentials pour transmission
+    MODALS.credentialsCree = ()=>modalShell("✓ Compte créé avec succès", `
+      <div class="card" style="background:var(--primary-light);border:2px solid var(--primary)">
+        <h3 style="margin:0 0 8px;color:var(--primary)">Identifiants pour ${escapeHtml(name)}</h3>
+        <div class="f12 muted mb-2">À transmettre à l'utilisateur — il ne sera plus possible de récupérer le mot de passe</div>
+        <table style="width:100%;font-family:var(--ff-mono);font-size:14px">
+          <tr><td style="padding:4px 0;font-weight:700">Email :</td><td><span style="background:#fff;padding:3px 8px;border-radius:4px;display:inline-block">${escapeHtml(email)}</span></td></tr>
+          <tr><td style="padding:4px 0;font-weight:700">Mot de passe :</td><td><span style="background:#fff;padding:3px 8px;border-radius:4px;display:inline-block">${escapeHtml(pwd)}</span></td></tr>
+          <tr><td style="padding:4px 0;font-weight:700">Rôle :</td><td>${ROLES_DEF[role]?.ico||''} ${escapeHtml(ROLES_DEF[role]?.label||role)}</td></tr>
+          <tr><td style="padding:4px 0;font-weight:700">URL :</td><td><span class="f12">${escapeHtml(location.origin)}</span></td></tr>
+        </table>
+      </div>
+      <div class="row row-2 mt-2">
+        <button class="btn block" onclick="copyCredentials('${escapeHtml(email)}','${escapeHtml(pwd)}','${escapeHtml(name)}')">📋 Copier</button>
+        <a class="btn block" style="background:#25D366" target="_blank" href="https://wa.me/?text=${encodeURIComponent('Bonjour '+name+',\n\nVoici vos identifiants pour Sanix DistriPro ERP :\n\nEmail : '+email+'\nMot de passe : '+pwd+'\nRôle : '+(ROLES_DEF[role]?.label||role)+'\nURL : '+location.origin+'\n\nVeuillez changer votre mot de passe après la première connexion.')}">📱 WhatsApp</a>
+      </div>
+      <div class="hint mt-2">⚠️ <strong>Important :</strong> notez ces identifiants maintenant. Le mot de passe ne sera plus jamais affiché en clair.</div>
+    `, `<button class="btn" onclick="closeModal();loadUsersList()">Fermer</button>`);
+    openModal('credentialsCree');
+    toast(`✓ Utilisateur ${name} créé`, "success");
+
+  } catch(e){ toast("Erreur : "+e.message, "error"); }
+};
+
+window.copyCredentials = function(email, pwd, name){
+  const txt = `Sanix DistriPro ERP - Identifiants pour ${name}\n\nEmail : ${email}\nMot de passe : ${pwd}\nURL : ${location.origin}\n\nVeuillez changer votre mot de passe après la première connexion.`;
+  navigator.clipboard.writeText(txt).then(
+    ()=>toast("✓ Copié dans le presse-papier","success"),
+    ()=>toast("Copie impossible","error")
+  );
+};
+
+window.changeUserRole = function(userId, userName, currentRole){
+  // Liste des rôles disponibles pour le prompt
+  const rolesList = Object.entries(ROLES_DEF).map(([k,r])=>`${k} (${r.label})`).join('\n  - ');
+  const newRole = prompt(
+    `Nouveau rôle pour ${userName} ?\nActuel : ${currentRole}\n\nValeurs possibles :\n  - ${rolesList}`,
+    currentRole
+  );
+  if(!newRole || newRole === currentRole) return;
+  if(!ROLES_DEF[newRole]){
+    toast("Rôle invalide. Valeurs : "+Object.keys(ROLES_DEF).join(', '),"error");
+    return;
+  }
+  if(!confirm(`Confirmer le changement de rôle de ${userName} :\n${currentRole} → ${newRole} ?`)) return;
+
+  ensureSupabase().then(async sb=>{
+    const { error } = await sb.from('profiles').update({ role: newRole }).eq('id', userId);
+    if(error){ toast("Erreur : "+error.message,"error"); return; }
+    toast(`✓ ${userName} est maintenant ${ROLES_DEF[newRole].ico} ${ROLES_DEF[newRole].label}`,"success");
+    loadUsersList();
+  });
+};
 
 /* ====================================================================
    BOOT
