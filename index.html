@@ -6343,29 +6343,41 @@ window.doMagicLink = doMagicLink;
 window.doSignOut = doSignOut;
 
 // Test de connexion
+// Helper : exécute une promesse avec timeout (rejette si trop long)
+function withTimeout(promise, ms, errMsg){
+  return Promise.race([
+    promise,
+    new Promise((_, reject)=>setTimeout(()=>reject(new Error(errMsg||`Timeout après ${ms/1000}s`)), ms))
+  ]);
+}
+
 async function doSyncTest(){
   const elState = document.getElementById('sync_state');
   if(elState){ elState.innerHTML = '⏳ Test en cours…'; elState.style.color = 'var(--alert)'; }
   toast("Test de connexion Supabase…","info");
-  const sb = await ensureSupabase();
-  if(!sb){
-    if(elState){ elState.innerHTML = '❌ Lib non chargée'; elState.style.color = 'var(--danger)'; }
-    return;
-  }
-  try{
+  try {
+    const sb = await withTimeout(ensureSupabase(), 8000, "Lib Supabase non chargée");
+    if(!sb){
+      if(elState){ elState.innerHTML = '❌ Lib non chargée'; elState.style.color = 'var(--danger)'; }
+      return;
+    }
     const t0 = Date.now();
-    const { error } = await sb.from('app_state').select('id').limit(1);
+    const { error } = await withTimeout(
+      sb.from('app_state').select('id').limit(1),
+      8000,
+      "Supabase ne répond pas (8s) — réseau lent ou service indisponible"
+    );
     const ms = Date.now() - t0;
     if(error){
-      if(elState){ elState.innerHTML = '❌ Erreur : ' + escapeHtml(error.message.slice(0,50)); elState.style.color = 'var(--danger)'; }
+      if(elState){ elState.innerHTML = '❌ ' + escapeHtml(error.message.slice(0,50)); elState.style.color = 'var(--danger)'; }
       toast("Erreur : "+error.message,"error");
       return;
     }
     if(elState){ elState.innerHTML = `✓ Connecté (${ms} ms)`; elState.style.color = 'var(--primary)'; }
     toast(`Connexion Supabase OK (${ms} ms)`,"success");
-  }catch(e){
-    if(elState){ elState.innerHTML = '❌ ' + escapeHtml(e.message.slice(0,50)); elState.style.color = 'var(--danger)'; }
-    toast("Erreur réseau : "+e.message,"error");
+  } catch(e){
+    if(elState){ elState.innerHTML = '⏱ ' + escapeHtml(e.message.slice(0,60)); elState.style.color = 'var(--danger)'; }
+    toast("Timeout : "+e.message,"error");
   }
 }
 
@@ -6373,6 +6385,7 @@ async function doSyncTest(){
 window.doSyncTest = doSyncTest;
 window.doSyncPush = doSyncPush;
 window.doSyncPull = doSyncPull;
+window.withTimeout = withTimeout;
 
 // ============================================================================
 // PUSH/PULL ANONYMES — Contournent l'authentification Supabase Auth
@@ -6381,24 +6394,28 @@ window.doSyncPull = doSyncPull;
 
 async function doSyncPushAnon(){
   const t0 = Date.now();
-  const sb = await ensureSupabase();
-  if(!sb){ toast("Connexion Supabase impossible","error"); return; }
-  toast("⚡ Push rapide en cours…","info");
-  const payload = JSON.stringify(STATE);
-  const sizeBytes = new Blob([payload]).size;
-  const newVersion = Math.floor(Date.now()/1000);
-  const deviceId = getDeviceId();
   try {
-    const { error } = await sb.from('app_state').upsert({
-      id: 'main',
-      data: STATE,
-      device_id: deviceId,
-      user_id: null,
-      version: newVersion,
-      size_bytes: sizeBytes,
-      notes: `Push rapide anonyme · ${STATE.factures?.length||0} factures · ${STATE.clients?.length||0} clients · ${STATE.avoirs?.length||0} avoirs`,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'id' });
+    const sb = await withTimeout(ensureSupabase(), 8000, "Lib Supabase indisponible");
+    if(!sb){ toast("Connexion Supabase impossible","error"); return; }
+    toast("⚡ Push rapide en cours…","info");
+    const payload = JSON.stringify(STATE);
+    const sizeBytes = new Blob([payload]).size;
+    const newVersion = Math.floor(Date.now()/1000);
+    const deviceId = getDeviceId();
+    const { error } = await withTimeout(
+      sb.from('app_state').upsert({
+        id: 'main',
+        data: STATE,
+        device_id: deviceId,
+        user_id: null,
+        version: newVersion,
+        size_bytes: sizeBytes,
+        notes: `Push rapide anonyme · ${STATE.factures?.length||0} factures · ${STATE.clients?.length||0} clients · ${STATE.avoirs?.length||0} avoirs`,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' }),
+      15000,
+      "Push timeout après 15s — Supabase ne répond pas"
+    );
     const ms = Date.now() - t0;
     if(error){
       toast("❌ Push échoué : "+error.message,"error");
@@ -6413,17 +6430,21 @@ async function doSyncPushAnon(){
     toast(`⚡ Push rapide réussi · ${(sizeBytes/1024).toFixed(0)} kB en ${ms}ms`,"success");
     if(CURRENT_VIEW === 'parametrage') route('parametrage');
   } catch(e){
-    toast("Erreur réseau : "+e.message,"error");
+    toast("❌ "+e.message,"error");
   }
 }
 
 async function doSyncPullAnon(){
   const t0 = Date.now();
-  const sb = await ensureSupabase();
-  if(!sb){ toast("Connexion Supabase impossible","error"); return; }
-  toast("⚡ Pull rapide en cours…","info");
   try {
-    const { data, error } = await sb.from('app_state').select('*').eq('id','main').maybeSingle();
+    const sb = await withTimeout(ensureSupabase(), 8000, "Lib Supabase indisponible");
+    if(!sb){ toast("Connexion Supabase impossible","error"); return; }
+    toast("⚡ Pull rapide en cours…","info");
+    const { data, error } = await withTimeout(
+      sb.from('app_state').select('*').eq('id','main').maybeSingle(),
+      15000,
+      "Pull timeout après 15s — Supabase ne répond pas"
+    );
     const ms = Date.now() - t0;
     if(error){
       toast("❌ Pull échoué : "+error.message,"error");
@@ -6443,7 +6464,7 @@ async function doSyncPullAnon(){
     toast(`⚡ Pull rapide réussi · ${(data.size_bytes/1024).toFixed(0)} kB en ${ms}ms · rechargement…`,"success");
     setTimeout(()=>location.reload(), 1200);
   } catch(e){
-    toast("Erreur réseau : "+e.message,"error");
+    toast("❌ "+e.message,"error");
   }
 }
 
