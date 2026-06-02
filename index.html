@@ -568,6 +568,7 @@ function seedDemo(){
     retours_marchandise: [],   // avoirs de retour de produits (différent retour emballage)
     ecritures: [],             // écritures comptables SYSCOHADA
     plan_comptable: [],        // chargé au boot depuis PLAN_COMPTABLE_SYSCOHADA
+    avoirs: [],                // avoirs autonomes (commercial, financier, avance)
     _seedExtras: { arts, cl, depotIds, sdIds, concIds }, // exposed for follow-up seeding
   };
 }
@@ -827,6 +828,8 @@ if(STATE && !STATE.retours_marchandise){ STATE.retours_marchandise = []; saveSta
 // Migration v2.9 : module comptabilité
 if(STATE && !STATE.ecritures){ STATE.ecritures = []; saveState(); }
 if(STATE && !STATE.plan_comptable){ STATE.plan_comptable = []; }
+// Migration v2.13 : avoirs autonomes
+if(STATE && !STATE.avoirs){ STATE.avoirs = []; saveState(); }
 
 // ============ ROUTER ============
 let CURRENT_VIEW = "dashboard";
@@ -881,6 +884,7 @@ const NAV = [
     {v:"clients",ic:"👥",l:"Clients"},
     {v:"factures",ic:"🧾",l:"Factures FNE"},
     {v:"encaissements",ic:"💰",l:"Encaissements"},
+    {v:"avoirs",ic:"🎫",l:"Avoirs clients"},
     {v:"surveillance",ic:"🚨",l:"Surveillance emballages"},
     {v:"retours",ic:"↩",l:"Retours marchandise"},
   ]},
@@ -2097,6 +2101,7 @@ MODALS.editClient = (id)=>{
     <div class="card mt-2" style="background:var(--bg)">
       <div class="f13"><strong>Solde client :</strong> <span class="${clientSolde(id)>0?'danger b700':''}">${fmtFCFA(clientSolde(id))}</span> de créances</div>
       <div class="f13"><strong>Consignations actives :</strong> <span class="${clientConsignationValeur(id)>0?'warn b700':''}">${fmtFCFA(clientConsignationValeur(id))}</span></div>
+      <div class="f13"><strong>🎫 Avoirs disponibles :</strong> <span class="${clientAvoirsRestants(id)>0?'b700':''}" style="color:${clientAvoirsRestants(id)>0?'var(--primary)':'inherit'}">${fmtFCFA(clientAvoirsRestants(id))}</span> ${clientAvoirsRestants(id)>0?`<a onclick="closeModal();route('avoirs');_avoirsFilters.client='${id}';route('avoirs')" style="cursor:pointer;color:var(--primary);text-decoration:underline;font-size:11px">voir détails →</a>`:''}</div>
     </div>`,
     `<button class="btn danger" onclick="if(confirm('Supprimer ce client ?')){STATE.clients=STATE.clients.filter(x=>x.id!=='${id}');saveState();closeModal();route(CURRENT_VIEW);toast('Client supprimé','success')}">🗑 Supprimer</button>
      <button class="btn ghost" onclick="closeModal()">Annuler</button>
@@ -6403,6 +6408,9 @@ const PLAN_COMPTABLE_SYSCOHADA = [
   {numero:"4011",intitule:"Fournisseurs concessionnaires", classe:4, type:"passif", sens:"credit", collectif:true},
   {numero:"411", intitule:"Clients", classe:4, type:"actif", sens:"debit", collectif:true},
   {numero:"416", intitule:"Clients douteux", classe:4, type:"actif", sens:"debit", collectif:true},
+  {numero:"4191",intitule:"Clients - Avances et acomptes reçus", classe:4, type:"passif", sens:"credit", collectif:true},
+  {numero:"4192",intitule:"Clients - Trop-perçus à régulariser", classe:4, type:"passif", sens:"credit", collectif:true},
+  {numero:"4193",intitule:"Clients - Avoirs à régulariser", classe:4, type:"passif", sens:"credit", collectif:true},
   {numero:"4194",intitule:"Clients - Emballages consignés", classe:4, type:"passif", sens:"credit", collectif:true},
   {numero:"421", intitule:"Personnel - Rémunérations dues", classe:4, type:"passif", sens:"credit"},
   {numero:"4431",intitule:"État - TVA facturée (collectée)", classe:4, type:"passif", sens:"credit"},
@@ -7562,6 +7570,531 @@ async function initLoginGate(){
 window.showLoginScreen = showLoginScreen;
 window.hideLoginScreen = hideLoginScreen;
 window.initLoginGate = initLoginGate;
+
+/* ====================================================================
+   ============ MODULE AVOIRS CLIENTS (v2.13) ============
+   Avoirs autonomes (commercial / financier / avance) + agrégation retours
+   Compte SYSCOHADA : 4193 (Clients - Avoirs à régulariser)
+   ==================================================================== */
+
+const AVOIR_TYPES = {
+  commercial: { ico:'🎁', label:'Commercial',  desc:'Geste commercial, fidélité, ristourne exceptionnelle' },
+  financier:  { ico:'💸', label:'Financier',   desc:'Erreur facturation, double encaissement, régularisation' },
+  avance:     { ico:'📥', label:'Avance',      desc:'Acompte reçu avant livraison' },
+  retour:     { ico:'↩️', label:'Retour',      desc:'Avoir lié à un retour de marchandise' },
+};
+
+// Génère un numéro d'avoir séquentiel
+function genNumeroAvoir(){
+  const year = new Date().getFullYear();
+  const seq = (STATE.avoirs||[]).filter(a=>(a.numero||"").startsWith("AV-"+year)).length + 1;
+  return "AV-"+year+"-"+String(seq).padStart(5,"0");
+}
+
+// Crée un avoir et génère l'écriture comptable correspondante
+function creerAvoir({client_id, type, motif, montant_ht, tva_applicable, notes, source, source_id}){
+  const cl = getClient(client_id);
+  if(!cl){ toast("Client introuvable","error"); return null; }
+  const ht = parseFloat(montant_ht) || 0;
+  if(ht <= 0){ toast("Montant doit être positif","error"); return null; }
+  const tva = tva_applicable ? Math.round(ht * 0.18) : 0;
+  const ttc = ht + tva;
+
+  const avoir = {
+    id: uid("av_"),
+    numero: genNumeroAvoir(),
+    date: today(),
+    client_id,
+    type: type || 'commercial',
+    motif: motif || '',
+    montant_ht: ht,
+    montant_tva: tva,
+    montant_ttc: ttc,
+    statut: 'emis',
+    montant_utilise: 0,
+    montant_restant: ttc,
+    source: source || 'manuel',
+    source_id: source_id || null,
+    notes: notes || '',
+    created_at: now(),
+    applications: []  // [{id, date, type:"facture"|"remboursement", facture_id?, montant, mode?, reference?}]
+  };
+
+  STATE.avoirs.push(avoir);
+
+  // Génère l'écriture comptable d'émission
+  // Débit 7019 (RRR accordés) : HT + Débit 4431 (TVA collectée à régulariser) : TVA
+  // Crédit 4193 (Clients - Avoirs à régulariser) compte_aux = client_id : TTC
+  const compteClient4193 = "4193"; // toujours 4193 pour les avoirs à régulariser
+  const lignes = [];
+  if(ht > 0)  lignes.push({ compte:"7019", debit:ht,  libelle:"Avoir "+AVOIR_TYPES[type]?.label+" - "+cl.nom });
+  if(tva > 0) lignes.push({ compte:"4431", debit:tva, libelle:"Annulation TVA sur avoir" });
+  lignes.push({ compte:compteClient4193, compte_aux:client_id, credit:ttc, libelle:"Avoir "+avoir.numero+" - "+cl.nom });
+
+  creerEcriture({
+    date: avoir.date, journal:"VTE",
+    libelle: "Avoir "+(AVOIR_TYPES[type]?.label||type)+" - "+cl.nom+(motif?" - "+motif:""),
+    reference: avoir.numero,
+    lignes,
+    source_table:"avoirs", source_id:avoir.id, auto:true
+  });
+
+  saveState();
+  return avoir;
+}
+
+// Applique un avoir sur une facture (réduit le reste à payer)
+function appliquerAvoir(avoirId, factureId, montantApplique){
+  const avoir = STATE.avoirs.find(a=>a.id===avoirId);
+  const fac = STATE.factures.find(f=>f.id===factureId);
+  if(!avoir || !fac){ toast("Avoir ou facture introuvable","error"); return false; }
+  const restant = avoir.montant_restant;
+  const reste = fac.reste_a_payer || 0;
+  const montant = Math.min(parseFloat(montantApplique)||0, restant, reste);
+  if(montant <= 0){ toast("Montant invalide","error"); return false; }
+
+  // Met à jour la facture
+  fac.reste_a_payer = (fac.reste_a_payer||0) - montant;
+  if(fac.reste_a_payer <= 0) fac.statut = "Payée";
+
+  // Met à jour l'avoir
+  avoir.montant_utilise = (avoir.montant_utilise||0) + montant;
+  avoir.montant_restant = avoir.montant_ttc - avoir.montant_utilise;
+  avoir.statut = avoir.montant_restant <= 0 ? 'totalement_utilise' : 'partiellement_utilise';
+  avoir.applications = avoir.applications || [];
+  avoir.applications.push({
+    id: uid("app_"),
+    date: today(),
+    type: "facture",
+    facture_id: factureId,
+    facture_numero: fac.numero,
+    montant,
+    created_at: now()
+  });
+
+  // Écriture comptable : Débit 4193 / Crédit 411(client) — solde la créance avec l'avoir
+  const cl = getClient(avoir.client_id);
+  const compteClient = cl?.compte_compta || "411";
+  creerEcriture({
+    date: today(), journal:"OD",
+    libelle: "Application avoir "+avoir.numero+" sur facture "+fac.numero,
+    reference: avoir.numero+"/"+fac.numero,
+    lignes: [
+      { compte:"4193", compte_aux:avoir.client_id, debit:montant, libelle:"Application avoir" },
+      { compte:compteClient, compte_aux:avoir.client_id, credit:montant, libelle:"Solde facture "+fac.numero }
+    ],
+    source_table:"avoirs", source_id:avoir.id, auto:true
+  });
+
+  saveState();
+  toast(`✓ ${fmtFCFA(montant)} appliqué de ${avoir.numero} sur ${fac.numero}`,"success");
+  return true;
+}
+
+// Rembourse un avoir (en espèces / Wave / etc.)
+function rembourserAvoir(avoirId, montant, mode, reference){
+  const avoir = STATE.avoirs.find(a=>a.id===avoirId);
+  if(!avoir){ toast("Avoir introuvable","error"); return false; }
+  const m = Math.min(parseFloat(montant)||0, avoir.montant_restant);
+  if(m <= 0){ toast("Montant invalide","error"); return false; }
+
+  avoir.montant_utilise = (avoir.montant_utilise||0) + m;
+  avoir.montant_restant = avoir.montant_ttc - avoir.montant_utilise;
+  avoir.statut = avoir.montant_restant <= 0 ? 'rembourse' : 'partiellement_utilise';
+  avoir.applications = avoir.applications || [];
+  avoir.applications.push({
+    id: uid("app_"),
+    date: today(),
+    type: "remboursement",
+    mode: mode || "Espèces",
+    montant: m,
+    reference: reference || '',
+    created_at: now()
+  });
+
+  // Écriture : Débit 4193 / Crédit compte trésorerie selon mode
+  const compteTreso = compteTresorerie(mode);
+  const journal = mode==="Espèces" ? "CAI" :
+                  mode==="Wave" ? "WAV" :
+                  mode==="Orange Money" ? "OM" :
+                  mode==="MTN MoMo" ? "MTN" : "BNQ";
+  creerEcriture({
+    date: today(), journal,
+    libelle: "Remboursement avoir "+avoir.numero+" en "+mode,
+    reference: avoir.numero+(reference?"/"+reference:""),
+    lignes: [
+      { compte:"4193", compte_aux:avoir.client_id, debit:m, libelle:"Remboursement avoir" },
+      { compte:compteTreso, credit:m, libelle:"Sortie "+mode }
+    ],
+    source_table:"avoirs", source_id:avoir.id, auto:true
+  });
+
+  saveState();
+  toast(`✓ ${fmtFCFA(m)} remboursé en ${mode}`,"success");
+  return true;
+}
+
+// Stock d'avoirs disponibles pour un client (somme des montants_restants)
+function clientAvoirsRestants(clientId){
+  return (STATE.avoirs||[])
+    .filter(a=>a.client_id===clientId && a.montant_restant > 0)
+    .reduce((s,a)=>s + a.montant_restant, 0);
+}
+
+// Détection automatique des avances (encaissements > factures impayées)
+function detecterAvancesClients(){
+  const map = {}; // client_id → solde
+  // Total facturé par client
+  (STATE.factures||[]).forEach(f=>{
+    if(f.statut === 'Avoir') return;
+    if(!map[f.client_id]) map[f.client_id] = 0;
+    map[f.client_id] += f.montant_ttc||0;
+  });
+  // Moins les encaissements
+  (STATE.encaissements||[]).forEach(e=>{
+    if(!map[e.client_id]) map[e.client_id] = 0;
+    map[e.client_id] -= e.montant||0;
+  });
+  // Avances = solde négatif (client a payé plus qu'il doit)
+  const avances = [];
+  for(const [cid, solde] of Object.entries(map)){
+    if(solde < -100){ // tolérance 100 F arrondi
+      const cl = getClient(cid);
+      if(cl) avances.push({client_id:cid, client_nom:cl.nom, montant:Math.abs(solde)});
+    }
+  }
+  return avances;
+}
+
+// ==================== VUE : AVOIRS CLIENTS ====================
+
+var _avoirsFilters = { client:"", type:"", statut:"" };
+
+VIEWS.avoirs = function(){
+  const w = document.createElement("div");
+  let list = (STATE.avoirs||[]).slice();
+  if(_avoirsFilters.client) list = list.filter(a=>a.client_id === _avoirsFilters.client);
+  if(_avoirsFilters.type)   list = list.filter(a=>a.type === _avoirsFilters.type);
+  if(_avoirsFilters.statut) list = list.filter(a=>a.statut === _avoirsFilters.statut);
+  list.sort((a,b)=>new Date(b.date)-new Date(a.date));
+
+  const totalEmis = list.reduce((s,a)=>s+(a.montant_ttc||0),0);
+  const totalRestant = list.reduce((s,a)=>s+(a.montant_restant||0),0);
+  const totalUtilise = list.reduce((s,a)=>s+(a.montant_utilise||0),0);
+
+  // Détection automatique des avances
+  const avances = detecterAvancesClients();
+  const totalAvances = avances.reduce((s,a)=>s+a.montant,0);
+
+  w.innerHTML = `
+    <div class="view-head">
+      <div><h2>🎫 Avoirs clients <span class="sub">${list.length} avoir(s) · ${fmtFCFA(totalRestant)} disponible(s)</span></h2></div>
+      <div class="view-actions">
+        <button class="btn" onclick="openModal('creerAvoir')" style="background:var(--structure)">➕ Créer un avoir</button>
+      </div>
+    </div>
+
+    <div class="grid grid-4 kpis mb-2">
+      <div class="kpi info"><span class="ico">📋</span><span class="lbl">Total émis</span><span class="val">${fmtFCFA(totalEmis)}</span></div>
+      <div class="kpi info"><span class="ico">✓</span><span class="lbl">Total utilisé</span><span class="val">${fmtFCFA(totalUtilise)}</span></div>
+      <div class="kpi ${totalRestant>0?'warn':'ok'}"><span class="ico">💰</span><span class="lbl">Disponible (à régler)</span><span class="val">${fmtFCFA(totalRestant)}</span></div>
+      <div class="kpi ${totalAvances>0?'alert':'info'}"><span class="ico">📥</span><span class="lbl">Avances détectées</span><span class="val">${fmtFCFA(totalAvances)}</span></div>
+    </div>
+
+    ${avances.length > 0 ? `
+      <div class="card mb-2" style="background:#fff3e0;border-color:var(--alert)">
+        <strong>📥 Avances clients détectées (${avances.length})</strong>
+        <p class="f12 mt-1">Ces clients ont payé plus qu'ils ne doivent. Considérez créer un avoir d'avance pour clarifier la situation comptable.</p>
+        <table class="tbl mt-2"><thead><tr><th>Client</th><th class="right">Montant trop-perçu</th><th>Action</th></tr></thead><tbody>
+          ${avances.map(a=>`<tr>
+            <td><strong>${escapeHtml(a.client_nom)}</strong></td>
+            <td class="right b700">${fmtFCFA(a.montant)}</td>
+            <td><button class="btn sm" onclick="creerAvoirAvance('${a.client_id}',${a.montant})">➕ Créer avoir avance</button></td>
+          </tr>`).join("")}
+        </tbody></table>
+      </div>
+    `:''}
+
+    <div class="card mb-2" style="background:var(--bg)">
+      <div class="grid grid-3">
+        <div class="fld"><label>Client</label>
+          <select onchange="_avoirsFilters.client=this.value;route('avoirs')">
+            <option value="">Tous</option>
+            ${(STATE.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${escapeHtml(c.id)}" ${_avoirsFilters.client===c.id?'selected':''}>${escapeHtml(c.nom)}</option>`).join("")}
+          </select></div>
+        <div class="fld"><label>Type</label>
+          <select onchange="_avoirsFilters.type=this.value;route('avoirs')">
+            <option value="">Tous</option>
+            ${Object.entries(AVOIR_TYPES).map(([k,t])=>`<option value="${k}" ${_avoirsFilters.type===k?'selected':''}>${t.ico} ${t.label}</option>`).join("")}
+          </select></div>
+        <div class="fld"><label>Statut</label>
+          <select onchange="_avoirsFilters.statut=this.value;route('avoirs')">
+            <option value="">Tous</option>
+            <option value="emis"                   ${_avoirsFilters.statut==='emis'?'selected':''}>📋 Émis</option>
+            <option value="partiellement_utilise"  ${_avoirsFilters.statut==='partiellement_utilise'?'selected':''}>◐ Partiellement utilisé</option>
+            <option value="totalement_utilise"     ${_avoirsFilters.statut==='totalement_utilise'?'selected':''}>✓ Totalement utilisé</option>
+            <option value="rembourse"              ${_avoirsFilters.statut==='rembourse'?'selected':''}>💸 Remboursé</option>
+          </select></div>
+      </div>
+      <button class="btn ghost sm mt-2" onclick="_avoirsFilters={client:'',type:'',statut:''};route('avoirs')">🔄 Réinitialiser filtres</button>
+    </div>
+
+    ${list.length===0 ? '<div class="empty"><span class="ico">🎫</span>Aucun avoir · Créez-en un avec le bouton ci-dessus</div>' :
+      `<table class="tbl"><thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Type</th><th>Motif</th><th class="right">Montant</th><th class="right">Utilisé</th><th class="right">Restant</th><th>Statut</th><th>Actions</th></tr></thead><tbody>
+        ${list.map(a=>{
+          const cl = getClient(a.client_id);
+          const t = AVOIR_TYPES[a.type] || {ico:'?',label:a.type};
+          const stIco = {emis:'📋',partiellement_utilise:'◐',totalement_utilise:'✓',rembourse:'💸'}[a.statut]||'?';
+          const stCls = {emis:'info',partiellement_utilise:'warn',totalement_utilise:'ok',rembourse:'ok'}[a.statut]||'info';
+          return `<tr>
+            <td><span class="mono b700">${escapeHtml(a.numero)}</span></td>
+            <td class="f12">${fmtDate(a.date)}</td>
+            <td><strong>${escapeHtml(cl?.nom||'?')}</strong></td>
+            <td><span class="pill info">${t.ico} ${escapeHtml(t.label)}</span></td>
+            <td class="f12">${escapeHtml(a.motif||'')}</td>
+            <td class="right b700">${fmtFCFA(a.montant_ttc)}</td>
+            <td class="right">${fmtFCFA(a.montant_utilise||0)}</td>
+            <td class="right b700" style="color:${a.montant_restant>0?'var(--primary)':'var(--muted)'}">${fmtFCFA(a.montant_restant||0)}</td>
+            <td><span class="pill ${stCls}">${stIco} ${escapeHtml(a.statut)}</span></td>
+            <td>
+              ${a.montant_restant>0?`<button class="btn sm" onclick="openModal('appliquerAvoir','${a.id}')">→ Appliquer</button>
+              <button class="btn sm ghost" onclick="openModal('rembourserAvoir','${a.id}')">💸 Rembourser</button>`:''}
+              <button class="btn sm ghost" onclick="openModal('detailAvoir','${a.id}')">👁</button>
+            </td>
+          </tr>`;
+        }).join("")}
+      </tbody></table>`}
+  `;
+  return w;
+};
+
+// Modal : créer un avoir
+MODALS.creerAvoir = ()=>{
+  return modalShell("➕ Créer un avoir client", `
+    <div class="hint mb-2">
+      💡 Création d'un avoir <strong>autonome</strong> (sans retour de marchandise). Pour un avoir suite à retour, utilisez le module Retours marchandise.
+    </div>
+    <div class="row row-2">
+      <div class="fld"><label>Date</label><input type="date" id="cav_date" value="${today()}"></div>
+      <div class="fld"><label>Client *</label>
+        <select id="cav_client">
+          <option value="">— Sélectionner —</option>
+          ${(STATE.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.nom)}</option>`).join("")}
+        </select></div>
+    </div>
+    <div class="fld"><label>Type *</label>
+      <select id="cav_type">
+        ${Object.entries(AVOIR_TYPES).filter(([k])=>k!=='retour').map(([k,t])=>`<option value="${k}">${t.ico} ${t.label} - ${t.desc}</option>`).join("")}
+      </select>
+    </div>
+    <div class="fld"><label>Motif *</label><input id="cav_motif" placeholder="Ex: Geste commercial fidélité 2026" maxlength="200"></div>
+    <div class="row row-2">
+      <div class="fld"><label>Montant HT (F CFA) *</label><input type="number" id="cav_ht" min="0" step="100" value="0"></div>
+      <div class="fld"><label class="flex" style="cursor:pointer;align-items:center;gap:6px;margin-top:24px">
+        <input type="checkbox" id="cav_tva" checked>
+        <span class="f13">TVA applicable (+18%)</span>
+      </label></div>
+    </div>
+    <div class="fld"><label>Notes</label><textarea id="cav_notes" rows="2"></textarea></div>
+    <div class="card mt-2" style="background:var(--primary-light)">
+      <strong>Écritures qui seront générées :</strong>
+      <ul class="f12" style="margin:4px 0 0 20px;padding:0">
+        <li>Débit <strong>7019</strong> (RRR accordés) du montant HT</li>
+        <li>Débit <strong>4431</strong> (TVA collectée) de la TVA <em>si applicable</em></li>
+        <li>Crédit <strong>4193</strong> (Clients - Avoirs à régulariser) du TTC, auxiliaire = client</li>
+      </ul>
+    </div>
+  `, `
+    <button class="btn ghost" onclick="closeModal()">Annuler</button>
+    <button class="btn" onclick="saveAvoir()">💾 Créer l'avoir</button>
+  `);
+};
+
+window.saveAvoir = function(){
+  const client_id = $("#cav_client").value;
+  const type = $("#cav_type").value;
+  const motif = $("#cav_motif").value.trim();
+  const montant_ht = parseFloat($("#cav_ht").value) || 0;
+  const tva_applicable = $("#cav_tva").checked;
+  const notes = $("#cav_notes").value.trim();
+  if(!client_id){ toast("Sélectionnez un client","error"); return; }
+  if(montant_ht <= 0){ toast("Montant HT doit être positif","error"); return; }
+  if(!motif){ toast("Motif requis","error"); return; }
+  const avoir = creerAvoir({client_id, type, motif, montant_ht, tva_applicable, notes, source:'manuel'});
+  if(avoir){
+    closeModal();
+    toast(`✓ Avoir ${avoir.numero} créé (${fmtFCFA(avoir.montant_ttc)})`,"success");
+    route('avoirs');
+  }
+};
+
+// Détection automatique : créer un avoir d'avance pour un trop-perçu détecté
+window.creerAvoirAvance = function(clientId, montant){
+  if(!confirm(`Créer un avoir d'avance pour ${getClient(clientId)?.nom} de ${fmtFCFA(montant)} ?`)) return;
+  // Avance = pas de TVA (c'est une régularisation comptable)
+  const av = creerAvoir({
+    client_id: clientId,
+    type: 'avance',
+    motif: 'Trop-perçu détecté automatiquement',
+    montant_ht: montant,
+    tva_applicable: false,
+    source: 'detection_auto'
+  });
+  if(av){
+    toast(`✓ Avoir d'avance ${av.numero} créé`, "success");
+    route('avoirs');
+  }
+};
+
+// Modal : appliquer un avoir sur une facture
+MODALS.appliquerAvoir = (avoirId)=>{
+  const av = STATE.avoirs.find(a=>a.id===avoirId);
+  if(!av) return modalShell("Erreur","Avoir introuvable","");
+  const cl = getClient(av.client_id);
+  const facturesImpayees = (STATE.factures||[]).filter(f=>f.client_id===av.client_id && f.statut!=='Avoir' && (f.reste_a_payer||0)>0);
+
+  return modalShell("→ Appliquer avoir "+av.numero, `
+    <div class="card" style="background:var(--primary-light)">
+      <div class="flex between">
+        <div><strong>${escapeHtml(cl?.nom||'?')}</strong> · ${AVOIR_TYPES[av.type]?.ico||''} ${escapeHtml(AVOIR_TYPES[av.type]?.label||av.type)}<br>
+          <span class="f12 muted">${escapeHtml(av.motif||'')}</span></div>
+        <div class="right">
+          <div class="f12 muted">Disponible</div>
+          <div class="b700 f18" style="color:var(--primary)">${fmtFCFA(av.montant_restant)}</div>
+        </div>
+      </div>
+    </div>
+    ${facturesImpayees.length===0 ? '<div class="empty mt-2"><span class="ico">📋</span>Aucune facture impayée pour ce client. Vous pouvez utiliser "💸 Rembourser" pour convertir cet avoir en remboursement direct.</div>' :
+      `<div class="section-title">Choisir la facture à régler</div>
+      <div class="grid grid-1" id="appAvFactures">
+        ${facturesImpayees.map(f=>`<div class="card" style="cursor:pointer" onclick="document.querySelectorAll('#appAvFactures .card').forEach(c=>c.style.borderColor='');this.style.borderColor='var(--primary)';this.style.borderWidth='2px';window._appAvFac='${f.id}'">
+          <div class="flex between">
+            <div><strong>${escapeHtml(f.numero)}</strong><br><span class="f12 muted">${fmtDate(f.date)} · ${escapeHtml(f.statut)}</span></div>
+            <div class="right"><div class="f12 muted">Reste à payer</div><div class="b700">${fmtFCFA(f.reste_a_payer)}</div></div>
+          </div>
+        </div>`).join("")}
+      </div>
+      <div class="fld mt-2"><label>Montant à appliquer (F CFA)</label>
+        <input type="number" id="appAv_montant" value="${Math.min(av.montant_restant, facturesImpayees[0]?.reste_a_payer||0)}" max="${av.montant_restant}" min="0" step="100">
+        <div class="f12 muted mt-1">Max : ${fmtFCFA(av.montant_restant)} (avoir) ou montant de la facture sélectionnée</div>
+      </div>`}
+  `, `
+    <button class="btn ghost" onclick="closeModal()">Annuler</button>
+    ${facturesImpayees.length>0?`<button class="btn" onclick="doApplyAvoir('${av.id}')">→ Appliquer</button>`:''}
+  `, ()=>{ window._appAvFac = facturesImpayees[0]?.id || null; if(window._appAvFac) document.querySelectorAll('#appAvFactures .card')[0].style.borderColor='var(--primary)'; });
+};
+
+window.doApplyAvoir = function(avoirId){
+  const factureId = window._appAvFac;
+  if(!factureId){ toast("Sélectionnez une facture","error"); return; }
+  const m = parseFloat($("#appAv_montant").value) || 0;
+  if(m <= 0){ toast("Montant invalide","error"); return; }
+  if(appliquerAvoir(avoirId, factureId, m)){
+    closeModal();
+    route('avoirs');
+  }
+};
+
+// Modal : rembourser un avoir
+MODALS.rembourserAvoir = (avoirId)=>{
+  const av = STATE.avoirs.find(a=>a.id===avoirId);
+  if(!av) return modalShell("Erreur","Avoir introuvable","");
+  const cl = getClient(av.client_id);
+
+  return modalShell("💸 Rembourser avoir "+av.numero, `
+    <div class="card" style="background:var(--primary-light)">
+      <div class="flex between">
+        <div><strong>${escapeHtml(cl?.nom||'?')}</strong><br><span class="f12 muted">${escapeHtml(av.motif||'')}</span></div>
+        <div class="right">
+          <div class="f12 muted">Disponible</div>
+          <div class="b700 f18">${fmtFCFA(av.montant_restant)}</div>
+        </div>
+      </div>
+    </div>
+    <div class="row row-2 mt-2">
+      <div class="fld"><label>Mode de paiement</label>
+        <select id="rembAv_mode">
+          <option>Espèces</option>
+          <option>Wave</option>
+          <option>Orange Money</option>
+          <option>MTN MoMo</option>
+          <option>Moov Money</option>
+          <option>Chèque</option>
+          <option>Virement</option>
+        </select></div>
+      <div class="fld"><label>Montant (F CFA)</label>
+        <input type="number" id="rembAv_montant" value="${av.montant_restant}" max="${av.montant_restant}" min="0" step="100">
+      </div>
+    </div>
+    <div class="fld"><label>Référence (n° transaction, chèque...)</label><input id="rembAv_ref" placeholder="Ex: TX-WAVE-789456"></div>
+  `, `
+    <button class="btn ghost" onclick="closeModal()">Annuler</button>
+    <button class="btn" onclick="doRembAvoir('${av.id}')" style="background:var(--alert)">💸 Confirmer remboursement</button>
+  `);
+};
+
+window.doRembAvoir = function(avoirId){
+  const m = parseFloat($("#rembAv_montant").value) || 0;
+  const mode = $("#rembAv_mode").value;
+  const ref = $("#rembAv_ref").value.trim();
+  if(m <= 0){ toast("Montant invalide","error"); return; }
+  if(!confirm(`Rembourser ${fmtFCFA(m)} en ${mode} ?\n\nCela générera une écriture comptable de sortie de trésorerie.`)) return;
+  if(rembourserAvoir(avoirId, m, mode, ref)){
+    closeModal();
+    route('avoirs');
+  }
+};
+
+// Modal : détail avoir
+MODALS.detailAvoir = (avoirId)=>{
+  const av = STATE.avoirs.find(a=>a.id===avoirId);
+  if(!av) return modalShell("Erreur","Avoir introuvable","");
+  const cl = getClient(av.client_id);
+  const t = AVOIR_TYPES[av.type] || {ico:'?',label:av.type};
+
+  return modalShell("👁 Détail avoir "+av.numero, `
+    <div class="card" style="background:var(--primary-light)">
+      <div class="flex between">
+        <div>
+          <strong>${escapeHtml(cl?.nom||'?')}</strong><br>
+          <span class="f12 muted">${fmtDate(av.date)} · ${t.ico} ${escapeHtml(t.label)}</span>
+        </div>
+        <div class="right">
+          <div class="f12 muted">Numéro</div>
+          <div class="mono b700">${escapeHtml(av.numero)}</div>
+        </div>
+      </div>
+      <div class="f12 mt-2"><strong>Motif :</strong> ${escapeHtml(av.motif||'-')}</div>
+      ${av.notes?`<div class="f12"><strong>Notes :</strong> ${escapeHtml(av.notes)}</div>`:''}
+    </div>
+
+    <table class="tbl mt-2"><tbody>
+      <tr><td>Montant HT</td><td class="right b700">${fmtFCFA(av.montant_ht)}</td></tr>
+      ${av.montant_tva>0?`<tr><td>TVA (18%)</td><td class="right">${fmtFCFA(av.montant_tva)}</td></tr>`:''}
+      <tr style="background:var(--bg)"><td><strong>Total TTC</strong></td><td class="right b700">${fmtFCFA(av.montant_ttc)}</td></tr>
+      <tr><td>Utilisé</td><td class="right">${fmtFCFA(av.montant_utilise||0)}</td></tr>
+      <tr style="background:${av.montant_restant>0?'#dbeafe':'#dcfce7'}"><td><strong>Disponible</strong></td><td class="right b700">${fmtFCFA(av.montant_restant||0)}</td></tr>
+    </tbody></table>
+
+    ${(av.applications||[]).length > 0 ? `
+      <div class="section-title">Historique des utilisations</div>
+      <table class="tbl"><thead><tr><th>Date</th><th>Type</th><th>Détail</th><th class="right">Montant</th></tr></thead><tbody>
+        ${av.applications.map(a=>`<tr>
+          <td class="f12">${fmtDate(a.date)}</td>
+          <td><span class="pill ${a.type==='facture'?'info':'warn'}">${a.type==='facture'?'📄 Facture':'💸 Remboursement'}</span></td>
+          <td class="f12">${a.type==='facture'?'Facture '+escapeHtml(a.facture_numero||'?'):'Mode '+escapeHtml(a.mode||'?')+(a.reference?' · Réf '+escapeHtml(a.reference):'')}</td>
+          <td class="right b700">${fmtFCFA(a.montant)}</td>
+        </tr>`).join("")}
+      </tbody></table>
+    `:''}
+  `, `<button class="btn ghost" onclick="closeModal()">Fermer</button>`);
+};
+
+window.creerAvoir = creerAvoir;
+window.appliquerAvoir = appliquerAvoir;
+window.rembourserAvoir = rembourserAvoir;
+window.clientAvoirsRestants = clientAvoirsRestants;
+window.detecterAvancesClients = detecterAvancesClients;
 
 /* ====================================================================
    ============ GESTION DES UTILISATEURS (v2.11) ============
