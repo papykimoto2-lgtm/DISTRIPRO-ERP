@@ -1864,7 +1864,16 @@ MODALS.nouveauConcessionnaire = ()=>{
     <div class="fld"><label>Territoire</label><input id="m_terr" placeholder="Ex : Abidjan Sud"></div>
     <div class="row row-2"><div class="fld"><label>Contact</label><input id="m_ct" placeholder="Nom du référent"></div>
       <div class="fld"><label>Téléphone</label><input id="m_tel" placeholder="+225 ..."></div></div>
-    <div class="fld"><label>Produits distribués</label><input id="m_prod" placeholder="Ex : Flag, Castel, Bock"></div>`,
+    <div class="fld"><label>Produits distribués</label><input id="m_prod" placeholder="Ex : Flag, Castel, Bock"></div>
+    <div class="fld"><label>📊 Compte comptable</label>
+      <input id="m_compte" class="mono" placeholder="Laisser vide pour 4011 (défaut)" list="dl_comptesConc">
+      <datalist id="dl_comptesConc">
+        <option value="4011">4011 - Fournisseurs concessionnaires (défaut)</option>
+        <option value="40111">40111 - Concessionnaire principal</option>
+        <option value="40112">40112 - Concessionnaire secondaire</option>
+      </datalist>
+      <div class="f12 muted mt-1">💡 Laisser vide = compte 4011 (Concessionnaires) par défaut.</div>
+    </div>`,
     `<button class="btn ghost" onclick="closeModal()">Annuler</button>
      <button class="btn" onclick="saveConcessionnaire()">💾 Enregistrer</button>`);
 };
@@ -1877,7 +1886,16 @@ MODALS.editConcessionnaire = (id)=>{
     <div class="fld"><label>Territoire</label><input id="m_terr" value="${escapeHtml(c.territoire||'')}"></div>
     <div class="row row-2"><div class="fld"><label>Contact</label><input id="m_ct" value="${escapeHtml(c.contact||'')}"></div>
       <div class="fld"><label>Téléphone</label><input id="m_tel" value="${escapeHtml(c.telephone||'')}"></div></div>
-    <div class="fld"><label>Produits distribués</label><input id="m_prod" value="${escapeHtml(c.produits||'')}"></div>`,
+    <div class="fld"><label>Produits distribués</label><input id="m_prod" value="${escapeHtml(c.produits||'')}"></div>
+    <div class="fld"><label>📊 Compte comptable</label>
+      <input id="m_compte" value="${escapeHtml(c.compte_compta||'')}" class="mono" placeholder="Laisser vide pour 4011 (défaut)" list="dl_comptesConcEd">
+      <datalist id="dl_comptesConcEd">
+        <option value="4011">4011 - Fournisseurs concessionnaires (défaut)</option>
+        <option value="40111">40111 - Concessionnaire principal</option>
+        <option value="40112">40112 - Concessionnaire secondaire</option>
+      </datalist>
+      <div class="f12 muted mt-1">💡 Détermine le compte SYSCOHADA pour ce concessionnaire dans les écritures d'achat. Laisser vide = 4011 par défaut.</div>
+    </div>`,
     `<button class="btn danger" onclick="deleteConcessionnaire('${id}')">🗑 Supprimer</button>
      <button class="btn ghost" onclick="closeModal()">Annuler</button>
      <button class="btn" onclick="saveConcessionnaire('${id}')">💾 Enregistrer</button>`);
@@ -1885,9 +1903,11 @@ MODALS.editConcessionnaire = (id)=>{
 function saveConcessionnaire(id){
   const nom = $("#m_nom").value.trim();
   if(!nom){ toast("Le nom est requis","error"); return; }
+  const compte_compta = ($("#m_compte")?.value||"").trim() || null;
   const data = { nom, nif:$("#m_nif").value.trim(), agrement:$("#m_agr").value.trim(),
     territoire:$("#m_terr").value.trim(), contact:$("#m_ct").value.trim(),
-    telephone:$("#m_tel").value.trim(), produits:$("#m_prod").value.trim() };
+    telephone:$("#m_tel").value.trim(), produits:$("#m_prod").value.trim(),
+    compte_compta };
   if(id){ Object.assign(getConc(id), data); toast("Concessionnaire modifié","success"); }
   else  { STATE.concessionnaires.push({id:uid("co_"),...data}); toast("Concessionnaire créé","success"); }
   saveState(); closeModal(); route(CURRENT_VIEW);
@@ -1904,7 +1924,18 @@ MODALS.nouveauFournisseur = ()=>{
     <div class="fld"><label>Nom</label><input id="m_nom" placeholder="Nom du fournisseur"></div>
     <div class="fld"><label>Type</label><input id="m_tp" placeholder="Ex : Emballages, Glace, Consommables"></div>
     <div class="fld"><label>Contact</label><input id="m_ct" placeholder="Personne à contacter"></div>
-    <div class="fld"><label>Téléphone</label><input id="m_tel" placeholder="+225 ..."></div>`,
+    <div class="fld"><label>Téléphone</label><input id="m_tel" placeholder="+225 ..."></div>
+    <div class="fld"><label>📊 Compte comptable</label>
+      <input id="m_compte" class="mono" placeholder="Laisser vide pour 401 (défaut)" list="dl_comptesFour">
+      <datalist id="dl_comptesFour">
+        <option value="401">401 - Fournisseurs (défaut SYSCOHADA)</option>
+        <option value="4011">4011 - Fournisseurs concessionnaires</option>
+        <option value="4012">4012 - Fournisseurs - sociétés du groupe</option>
+        <option value="408">408 - Fournisseurs - factures non parvenues</option>
+        <option value="409">409 - Fournisseurs débiteurs (avances)</option>
+      </datalist>
+      <div class="f12 muted mt-1">💡 Laisser vide = compte 401 par défaut.</div>
+    </div>`,
     `<button class="btn ghost" onclick="closeModal()">Annuler</button>
      <button class="btn" onclick="saveFournisseur()">💾 Enregistrer</button>`);
 };
@@ -1914,7 +1945,18 @@ MODALS.editFournisseur = (id)=>{
     <div class="fld"><label>Nom</label><input id="m_nom" value="${escapeHtml(f.nom)}"></div>
     <div class="fld"><label>Type</label><input id="m_tp" value="${escapeHtml(f.type||'')}"></div>
     <div class="fld"><label>Contact</label><input id="m_ct" value="${escapeHtml(f.contact||'')}"></div>
-    <div class="fld"><label>Téléphone</label><input id="m_tel" value="${escapeHtml(f.telephone||'')}"></div>`,
+    <div class="fld"><label>Téléphone</label><input id="m_tel" value="${escapeHtml(f.telephone||'')}"></div>
+    <div class="fld"><label>📊 Compte comptable</label>
+      <input id="m_compte" value="${escapeHtml(f.compte_compta||'')}" class="mono" placeholder="Laisser vide pour 401 (défaut)" list="dl_comptesFourEd">
+      <datalist id="dl_comptesFourEd">
+        <option value="401">401 - Fournisseurs (défaut SYSCOHADA)</option>
+        <option value="4011">4011 - Fournisseurs concessionnaires</option>
+        <option value="4012">4012 - Fournisseurs - sociétés du groupe</option>
+        <option value="408">408 - Fournisseurs - factures non parvenues</option>
+        <option value="409">409 - Fournisseurs débiteurs (avances)</option>
+      </datalist>
+      <div class="f12 muted mt-1">💡 Détermine le compte SYSCOHADA pour ce fournisseur. Laisser vide = 401 par défaut.</div>
+    </div>`,
     `<button class="btn danger" onclick="if(confirm('Supprimer ?')){STATE.fournisseurs=STATE.fournisseurs.filter(x=>x.id!=='${id}');saveState();closeModal();route(CURRENT_VIEW);toast('Supprimé','success')}">🗑 Supprimer</button>
      <button class="btn ghost" onclick="closeModal()">Annuler</button>
      <button class="btn" onclick="saveFournisseur('${id}')">💾 Enregistrer</button>`);
@@ -1922,7 +1964,8 @@ MODALS.editFournisseur = (id)=>{
 function saveFournisseur(id){
   const nom = $("#m_nom").value.trim();
   if(!nom){ toast("Le nom est requis","error"); return; }
-  const data = { nom, type:$("#m_tp").value.trim(), contact:$("#m_ct").value.trim(), telephone:$("#m_tel").value.trim() };
+  const compte_compta = ($("#m_compte")?.value||"").trim() || null;
+  const data = { nom, type:$("#m_tp").value.trim(), contact:$("#m_ct").value.trim(), telephone:$("#m_tel").value.trim(), compte_compta };
   if(id) Object.assign(STATE.fournisseurs.find(x=>x.id===id), data);
   else STATE.fournisseurs.push({id:uid("fr_"),...data});
   saveState(); closeModal(); route(CURRENT_VIEW); toast("Fournisseur "+(id?"modifié":"créé"),"success");
@@ -2038,6 +2081,19 @@ MODALS.editClient = (id)=>{
     <div class="fld"><label>Adresse</label><input id="m_ad" value="${escapeHtml(c.adresse||'')}"></div>
     <div class="row row-2"><div class="fld"><label>Téléphone</label><input id="m_tel" value="${escapeHtml(c.telephone||'')}"></div>
       <div class="fld"><label>Contact</label><input id="m_ct" value="${escapeHtml(c.contact||'')}"></div></div>
+
+    <div class="fld"><label>📊 Compte comptable</label>
+      <input id="m_compte" value="${escapeHtml(c.compte_compta||'')}" class="mono" placeholder="Laisser vide pour 411 (défaut SYSCOHADA)" list="dl_comptesClients">
+      <datalist id="dl_comptesClients">
+        <option value="411">411 - Clients (défaut SYSCOHADA)</option>
+        <option value="4111">4111 - Clients ordinaires</option>
+        <option value="4112">4112 - Clients - sociétés du groupe</option>
+        <option value="4118">4118 - Clients - retenues de garantie</option>
+        <option value="416">416 - Clients douteux ou litigieux</option>
+      </datalist>
+      <div class="f12 muted mt-1">💡 Détermine le compte SYSCOHADA pour ce client dans les écritures comptables. Laisser vide = 411 (Clients).</div>
+    </div>
+
     <div class="card mt-2" style="background:var(--bg)">
       <div class="f13"><strong>Solde client :</strong> <span class="${clientSolde(id)>0?'danger b700':''}">${fmtFCFA(clientSolde(id))}</span> de créances</div>
       <div class="f13"><strong>Consignations actives :</strong> <span class="${clientConsignationValeur(id)>0?'warn b700':''}">${fmtFCFA(clientConsignationValeur(id))}</span></div>
@@ -2049,8 +2105,10 @@ MODALS.editClient = (id)=>{
 function saveClient(id){
   const nom = $("#m_nom").value.trim();
   if(!nom){ toast("Le nom est requis","error"); return; }
+  const compte_compta = ($("#m_compte")?.value||"").trim() || null;
   const data = { nom, type:$("#m_tp").value, nif:$("#m_nif").value.trim(),
-    adresse:$("#m_ad").value.trim(), telephone:$("#m_tel").value.trim(), contact:$("#m_ct").value.trim() };
+    adresse:$("#m_ad").value.trim(), telephone:$("#m_tel").value.trim(), contact:$("#m_ct").value.trim(),
+    compte_compta };
   if(id) Object.assign(getClient(id), data);
   else STATE.clients.push({id:uid("cl_"), solde:0, ...data});
   saveState(); closeModal(); route(CURRENT_VIEW); toast("Client "+(id?"modifié":"créé"),"success");
@@ -6447,6 +6505,8 @@ function genEcritureVente(facture){
   // Skip les avoirs (générés par genEcritureRetour)
   if(facture.statut === "Avoir") return null;
   const cl = getClient(facture.client_id);
+  // Compte client : custom si défini, sinon 411 par défaut
+  const compteClient = cl?.compte_compta || "411";
   // Récupère les composants avec fallbacks pour formats legacy
   const ht   = facture.montant_liquide_ht ?? facture.montant_ht ?? 0;
   const tva  = facture.montant_tva ?? 0;
@@ -6456,7 +6516,7 @@ function genEcritureVente(facture){
   if(ttc_calc <= 0) return null;
   const libelle = `Vente ${facture.numero||""} - ${cl?.nom||""}`.trim();
   const lignes = [];
-  lignes.push({ compte:"411", compte_aux:facture.client_id, debit:ttc_calc, libelle });
+  lignes.push({ compte:compteClient, compte_aux:facture.client_id, debit:ttc_calc, libelle });
   if(ht > 0)   lignes.push({ compte:"701",  credit:ht,   libelle:"Ventes liquide HT" });
   if(tva > 0)  lignes.push({ compte:"4431", credit:tva,  libelle:"TVA collectée 18%" });
   if(cons > 0) lignes.push({ compte:"4194", compte_aux:facture.client_id, credit:cons, libelle:"Emballages consignés" });
@@ -6480,6 +6540,7 @@ function genEcritureEncaissement(enc){
   if(STATE.ecritures.find(e=>e.source_table==="encaissements" && e.source_id===enc.id)) return null;
   if(!enc.montant || enc.montant === 0) return null;
   const cl = getClient(enc.client_id);
+  const compteClient = cl?.compte_compta || "411";
   const compteTreso = compteTresorerie(enc.mode);
   const journal = enc.mode==="Espèces" ? "CAI" :
                   enc.mode==="Wave" ? "WAV" :
@@ -6490,10 +6551,10 @@ function genEcritureEncaissement(enc){
   const isRemb = enc.montant < 0;
   const lignes = isRemb ? [
     { compte:compteTreso, credit: montant, libelle },
-    { compte:"411", compte_aux:enc.client_id, debit: montant, libelle }
+    { compte:compteClient, compte_aux:enc.client_id, debit: montant, libelle }
   ] : [
     { compte:compteTreso, debit: montant, libelle },
-    { compte:"411", compte_aux:enc.client_id, credit: montant, libelle }
+    { compte:compteClient, compte_aux:enc.client_id, credit: montant, libelle }
   ];
   return creerEcriture({
     date: enc.date, journal, libelle, reference: enc.reference,
@@ -6507,7 +6568,9 @@ function genEcritureAchat(achat){
   const conc = achat.concessionnaire_id ? STATE.concessionnaires.find(c=>c.id===achat.concessionnaire_id) : null;
   const four = achat.fournisseur_id ? STATE.fournisseurs.find(f=>f.id===achat.fournisseur_id) : null;
   const partenaire = conc || four;
-  const compteTiers = conc ? "4011" : "401";
+  // Compte par défaut selon type, puis override si custom défini sur le tiers
+  const compteDefault = conc ? "4011" : "401";
+  const compteTiers = partenaire?.compte_compta || compteDefault;
   const libelle = `Achat ${achat.numero||""} - ${partenaire?.nom||""}`.trim();
   const ht = achat.montant_ht || 0;
   const tva = achat.montant_tva || 0;
@@ -6529,6 +6592,7 @@ function genEcritureAchat(achat){
 function genEcritureRetour(retour){
   if(STATE.ecritures.find(e=>e.source_table==="retours_marchandise" && e.source_id===retour.id)) return null;
   const cl = getClient(retour.client_id);
+  const compteClient = cl?.compte_compta || "411";
   const libelle = `Avoir ${retour.numero||""} - ${cl?.nom||""}`.trim();
   const ht   = retour.montant_liquide_ht_total ?? 0;
   const tva  = retour.montant_tva_total ?? 0;
@@ -6536,7 +6600,7 @@ function genEcritureRetour(retour){
   const ttc_calc = ht + tva + cons;
   if(ttc_calc <= 0) return null;
   const lignes = [];
-  lignes.push({ compte:"411", compte_aux:retour.client_id, credit:ttc_calc, libelle });
+  lignes.push({ compte:compteClient, compte_aux:retour.client_id, credit:ttc_calc, libelle });
   if(ht > 0)   lignes.push({ compte:"701",  debit:ht,   libelle:"Annulation vente HT" });
   if(tva > 0)  lignes.push({ compte:"4431", debit:tva,  libelle:"Annulation TVA" });
   if(cons > 0) lignes.push({ compte:"4194", compte_aux:retour.client_id, debit:cons, libelle:"Annulation consigne" });
@@ -7118,14 +7182,17 @@ VIEWS.etatCompte = function(){
   const tiers = f.type === "client"     ? (STATE.clients||[]) :
                 f.type === "fournisseur" ? (STATE.fournisseurs||[]) :
                 f.type === "concessionnaire" ? (STATE.concessionnaires||[]) : [];
-  // Comptes correspondants
-  const compteRacine = f.type === "client" ? "411" :
-                       f.type === "fournisseur" ? "401" :
-                       f.type === "concessionnaire" ? "4011" : "411";
-  const compteConsigne = f.type === "client" ? "4194" : null;
 
   // Récupère les mouvements du tiers sélectionné
   let mouvements = [];
+  // Détermine le compte racine effectif : custom si défini, sinon défaut par type
+  const tierSelTmp = tiers.find(t=>t.id === f.id);
+  const compteRacineDefault = f.type === "client" ? "411" :
+                              f.type === "fournisseur" ? "401" :
+                              f.type === "concessionnaire" ? "4011" : "411";
+  const compteRacine = tierSelTmp?.compte_compta || compteRacineDefault;
+  const compteConsigne = f.type === "client" ? "4194" : null;
+
   if(f.id){
     (STATE.ecritures||[]).forEach(e=>{
       // Filtre par date
@@ -7133,7 +7200,7 @@ VIEWS.etatCompte = function(){
       if(f.dt && e.date_ecriture > f.dt) return;
       e.lignes.forEach((l,idx)=>{
         if(l.compte_aux !== f.id) return;
-        // Le compte doit correspondre (411x/401x/4011x/4194x)
+        // Le compte doit correspondre (compte racine custom/défaut OU compte consigne 4194 pour clients)
         if(!l.compte.startsWith(compteRacine) && (!compteConsigne || !l.compte.startsWith(compteConsigne))) return;
         mouvements.push({
           ecriture_id: e.id,
@@ -7260,7 +7327,8 @@ window.exportEtatCompteCSV = function(){
                 f.type === "concessionnaire" ? (STATE.concessionnaires||[]) : [];
   const t = tiers.find(x=>x.id===f.id);
   if(!t){ toast("Aucun tiers sélectionné","error"); return; }
-  const compteRacine = f.type === "client" ? "411" : f.type === "fournisseur" ? "401" : "4011";
+  const compteRacineDefault = f.type === "client" ? "411" : f.type === "fournisseur" ? "401" : "4011";
+  const compteRacine = t.compte_compta || compteRacineDefault;
   const compteConsigne = f.type === "client" ? "4194" : null;
   const mouvements = [];
   (STATE.ecritures||[]).forEach(e=>{
