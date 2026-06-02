@@ -289,6 +289,41 @@ table.tbl td .pill{display:inline-block;padding:2px 8px;border-radius:999px;
 </head>
 <body>
 <!-- ====================================================================
+     ÉCRAN DE LOGIN PLEINE PAGE (v2.10)
+     Affiché au démarrage si non connecté · masqué une fois auth OK
+     ==================================================================== -->
+<div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:9000;background:linear-gradient(135deg,#0F8A5F 0%,#1D3557 100%);align-items:center;justify-content:center;padding:20px;color:#fff;overflow-y:auto">
+  <div style="max-width:440px;width:100%;background:rgba(255,255,255,.08);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-radius:20px;padding:36px 28px;box-shadow:0 20px 60px rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.15)">
+
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="background:#fff;color:#0F8A5F;width:72px;height:72px;border-radius:18px;display:inline-flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.25)">SD</div>
+      <h1 style="margin:0;font-size:22px;font-weight:900;letter-spacing:-.3px">Sanix DistriPro ERP</h1>
+      <p style="margin:6px 0 0;opacity:.85;font-size:13px;line-height:1.5">Gestion de dépôt boissons · Côte d'Ivoire<br>Connectez-vous pour synchroniser dans le cloud</p>
+    </div>
+
+    <button onclick="openLoginMode('signin')" style="display:block;width:100%;background:#fff;color:#0F8A5F;border:none;padding:14px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;box-shadow:0 4px 12px rgba(0,0,0,.2)">🔐 Se connecter</button>
+
+    <button onclick="openLoginMode('signup')" style="display:block;width:100%;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.35);padding:14px;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px">✨ Créer un compte</button>
+
+    <button onclick="openLoginMode('magiclink')" style="display:block;width:100%;background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.25);padding:12px;border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:24px">📩 Lien magique par email</button>
+
+    <div style="display:flex;align-items:center;gap:12px;margin:20px 0;color:rgba(255,255,255,.5);font-size:11px;font-weight:600;letter-spacing:.5px">
+      <div style="flex:1;height:1px;background:rgba(255,255,255,.2)"></div>
+      <span>OU</span>
+      <div style="flex:1;height:1px;background:rgba(255,255,255,.2)"></div>
+    </div>
+
+    <button onclick="skipLoginToOffline()" style="display:block;width:100%;background:transparent;color:rgba(255,255,255,.85);border:1px dashed rgba(255,255,255,.3);padding:12px;border-radius:12px;font-size:13px;font-weight:500;cursor:pointer">💾 Continuer en mode hors-ligne</button>
+    <p style="margin:8px 0 0;text-align:center;opacity:.55;font-size:11px;line-height:1.5">Vos données restent locales · pas de sauvegarde cloud</p>
+
+    <div style="text-align:center;margin-top:28px;padding-top:20px;border-top:1px solid rgba(255,255,255,.1);opacity:.6;font-size:11px;line-height:1.7">
+      <strong>Sanix Africa Division Technologies</strong><br>
+      Cyrille KESSIE · <a href="tel:+22507791810750" style="color:#fff;text-decoration:none">+225 07 79 18 10 75</a>
+    </div>
+  </div>
+</div>
+
+<!-- ====================================================================
      APP STRUCTURE
      ==================================================================== -->
 <div id="app">
@@ -863,7 +898,7 @@ function renderSidebar(){
       html += `<a class="nav-item${a}" data-view="${it.v}" onclick="route('${it.v}')"><span class="ico">${it.ic}</span><span>${it.l}</span></a>`;
     });
   });
-  html += `<div class="foot">📍 ${escapeHtml(STATE.config.depot.nom)}<br>NIF : ${escapeHtml(STATE.config.depot.nif)}<br>${HAS_LS?"💾 localStorage actif":"⚠️ mode mémoire"}<br><span id="syncBadge" style="display:inline-block;margin-top:6px;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer" onclick="route('parametrage')">⏸ Non connecté</span><br><br><span style="opacity:.7">Sanix Africa Division Technologies<br>Cyrille KESSIE · +225 07 79 18 10 75</span></div>`;
+  html += `<div class="foot">📍 ${escapeHtml(STATE.config.depot.nom)}<br>NIF : ${escapeHtml(STATE.config.depot.nif)}<br>${HAS_LS?"💾 localStorage actif":"⚠️ mode mémoire"}<br><span id="syncBadge" style="display:inline-block;margin-top:6px;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer" onclick="route('parametrage')">⏸ Non connecté</span><br><button id="sidebarLogoutBtn" onclick="doSignOut()" style="display:none;margin-top:8px;background:rgba(220,38,38,.15);color:#fca5a5;border:1px solid rgba(220,38,38,.4);padding:5px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;width:100%">🚪 Se déconnecter</button><br><span style="opacity:.7;margin-top:8px;display:inline-block">Sanix Africa Division Technologies<br>Cyrille KESSIE · +225 07 79 18 10 75</span></div>`;
   sb.innerHTML = html;
 }
 function renderBnav(){
@@ -5251,6 +5286,8 @@ function markSyncDirty(){
 // Badge de sync dans la sidebar (état temps réel)
 function updateSyncBadge(){
   const badge = document.getElementById('syncBadge');
+  const logoutBtn = document.getElementById('sidebarLogoutBtn');
+  if(logoutBtn) logoutBtn.style.display = _authUser ? 'block' : 'none';
   if(!badge) return;
   if(!_authUser){
     badge.innerHTML = '🔐 Non connecté';
@@ -7070,6 +7107,87 @@ function autoGenMissingEcritures(){
 window.autoGenMissingEcritures = autoGenMissingEcritures;
 
 /* ====================================================================
+   ============ SYSTÈME DE LOGIN PLEINE PAGE (v2.10) ============
+   Gating obligatoire au démarrage avec option offline
+   ==================================================================== */
+
+function showLoginScreen(){
+  const ov = document.getElementById('loginOverlay');
+  if(ov) ov.style.display = 'flex';
+}
+
+function hideLoginScreen(){
+  const ov = document.getElementById('loginOverlay');
+  if(ov) ov.style.display = 'none';
+}
+
+// L'utilisateur choisit "continuer hors-ligne" — on note la préférence
+window.skipLoginToOffline = function(){
+  localStorage.setItem('sanix_login_skip', '1');
+  hideLoginScreen();
+  toast("Mode hors-ligne actif — vos données restent locales (pas de sync cloud)", "info");
+};
+
+// Ouvre le modal auth sur le bon onglet selon le mode demandé
+window.openLoginMode = function(mode){
+  openModal('auth');
+  setTimeout(()=>{
+    if(typeof switchAuthTab === 'function'){
+      if(mode === 'signup')    switchAuthTab('signup');
+      else if(mode === 'magiclink') switchAuthTab('magiclink');
+      else                     switchAuthTab('signin');
+    }
+  }, 80);
+};
+
+// Étend updateSyncUI pour gérer l'écran de login
+const _origUpdateSyncUI = typeof updateSyncUI === 'function' ? updateSyncUI : null;
+updateSyncUI = function(){
+  if(_origUpdateSyncUI) _origUpdateSyncUI.apply(this, arguments);
+  if(_authUser){
+    // Authentifié → cache l'écran de login si visible
+    hideLoginScreen();
+    localStorage.removeItem('sanix_login_skip'); // si re-connexion, on annule le skip
+  }
+};
+
+// Override doSignOut pour réafficher l'écran de login après déconnexion
+const _origDoSignOut = typeof doSignOut === 'function' ? doSignOut : null;
+if(_origDoSignOut){
+  window.doSignOut = async function(){
+    await _origDoSignOut.apply(this, arguments);
+    localStorage.removeItem('sanix_login_skip');
+    setTimeout(showLoginScreen, 200);
+  };
+}
+
+// Décide au boot si on doit afficher l'écran
+async function initLoginGate(){
+  // Si déjà connecté (session restaurée), on cache et on ne fait rien
+  // Si user a déjà choisi "skip", on respecte
+  if(_authUser) { hideLoginScreen(); return; }
+  if(localStorage.getItem('sanix_login_skip') === '1') { hideLoginScreen(); return; }
+
+  // Vérifie si une session Supabase existe en cache
+  const sessKey = 'sb-' + SUPABASE_PROJECT_REF + '-auth-token';
+  const hasSession = !!localStorage.getItem(sessKey);
+
+  if(hasSession){
+    // Une session existe peut-être — laisse 1.5s à ensureSupabase pour la restaurer
+    setTimeout(()=>{
+      if(!_authUser) showLoginScreen();
+    }, 1500);
+  } else {
+    // Aucune session, montre tout de suite
+    showLoginScreen();
+  }
+}
+
+window.showLoginScreen = showLoginScreen;
+window.hideLoginScreen = hideLoginScreen;
+window.initLoginGate = initLoginGate;
+
+/* ====================================================================
    BOOT
    ==================================================================== */
 window.addEventListener("DOMContentLoaded", ()=>{
@@ -7134,6 +7252,9 @@ window.addEventListener("DOMContentLoaded", ()=>{
 
   // Initialise le badge (état non connecté par défaut)
   setTimeout(updateSyncBadge, 100);
+
+  // Système de login : affiche l'écran de connexion au démarrage si nécessaire
+  setTimeout(initLoginGate, 300);
 });
 
 // expose helpers pour modaux dynamiques chargés via onclick=""
