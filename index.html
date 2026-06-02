@@ -5232,15 +5232,15 @@ window.recomputeRetour = recomputeRetour;
 const SUPABASE_URL = "https://ypwsoltjfnpjavhucxwz.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_2L9rpDdpho3NEKy-uz2Jbg_hVfjAIf1";
 const SUPABASE_PROJECT_REF = "ypwsoltjfnpjavhucxwz";
-let _supaClient = null;
-let _supaLoading = false;
-let _authUser = null;
-let _authRole = null;          // 'admin'|'manager'|'livreur'|'comptable'|null
-let _pendingAfterAuth = null;
-let _syncDirty = false;        // changements non synchronisés depuis dernier push réussi
-let _autoSyncTimer = null;
-let _lastAutoSyncAttempt = 0;
-let _lastCloudVersion = null;  // dernière version connue du cloud (pour détecter conflits)
+var _supaClient = null;
+var _supaLoading = false;
+var _authUser = null;
+var _authRole = null;          // 'admin'|'manager'|'livreur'|'comptable'|null
+var _pendingAfterAuth = null;
+var _syncDirty = false;        // changements non synchronisés depuis dernier push réussi
+var _autoSyncTimer = null;
+var _lastAutoSyncAttempt = 0;
+var _lastCloudVersion = null;  // dernière version connue du cloud (pour détecter conflits)
 
 // Marquage "données modifiées" — appelé depuis saveState
 function markSyncDirty(){
@@ -5713,7 +5713,7 @@ window.canManage = canManage;
    Notifications push depuis le cloud quand un autre device modifie
    ==================================================================== */
 
-let _realtimeChannel = null;
+var _realtimeChannel = null;
 
 async function startRealtime(){
   if(_realtimeChannel) return; // déjà actif
@@ -5806,10 +5806,10 @@ window.stopRealtime = stopRealtime;
    Lib jsQR (~80 Ko) chargée à la demande
    ==================================================================== */
 
-let _qrStream = null;
-let _qrAnimFrame = null;
-let _qrLibLoaded = false;
-let _qrCallback = null;
+var _qrStream = null;
+var _qrAnimFrame = null;
+var _qrLibLoaded = false;
+var _qrCallback = null;
 
 async function loadQRLib(){
   if(_qrLibLoaded || window.jsQR) { _qrLibLoaded = true; return true; }
