@@ -899,6 +899,7 @@ const NAV = [
   { group:"COMPTABILITÉ", items:[
     {v:"dashboardCompta",ic:"📊",l:"Tableau de bord"},
     {v:"ecritures",ic:"📚",l:"Journal d'écritures"},
+    {v:"etatCompte",ic:"📋",l:"État de compte tiers"},
     {v:"planComptable",ic:"📋",l:"Plan comptable"},
     {v:"auditLog",ic:"🔍",l:"Journal d'audit"},
   ]},
@@ -7104,6 +7105,213 @@ window.comptaKPI = comptaKPI;
 window.soldeCompte = soldeCompte;
 window.topDebiteurs = topDebiteurs;
 window.topCreanciers = topCreanciers;
+
+// ==================== VUE : ÉTAT DE COMPTE DÉTAILLÉ (grand livre auxiliaire) ====================
+// Affiche tous les mouvements d'un client/fournisseur avec solde progressif
+
+var _ecompteFilters = { type:"client", id:"", df:"", dt:"" };
+
+VIEWS.etatCompte = function(){
+  const w = document.createElement("div");
+  const f = _ecompteFilters;
+  // Liste des tiers selon le type sélectionné
+  const tiers = f.type === "client"     ? (STATE.clients||[]) :
+                f.type === "fournisseur" ? (STATE.fournisseurs||[]) :
+                f.type === "concessionnaire" ? (STATE.concessionnaires||[]) : [];
+  // Comptes correspondants
+  const compteRacine = f.type === "client" ? "411" :
+                       f.type === "fournisseur" ? "401" :
+                       f.type === "concessionnaire" ? "4011" : "411";
+  const compteConsigne = f.type === "client" ? "4194" : null;
+
+  // Récupère les mouvements du tiers sélectionné
+  let mouvements = [];
+  if(f.id){
+    (STATE.ecritures||[]).forEach(e=>{
+      // Filtre par date
+      if(f.df && e.date_ecriture < f.df) return;
+      if(f.dt && e.date_ecriture > f.dt) return;
+      e.lignes.forEach((l,idx)=>{
+        if(l.compte_aux !== f.id) return;
+        // Le compte doit correspondre (411x/401x/4011x/4194x)
+        if(!l.compte.startsWith(compteRacine) && (!compteConsigne || !l.compte.startsWith(compteConsigne))) return;
+        mouvements.push({
+          ecriture_id: e.id,
+          date: e.date_ecriture,
+          journal: e.journal_code,
+          numero: e.numero,
+          reference: e.reference,
+          libelle: l.libelle || e.libelle,
+          compte: l.compte,
+          debit: l.debit||0,
+          credit: l.credit||0,
+          statut: e.statut,
+          source_table: e.source_table,
+          source_id: e.source_id,
+          lettrage: l.lettrage
+        });
+      });
+    });
+    mouvements.sort((a,b)=>new Date(a.date)-new Date(b.date));
+  }
+
+  // Calcul solde progressif
+  let solde = 0;
+  mouvements.forEach(m=>{ solde += m.debit - m.credit; m.solde_progressif = solde; });
+  const totD = mouvements.reduce((s,m)=>s+m.debit, 0);
+  const totC = mouvements.reduce((s,m)=>s+m.credit, 0);
+  const soldeFinal = totD - totC;
+
+  // Tiers sélectionné
+  const tierSel = tiers.find(t=>t.id === f.id);
+
+  w.innerHTML = `
+    <div class="view-head">
+      <div><h2>📋 État de compte détaillé <span class="sub">Grand livre auxiliaire · ${mouvements.length} mouvement(s)</span></h2></div>
+      <div class="view-actions">
+        ${tierSel?`<button class="btn ghost" onclick="exportEtatCompteCSV()">📤 Export CSV</button>
+        <button class="btn ghost" onclick="printEtatCompte()">🖨 Imprimer</button>`:''}
+      </div>
+    </div>
+
+    <div class="card mb-2" style="background:var(--bg)">
+      <div class="grid grid-4">
+        <div class="fld"><label>Type de tiers</label>
+          <select onchange="_ecompteFilters.type=this.value;_ecompteFilters.id='';route('etatCompte')">
+            <option value="client" ${f.type==='client'?'selected':''}>👤 Client (411)</option>
+            <option value="fournisseur" ${f.type==='fournisseur'?'selected':''}>🚚 Fournisseur (401)</option>
+            <option value="concessionnaire" ${f.type==='concessionnaire'?'selected':''}>🏭 Concessionnaire (4011)</option>
+          </select></div>
+        <div class="fld"><label>Choisir le tiers</label>
+          <select onchange="_ecompteFilters.id=this.value;route('etatCompte')">
+            <option value="">— Sélectionner —</option>
+            ${tiers.slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(t=>`<option value="${escapeHtml(t.id)}" ${f.id===t.id?'selected':''}>${escapeHtml(t.nom)}</option>`).join("")}
+          </select></div>
+        <div class="fld"><label>Date du</label><input type="date" value="${f.df}" onchange="_ecompteFilters.df=this.value;route('etatCompte')"></div>
+        <div class="fld"><label>Date au</label><input type="date" value="${f.dt}" onchange="_ecompteFilters.dt=this.value;route('etatCompte')"></div>
+      </div>
+    </div>
+
+    ${!tierSel ? `<div class="empty"><span class="ico">👈</span>Choisissez un ${f.type==='client'?'client':f.type==='fournisseur'?'fournisseur':'concessionnaire'} dans la liste pour voir son état de compte</div>` :
+      `<div id="etatCompteContent">
+        <div class="card mb-2" style="background:linear-gradient(135deg,var(--primary-light),var(--bg))">
+          <div class="flex between">
+            <div>
+              <h2 style="margin:0">${escapeHtml(tierSel.nom)}</h2>
+              <div class="f12 muted mt-1">
+                ${tierSel.type?escapeHtml(tierSel.type)+' · ':''}${tierSel.telephone?'📞 '+escapeHtml(tierSel.telephone)+' · ':''}${tierSel.zone?'📍 '+escapeHtml(tierSel.zone):''}
+              </div>
+              <div class="f12 muted">${tierSel.nif?'NIF : '+escapeHtml(tierSel.nif):''} ${tierSel.code_badge?' · Badge : '+escapeHtml(tierSel.code_badge):''}</div>
+            </div>
+            <div class="right">
+              <div class="f12 muted">Compte collectif</div>
+              <div class="b700 f18 mono">${compteRacine}</div>
+              <div class="f12 muted mt-1">ID auxiliaire</div>
+              <div class="mono f12">${escapeHtml(tierSel.id)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-4 kpis mb-2">
+          <div class="kpi info"><span class="ico">📥</span><span class="lbl">Total débit</span><span class="val">${fmtFCFA(totD)}</span></div>
+          <div class="kpi info"><span class="ico">📤</span><span class="lbl">Total crédit</span><span class="val">${fmtFCFA(totC)}</span></div>
+          <div class="kpi ${soldeFinal>0?(f.type==='client'?'warn':'ok'):(soldeFinal<0?(f.type==='client'?'ok':'warn'):'info')}">
+            <span class="ico">💰</span><span class="lbl">Solde</span><span class="val">${fmtFCFA(Math.abs(soldeFinal))}</span>
+          </div>
+          <div class="kpi info"><span class="ico">📊</span><span class="lbl">Sens</span><span class="val">${soldeFinal>0?(f.type==='client'?'Débit (à recouvrer)':'Débit'):soldeFinal<0?(f.type==='client'?'Crédit':'Crédit (à payer)'):'Soldé ✓'}</span></div>
+        </div>
+
+        ${mouvements.length===0 ? '<div class="empty"><span class="ico">📋</span>Aucun mouvement comptable sur cette période</div>' :
+          `<table class="tbl"><thead><tr><th>Date</th><th>Jrnl</th><th>N°</th><th>Libellé</th><th>Compte</th><th class="right">Débit</th><th class="right">Crédit</th><th class="right">Solde</th><th>Statut</th></tr></thead><tbody>
+            ${mouvements.map(m=>{
+              const stIco = {brouillon:'📝',validee:'✓',validee_finale:'✓✓',cloturee:'🔒'}[m.statut]||'?';
+              const stCls = {brouillon:'muted',validee:'info',validee_finale:'ok',cloturee:'bad'}[m.statut]||'info';
+              return `<tr style="cursor:pointer" onclick="openModal('detailEcriture','${m.ecriture_id}')">
+                <td class="f12">${fmtDate(m.date)}</td>
+                <td><span class="pill info">${escapeHtml(m.journal||'?')}</span></td>
+                <td class="f12 mono">${escapeHtml(m.numero||'')}</td>
+                <td class="f12">${escapeHtml(m.libelle)}${m.reference?'<br><span class="f10 muted">Réf: '+escapeHtml(m.reference)+'</span>':''}</td>
+                <td class="f12 mono">${escapeHtml(m.compte)}</td>
+                <td class="right b700" style="color:var(--primary)">${m.debit>0?fmtFCFA(m.debit):'-'}</td>
+                <td class="right b700" style="color:var(--alert)">${m.credit>0?fmtFCFA(m.credit):'-'}</td>
+                <td class="right b700" style="color:${m.solde_progressif>0?'var(--alert)':m.solde_progressif<0?'var(--primary)':'var(--muted)'}">${fmtFCFA(Math.abs(m.solde_progressif))} ${m.solde_progressif>0?'D':m.solde_progressif<0?'C':''}</td>
+                <td><span class="pill ${stCls}">${stIco}</span></td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+          <tfoot><tr style="background:var(--bg);font-weight:700">
+            <td colspan="5">TOTAUX</td>
+            <td class="right">${fmtFCFA(totD)}</td>
+            <td class="right">${fmtFCFA(totC)}</td>
+            <td class="right b700">${fmtFCFA(Math.abs(soldeFinal))} ${soldeFinal>0?'D':soldeFinal<0?'C':''}</td>
+            <td></td>
+          </tr></tfoot>
+          </table>
+          <div class="hint mt-2">💡 D = solde débiteur (le tiers vous doit) · C = solde créditeur (vous devez au tiers). Cliquez sur une ligne pour voir l'écriture complète.</div>`}
+      </div>`}
+  `;
+  return w;
+};
+
+window.exportEtatCompteCSV = function(){
+  const f = _ecompteFilters;
+  const tiers = f.type === "client" ? (STATE.clients||[]) :
+                f.type === "fournisseur" ? (STATE.fournisseurs||[]) :
+                f.type === "concessionnaire" ? (STATE.concessionnaires||[]) : [];
+  const t = tiers.find(x=>x.id===f.id);
+  if(!t){ toast("Aucun tiers sélectionné","error"); return; }
+  const compteRacine = f.type === "client" ? "411" : f.type === "fournisseur" ? "401" : "4011";
+  const compteConsigne = f.type === "client" ? "4194" : null;
+  const mouvements = [];
+  (STATE.ecritures||[]).forEach(e=>{
+    if(f.df && e.date_ecriture < f.df) return;
+    if(f.dt && e.date_ecriture > f.dt) return;
+    e.lignes.forEach(l=>{
+      if(l.compte_aux !== f.id) return;
+      if(!l.compte.startsWith(compteRacine) && (!compteConsigne || !l.compte.startsWith(compteConsigne))) return;
+      mouvements.push({date:e.date_ecriture, journal:e.journal_code, numero:e.numero, reference:e.reference||'', libelle:l.libelle||e.libelle, compte:l.compte, debit:l.debit||0, credit:l.credit||0, statut:e.statut});
+    });
+  });
+  mouvements.sort((a,b)=>new Date(a.date)-new Date(b.date));
+  let solde = 0;
+  const rows = [
+    [`État de compte : ${t.nom}`],
+    [`Période : ${f.df||'début'} → ${f.dt||"aujourd'hui"}`],
+    [`Compte collectif : ${compteRacine}`, `Auxiliaire : ${t.id}`],
+    [],
+    ["Date","Journal","N° écriture","Référence","Libellé","Compte","Débit","Crédit","Solde","Statut"]
+  ];
+  mouvements.forEach(m=>{
+    solde += m.debit - m.credit;
+    rows.push([m.date, m.journal, m.numero, m.reference, m.libelle, m.compte, m.debit, m.credit, solde, m.statut]);
+  });
+  rows.push([], ["TOTAUX","","","","","", mouvements.reduce((s,m)=>s+m.debit,0), mouvements.reduce((s,m)=>s+m.credit,0), solde]);
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";")).join("\n");
+  const blob = new Blob(["\ufeff"+csv], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `etat_compte_${(t.nom||'tiers').replace(/[^a-z0-9]/gi,'_')}_${today()}.csv`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  toast(`État de compte ${t.nom} exporté`,"success");
+};
+
+window.printEtatCompte = function(){
+  const el = document.getElementById('etatCompteContent');
+  if(!el){ toast("Rien à imprimer","error"); return; }
+  const win = window.open("","_blank","width=900,height=1000");
+  const styles = `body{font-family:Arial,sans-serif;padding:20px;font-size:12px;color:#1D3557}h1,h2,h3{margin:0 0 8px}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}th{background:#0F8A5F;color:#fff}.right{text-align:right}.b700{font-weight:700}.f12{font-size:11px}.muted{color:#64748b}.f10{font-size:9px}.pill{display:inline-block;padding:1px 6px;border-radius:6px;font-size:10px;background:#e5e7eb}.card{border:1px solid #d1d5db;border-radius:8px;padding:10px;margin-bottom:8px}.flex{display:flex;justify-content:space-between}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}.kpi{border:1px solid #e5e7eb;border-radius:8px;padding:8px}.kpi .lbl{display:block;font-size:10px;color:#64748b}.kpi .val{font-size:14px;font-weight:700}tfoot td{background:#f3f4f6;font-weight:700}.mono{font-family:monospace}`;
+  win.document.write(`<!doctype html><html><head><title>État de compte</title><style>${styles}</style></head><body>
+    <h1>📋 ÉTAT DE COMPTE DÉTAILLÉ</h1>
+    <p style="color:#64748b">Sanix DistriPro ERP · ${escapeHtml(STATE.config.depot.nom)}<br>Édité le ${fmtDateTime(now())}</p>
+    ${el.outerHTML}
+    <div style="margin-top:30px;text-align:center;color:#64748b;font-size:10px;border-top:1px solid #e5e7eb;padding-top:10px">
+      Sanix Africa Division Technologies · Cyrille KESSIE · +225 07 79 18 10 75
+    </div>
+  </body></html>`);
+  win.document.close();
+  setTimeout(()=>win.print(), 500);
+};
 
 // HOOK GLOBAL : auto-génère les écritures comptables après chaque saveState (debounced 500ms)
 // Permet de ne pas modifier toutes les fonctions saveXxx existantes
