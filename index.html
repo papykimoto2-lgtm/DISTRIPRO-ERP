@@ -1709,6 +1709,11 @@ VIEWS.parametrage = function(){
           <button class="btn block" onclick="doSyncPush()" style="background:var(--structure)">⬆️ Pousser</button>
           <button class="btn block ghost" onclick="doSyncPull()">⬇️ Récupérer</button>
         </div>
+        <div class="row row-2 mt-1">
+          <button class="btn block" onclick="doSyncPushAnon()" style="background:#10b981" title="Push sans authentification Supabase">⚡ Push rapide</button>
+          <button class="btn block ghost" onclick="doSyncPullAnon()" style="border-color:#10b981;color:#10b981" title="Pull sans authentification Supabase">⚡ Pull rapide</button>
+        </div>
+        <div class="hint mt-1">⚡ <strong>Push/Pull rapide</strong> : contourne l'authentification Supabase si elle rame. Marche grâce aux policies RLS qui acceptent les opérations anonymes sur <code>app_state</code>.</div>
       </div>
 
       <div class="card" style="border-color:var(--alert)">
@@ -6368,6 +6373,82 @@ async function doSyncTest(){
 window.doSyncTest = doSyncTest;
 window.doSyncPush = doSyncPush;
 window.doSyncPull = doSyncPull;
+
+// ============================================================================
+// PUSH/PULL ANONYMES — Contournent l'authentification Supabase Auth
+// Marche grâce aux policies RLS qui acceptent les opérations anonymes sur app_state
+// ============================================================================
+
+async function doSyncPushAnon(){
+  const t0 = Date.now();
+  const sb = await ensureSupabase();
+  if(!sb){ toast("Connexion Supabase impossible","error"); return; }
+  toast("⚡ Push rapide en cours…","info");
+  const payload = JSON.stringify(STATE);
+  const sizeBytes = new Blob([payload]).size;
+  const newVersion = Math.floor(Date.now()/1000);
+  const deviceId = getDeviceId();
+  try {
+    const { error } = await sb.from('app_state').upsert({
+      id: 'main',
+      data: STATE,
+      device_id: deviceId,
+      user_id: null,
+      version: newVersion,
+      size_bytes: sizeBytes,
+      notes: `Push rapide anonyme · ${STATE.factures?.length||0} factures · ${STATE.clients?.length||0} clients · ${STATE.avoirs?.length||0} avoirs`,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+    const ms = Date.now() - t0;
+    if(error){
+      toast("❌ Push échoué : "+error.message,"error");
+      console.error("Push anon error:", error);
+      return;
+    }
+    _lastCloudVersion = newVersion;
+    _syncDirty = false;
+    STATE.config._lastSync = new Date().toISOString();
+    saveState();
+    if(typeof updateSyncBadge === 'function') updateSyncBadge();
+    toast(`⚡ Push rapide réussi · ${(sizeBytes/1024).toFixed(0)} kB en ${ms}ms`,"success");
+    if(CURRENT_VIEW === 'parametrage') route('parametrage');
+  } catch(e){
+    toast("Erreur réseau : "+e.message,"error");
+  }
+}
+
+async function doSyncPullAnon(){
+  const t0 = Date.now();
+  const sb = await ensureSupabase();
+  if(!sb){ toast("Connexion Supabase impossible","error"); return; }
+  toast("⚡ Pull rapide en cours…","info");
+  try {
+    const { data, error } = await sb.from('app_state').select('*').eq('id','main').maybeSingle();
+    const ms = Date.now() - t0;
+    if(error){
+      toast("❌ Pull échoué : "+error.message,"error");
+      console.error("Pull anon error:", error);
+      return;
+    }
+    if(!data || !data.data){
+      toast("Aucune donnée trouvée dans le cloud","info");
+      return;
+    }
+    if(!confirm(`⚠️ ÉCRASEMENT des données locales\n\nCloud :\n• ${data.data.factures?.length||0} factures\n• ${data.data.clients?.length||0} clients\n• ${data.data.avoirs?.length||0} avoirs\n• Synchronisé le ${new Date(data.updated_at).toLocaleString('fr-FR')}\n\nLocal sera remplacé. Continuer ?`)) return;
+    Object.assign(STATE, data.data);
+    saveState();
+    _lastCloudVersion = data.version;
+    _syncDirty = false;
+    if(typeof updateSyncBadge === 'function') updateSyncBadge();
+    toast(`⚡ Pull rapide réussi · ${(data.size_bytes/1024).toFixed(0)} kB en ${ms}ms · rechargement…`,"success");
+    setTimeout(()=>location.reload(), 1200);
+  } catch(e){
+    toast("Erreur réseau : "+e.message,"error");
+  }
+}
+
+window.doSyncPushAnon = doSyncPushAnon;
+window.doSyncPullAnon = doSyncPullAnon;
 window.getDeviceId = getDeviceId;
 
 /* ====================================================================
