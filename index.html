@@ -7506,9 +7506,11 @@ window.doLocalLogin = async function(){
         return;
       }
       await setupLocalPwd(pwd);
+      // Active le mode admin local
+      activateLocalAdmin();
       sessionStorage.setItem('sanix_logged_in', '1');
       hideLoginScreen();
-      toast("✓ Mot de passe créé · Bienvenue !", "success");
+      toast("✓ Mot de passe créé · Bienvenue Administrateur !", "success");
     } else {
       // Login normal : vérifier le mot de passe
       const ok = await verifyLocalPwd(pwd);
@@ -7518,9 +7520,11 @@ window.doLocalLogin = async function(){
         btn.innerHTML = original;
         return;
       }
+      // Active le mode admin local
+      activateLocalAdmin();
       sessionStorage.setItem('sanix_logged_in', '1');
       hideLoginScreen();
-      toast("✓ Connecté", "success");
+      toast("✓ Connecté en tant qu'administrateur", "success");
     }
   } catch(e){
     showLoginError("Erreur : " + e.message);
@@ -7528,6 +7532,29 @@ window.doLocalLogin = async function(){
     btn.innerHTML = original;
   }
 };
+
+// Active le mode admin local (set les variables auth en sans Supabase)
+function activateLocalAdmin(){
+  // Définit l'utilisateur courant comme admin local
+  // Note : utilise window. pour que les var top-level _authUser, _authRole, _authTenant soient bien settées
+  window._authUser = { id: 'local-admin', email: 'admin@local', local: true };
+  window._authRole = 'admin';
+  window._authTenant = 'sanix_main';
+  // Refresh la sidebar pour afficher le bon état
+  if(typeof renderSidebar === 'function') renderSidebar();
+  if(typeof updateSyncBadge === 'function') updateSyncBadge();
+  if(typeof route === 'function' && typeof CURRENT_VIEW !== 'undefined' && CURRENT_VIEW) setTimeout(()=>route(CURRENT_VIEW), 50);
+}
+
+// Désactive le mode admin local
+function deactivateLocalAdmin(){
+  // Reset seulement si c'était un admin local (pas de Supabase)
+  if(window._authUser && window._authUser.local){
+    window._authUser = null;
+    window._authRole = null;
+    window._authTenant = null;
+  }
+}
 
 // Reset mot de passe (data métier préservée)
 window.forgotLocalPwd = function(){
@@ -7555,6 +7582,8 @@ window.changeLocalPwd = async function(){
 // Au boot : décide d'afficher l'écran ou non
 function initLoginGate(){
   if(sessionStorage.getItem('sanix_logged_in') === '1'){
+    // Session active → réactive le mode admin local
+    activateLocalAdmin();
     hideLoginScreen();
     return;
   }
@@ -7563,6 +7592,7 @@ function initLoginGate(){
 
 // Déconnexion locale (efface session, garde le mdp)
 window.doLocalLogout = function(){
+  deactivateLocalAdmin();
   sessionStorage.removeItem('sanix_logged_in');
   showLoginScreen();
   toast("Déconnecté","info");
@@ -8121,6 +8151,52 @@ VIEWS.utilisateurs = function(){
     </div>`;
     return w;
   }
+  // Mode admin local sans Supabase : pas de gestion d'utilisateurs collaboratifs
+  if(_authUser && _authUser.local){
+    w.innerHTML = `
+      <div class="view-head">
+        <div><h2>👥 Gestion des utilisateurs <span class="sub">Mode local · Admin unique</span></h2></div>
+      </div>
+      <div class="card" style="background:var(--primary-light);border:2px solid var(--primary);padding:30px;text-align:center">
+        <div style="font-size:48px;margin-bottom:16px">👑</div>
+        <h2 style="margin:0 0 8px;color:var(--primary)">Vous êtes l'administrateur local</h2>
+        <p>L'application fonctionne actuellement en <strong>mode local</strong> (mot de passe stocké dans ce navigateur).<br>
+        Il n'y a qu'un seul utilisateur : <strong>vous</strong>.</p>
+
+        <div class="grid grid-2 mt-2" style="text-align:left">
+          <div class="card" style="background:#fff">
+            <h3 style="margin:0 0 6px">✅ Ce que vous pouvez faire</h3>
+            <ul class="f12" style="margin:4px 0 0 18px;padding:0;line-height:1.7">
+              <li>Toutes les opérations métier (ventes, stock, compta)</li>
+              <li>Changer votre mot de passe</li>
+              <li>Vous déconnecter avec le bouton sidebar</li>
+              <li>Réinitialiser le mot de passe si oublié</li>
+            </ul>
+          </div>
+          <div class="card" style="background:#fff">
+            <h3 style="margin:0 0 6px">🌐 Pour plusieurs utilisateurs</h3>
+            <p class="f12" style="margin:0;line-height:1.7">Si vous souhaitez créer plusieurs comptes (livreur, comptable, manager...) collaboratifs entre plusieurs appareils, activez la <strong>synchronisation cloud Supabase</strong> dans Paramétrage.</p>
+            <button class="btn block mt-2" onclick="route('parametrage')" style="background:var(--structure)">⚙ Paramétrage cloud</button>
+          </div>
+        </div>
+
+        <div class="card mt-2" style="background:#fff;text-align:left">
+          <h3 style="margin:0 0 6px">🔐 Sécurité de votre mot de passe</h3>
+          <ul class="f12" style="margin:4px 0 0 18px;padding:0;line-height:1.7">
+            <li>Stocké uniquement dans ce navigateur (jamais envoyé)</li>
+            <li>Hashé SHA-256 + sel cryptographique (16 bytes)</li>
+            <li>Session active jusqu'à fermeture de l'onglet</li>
+          </ul>
+          <div class="row row-2 mt-2">
+            <button class="btn ghost" onclick="changeLocalPwd()">🔑 Changer mon mot de passe</button>
+            <button class="btn ghost danger" onclick="forgotLocalPwd()">🔄 Réinitialiser (oubli)</button>
+          </div>
+        </div>
+      </div>
+    `;
+    return w;
+  }
+  // Mode Supabase : gestion classique multi-utilisateurs
   w.innerHTML = `
     <div class="view-head">
       <div><h2>👥 Gestion des utilisateurs <span class="sub">Création de comptes · Assignation de rôles</span></h2></div>
