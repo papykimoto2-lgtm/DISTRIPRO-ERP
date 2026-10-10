@@ -222,7 +222,7 @@ function echec(l,motif,obs){
 /* ---------- Données de démonstration ---------- */
 function seed(){
  S={v:1,seq:{cmd:0,inc:0},
-  config:{org:"ANGEL'S GROUP",gps_stale_ok:2,gps_stale_warn:10,gps_interval:20,gps_retention_jours:30,remu:{type:"mixte",fixe:500,pct:0},
+  config:{org:"ANGEL'S GROUP",whatsapp:"0584163232",gps_stale_ok:2,gps_stale_warn:10,gps_interval:20,gps_retention_jours:30,remu:{type:"mixte",fixe:500,pct:0},
    modes:["Espèces","Mobile Money","Virement","Autre"],
    motifs:["Client absent","Client injoignable","Adresse incorrecte","Accès impossible","Client a refusé le colis","Paiement indisponible","Colis endommagé","Incident de moto","Conditions de sécurité défavorables","Autre motif"],
    cats:["Retard","Colis manquant","Colis endommagé","Mauvaise adresse","Erreur de montant","Contestation de livraison","Panne de moto","Incident de sécurité","Réclamation client"],
@@ -285,7 +285,7 @@ function loginHTML(){
 function render(){
  if(!S)return;
  if(!ME){$("#app").innerHTML=loginHTML();return}
- if(ME.role==="livreur"){$("#app").innerHTML=livreurHTML();syncGPS();return}
+ if(ME.role==="livreur"){$("#app").innerHTML=livreurHTML();syncGPS();initMaps();return}
  const nav=NAV.filter(n=>n.r.includes(ME.role));if(!nav.find(n=>n.v===view))view=nav[0].v;
  $("#app").innerHTML=`<div class="shell"><aside><div class="brand">ANGEL'S GROUP<small>ERP · Livraisons V1</small></div>${nav.map(n=>`<a class="${n.v===view?"on":""}" data-act="nav" data-id="${n.v}">${n.i} ${n.l}</a>`).join("")}<div class="who">👤 ${esc(ME.nom)}<br><span style="opacity:.7">${ROLES[ME.role]}</span><br><a data-act="logout" style="padding:6px 0">⏏ Déconnexion</a></div></aside><main>${VIEWS[view]()}</main></div>`}
 
@@ -304,6 +304,7 @@ function alertes(){
   if(l.statut==="en_cours"){const f=fraicheur(S.pos[l.livreur_id]);if(f.k!=="ok")a.push({k:"",m:`GPS ${f.k==="mu"?"absent":"non récent"} pour ${lv.nom} (${c.numero}). Cela ne prouve pas une faute : réseau, batterie ou téléphone possibles.`})}});
  const ec=S.livraisons.filter(l=>l.ecart_statut==="a_valider").length;if(ec)a.push({k:"err",m:`${ec} écart(s) d'encaissement à valider`});
  const nf=S.commandes.filter(c=>c.statut==="echouee").length;if(nf)a.push({k:"warn",m:`${nf} livraison(s) échouée(s) à traiter`});
+ const ng=S.commandes.filter(c=>!["livree","annulee","retour_recu","brouillon"].includes(c.statut)&&!c.adr.gps).length;if(ng)a.push({k:"",m:`${ng} commande(s) active(s) sans position GPS : envoyez le lien du portail au client`});
  const np=S.commandes.filter(c=>c.statut==="prete").length;if(np)a.push({k:"",m:`${np} commande(s) prête(s) à affecter`});
  const rr=S.commandes.filter(c=>c.statut==="retour_cours").length;if(rr)a.push({k:"",m:`${rr} retour(s) à réceptionner`});
  S.produits.filter(p=>p.actif&&p.stock<=p.seuil).forEach(p=>a.push({k:"warn",m:`Stock bas : ${p.nom} (${p.stock})`}));
@@ -423,7 +424,7 @@ function cmdDetail(id){
  b.push(`<button class="btn ghost" data-act="printBL" data-id="${c.id}">🖨 Bon de livraison</button>`);
  if(can("admin"))b.push(`<button class="btn ghost" data-act="forceStatut" data-id="${c.id}">Correction exceptionnelle</button>`);
  modal(c.numero+" — "+cl.nom,`<div class="flex">${sb(c)}${c.priorite==="urgente"?badge("URGENT","er"):""}${badge(c.canal,"mu")}</div>
- <div class="pill"><b>Destination</b> : ${esc(a.libelle||"")} · ${esc(a.zone)} ${esc(a.quartier||"")}<br>Repère : ${esc(a.repere||"—")}${a.instructions?"<br>Instructions : "+esc(a.instructions):""}<br>Tél. client : <a href="tel:${esc(cl.tel)}">${esc(cl.tel)}</a></div>
+ <div class="pill"><b>Destination</b> : ${esc(a.libelle||"")} · ${esc(a.zone)} ${esc(a.quartier||"")}<br>Repère : ${esc(a.repere||"—")}${a.instructions?"<br>Instructions : "+esc(a.instructions):""}<br>Tél. client : <a href="tel:${esc(cl.tel)}">${esc(cl.tel)}</a><br>${geoBadge(a)}${can("admin","superviseur","commercial")?geoBtns(cl.id,a.id):""}</div>
  ${tbl(["Produit","Qté","P.U.","Total"],c.lignes.map(l=>`<tr><td>${esc(prod(l.produit_id).nom)}</td><td>${l.qte}</td><td>${fcfa(l.pu)}</td><td>${fcfa(l.qte*l.pu)}</td></tr>`))}
  <div class="pill">Produits ${fcfa(c.montant_produits)} + livraison ${fcfa(c.frais)} − remise ${fcfa(c.remise)} = <b>${fcfa(c.total)}</b><br>Déjà payé : ${fcfa(paye(c))} · Reste dû : <b>${fcfa(soldeCmd(c))}</b> (${c.paiement==="avance"?"payé d'avance":c.paiement==="partiel"?"paiement partiel":"à la livraison"})</div>
  ${c.obs?`<div class="pill">Observations : ${esc(c.obs)}</div>`:""}
@@ -440,7 +441,7 @@ function assignModal(c){
  const old=activeLiv(c.id),zn=c.adr.zone;
  const list=S.livreurs.map(l=>{const n=S.livraisons.filter(x=>x.livreur_id===l.id&&isActive(x)).length,mo=l.moto_id&&moto(l.moto_id),bloque=mo&&!["disponible","affectee"].includes(mo.statut),ind=l.statut!=="disponible";
   return{l,n,mo,bloque,ind,sc:(ind?10:0)+(bloque?100:0)+n*2+(l.zone===zn?-3:0)+(old&&old.livreur_id===l.id?200:0)}}).sort((a,b)=>a.sc-b.sc);
- modal((old?"Réaffecter ":"Affecter ")+c.numero,`<div class="pill">Destination : <b>${esc(zn)}</b> ${esc(c.adr.quartier||"")} · À encaisser : <b>${fcfa(soldeCmd(c))}</b> ${c.priorite==="urgente"?badge("URGENT","er"):""}</div>
+ modal((old?"Réaffecter ":"Affecter ")+c.numero,`<div class="pill">${c.adr.gps?"":`<div class="al warn sm">Adresse non géolocalisée : le livreur n'aura pas de carte. Demandez la position au client (portail).</div>`}Destination : <b>${esc(zn)}</b> ${esc(c.adr.quartier||"")} · À encaisser : <b>${fcfa(soldeCmd(c))}</b> ${c.priorite==="urgente"?badge("URGENT","er"):""}</div>
  ${list.map((x,i)=>`<label style="display:flex;gap:10px;align-items:center;border:1px solid var(--bd);border-radius:10px;padding:9px;color:var(--tx);${x.bloque?"opacity:.5":""}"><input type="radio" name="lid" value="${x.l.id}" style="width:auto" ${i===0&&!x.bloque?"checked":""} ${x.bloque||(old&&old.livreur_id===x.l.id)?"disabled":""}>
  <span style="flex:1"><b>${esc(x.l.nom)}</b> ${x.l.zone===zn?badge("même zone","ok"):""} ${x.ind?badge("indisponible","er"):""}<br><span class="sm mu">${x.n} mission(s) active(s) · moto ${x.mo?esc(x.mo.immat)+" ("+x.mo.statut+")":"non affectée"} · position : ${fraicheur(S.pos[x.l.id]).t}</span></span></label>`).join("")}
  ${old?`<label>Motif de la réaffectation (obligatoire)<input name="motif" required></label>`:""}
@@ -475,14 +476,14 @@ VIEWS.clients=()=>{
   return`<tr><td><b>${esc(c.nom)}</b></td><td>${esc(c.tel)}</td><td>${c.adresses.length} adresse(s)</td><td>${cs.length}</td><td>${fcfa(cs.filter(x=>x.statut==="livree").reduce((a,x)=>a+x.total,0))}</td><td>${du?`<b style="color:var(--er)">${fcfa(du)}</b>`:"—"}</td><td><button class="btn sm ghost" data-act="cliDetail" data-id="${c.id}">Fiche</button></td></tr>`});
  return`<div class="between"><h1>Clients</h1><button class="btn" data-act="newCli">➕ Nouveau client</button></div><input data-f="cq" placeholder="Rechercher puis Entrée" value="${esc(ui.cq||"")}" style="max-width:300px;margin-bottom:10px">${tbl(["Client","Téléphone","Adresses","Commandes","Achats livrés","Solde dû",""],rows)}`};
 const adrForm=a=>`<div class="g3"><label>Libellé<input name="a_lib" value="${esc(a?a.libelle:"")}" placeholder="Domicile, boutique…"></label><label>Zone<select name="a_zone">${opts(S.config.zones.map(z=>z.nom),a?a.zone:"")}</select></label><label>Quartier<input name="a_q" value="${esc(a?a.quartier:"")}"></label></div><div class="g2"><label>Point de repère<input name="a_rep" value="${esc(a?a.repere:"")}"></label><label>Instructions d'accès<input name="a_ins" value="${esc(a?a.instructions:"")}"></label></div><div class="g2"><label>Latitude GPS (facultatif)<input name="a_lat" value="${a&&a.gps?a.gps.lat:""}"></label><label>Longitude GPS<input name="a_lng" value="${a&&a.gps?a.gps.lng:""}"></label></div>`;
-const adrFrom=d=>({libelle:d.a_lib||"Adresse",zone:d.a_zone,quartier:d.a_q,repere:d.a_rep,instructions:d.a_ins,gps:d.a_lat&&d.a_lng&&!isNaN(+d.a_lat)&&!isNaN(+d.a_lng)?{lat:+d.a_lat,lng:+d.a_lng}:null});
+const adrFrom=d=>({libelle:d.a_lib||"Adresse",zone:d.a_zone,quartier:d.a_q,repere:d.a_rep,instructions:d.a_ins,gps:d.a_lat&&d.a_lng&&!isNaN(+d.a_lat)&&!isNaN(+d.a_lng)?{lat:+d.a_lat,lng:+d.a_lng}:null,gps_src:d.a_lat&&d.a_lng?"saisie par le personnel":""});
 function cliForm(c){const nw=!c;
  modal(nw?"Nouveau client":"Modifier le client",`<div class="g2"><label>Nom / raison sociale<input name="nom" required value="${esc(c?c.nom:"")}"></label><label>Téléphone<input name="tel" required value="${esc(c?c.tel:"")}"></label></div><label>Téléphone secondaire<input name="tel2" value="${esc(c?c.tel2:"")}"></label>${nw?'<div class="sec">Adresse principale</div>'+adrForm():""}`,
  {onSubmit:d=>{if(nw){if(!d.a_q.trim()&&!d.a_rep.trim())return toast("Quartier ou repère requis","err"),false;const a=Object.assign({id:uid("a"),defaut:true},adrFrom(d));S.clients.push({id:uid("cl"),nom:d.nom.trim(),tel:d.tel.trim(),tel2:d.tel2,adresses:[a],note:""});audit("Création client",d.nom)}
   else{c.nom=d.nom.trim();c.tel=d.tel.trim();c.tel2=d.tel2;audit("Modification client",c.nom)}save();render()}})}
 function cliDetail(id){const c=cli(id),cs=S.commandes.filter(x=>x.client_id===id);
  modal(c.nom,`<div class="pill">📞 <a href="tel:${esc(c.tel)}">${esc(c.tel)}</a> ${c.tel2?" · "+esc(c.tel2):""}</div>
- <div class="sec">Adresses</div>${c.adresses.map(a=>`<div class="pill"><b>${esc(a.libelle)}</b> ${a.defaut?badge("par défaut","ok"):`<a href="#" data-act="adrDefaut" data-id="${c.id}|${a.id}" class="sm">définir par défaut</a>`}<br>${esc(a.zone)} · ${esc(a.quartier||"")} — ${esc(a.repere||"")}${a.instructions?"<br><i>"+esc(a.instructions)+"</i>":""}${a.gps?`<br><span class="sm mu">GPS ${a.gps.lat}, ${a.gps.lng}</span>`:""}</div>`).join("")}
+ <div class="sec">Adresses</div>${c.adresses.map(a=>`<div class="pill"><b>${esc(a.libelle)}</b> ${a.defaut?badge("par défaut","ok"):`<a href="#" data-act="adrDefaut" data-id="${c.id}|${a.id}" class="sm">définir par défaut</a>`}<br>${esc(a.zone)} · ${esc(a.quartier||"")} — ${esc(a.repere||"")}${a.instructions?"<br><i>"+esc(a.instructions)+"</i>":""}<br>${geoBadge(a)}${geoBtns(c.id,a.id)}</div>`).join("")}
  <button type="button" class="btn sm ghost" data-act="adrAdd" data-id="${c.id}">+ Ajouter une adresse</button>
  <div class="sec">Historique (${cs.length})</div>${tbl(["Commande","Date","Total","Statut"],cs.map(x=>`<tr><td><a href="#" data-act="cmdDetail" data-id="${x.id}">${x.numero}</a></td><td>${fdt(x.date)}</td><td>${fcfa(x.total)}</td><td>${sb(x)}</td></tr>`),"Aucune commande")}
  <div class="flex"><button type="button" class="btn ghost" data-act="cliEdit" data-id="${c.id}">Modifier</button></div>`,{wide:true,focus:false})}
@@ -595,6 +596,7 @@ function missionCard(l){
  if(l.statut==="en_cours")btn=`<div class="row"><button class="btn ok" data-act="lConf" data-id="${l.id}">✔ Confirmer la livraison</button></div><div class="row"><button class="btn wa" data-act="lFail" data-id="${l.id}">Livraison impossible</button></div>`;
  return`<div class="mc ${c.priorite==="urgente"?"urg":""}"><div class="between"><b>${c.numero}</b><span>${c.priorite==="urgente"?badge("URGENT","er")+" ":""}${lb(l)}</span></div>
  <div><b>${esc(cl.nom)}</b><br>📍 ${esc(a.zone)} · ${esc(a.quartier||"")}<br><span class="mu">${esc(a.repere||"")}</span>${a.instructions?`<br><i>${esc(a.instructions)}</i>`:""}</div>
+ ${a.gps?`<div class="flex sm">${geoBadge(a)}<button class="btn sm ghost" data-act="lMap" data-id="${l.id}">${ui.mapOpen&&ui.mapOpen[l.id]?"Masquer la carte":"🗺 Voir sur la carte"}</button></div>${ui.mapOpen&&ui.mapOpen[l.id]?`<div class="mapbox" id="map_${l.id}" style="height:260px;border-radius:10px;overflow:hidden;background:#e8ebf5"></div>`:""}`:`<div class="al warn sm" style="margin:0">Adresse non géolocalisée. <a href="#" data-act="lAskGeo" data-id="${l.id}">Demander sa position au client</a></div>`}
  <div class="between pill"><span>${c.lignes.reduce((s,x)=>s+x.qte,0)} article(s)${l.nb_colis?" · "+l.nb_colis+" colis":""}</span><span class="amt">${l.montant_attendu>0?fcfa(l.montant_attendu):"Déjà payé"}</span></div>
  ${c.obs?`<div class="sm">📝 ${esc(c.obs)}</div>`:""}
  <div class="row"><a class="btn ghost" style="text-align:center;text-decoration:none" href="tel:${esc(cl.tel)}">📞 Appeler</a><a class="btn ghost" style="text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=two-wheeler">🧭 Itinéraire</a></div>${btn}</div>`}
@@ -664,6 +666,10 @@ const ACT={
  lFail:id=>{const l=byId(S.livraisons,id);modal("Livraison impossible",`<label>Motif<select name="m">${opts(S.config.motifs)}</select></label><label>Observation<textarea name="o" rows="2"></textarea></label>`,{label:"Enregistrer l'échec",cls:"er",onSubmit:d=>{if(echec(l,d.m,d.o))done("Échec enregistré — le superviseur est informé")}})},
  myInc:()=>{const lv=livreurOf(ME),a=S.livraisons.find(l=>l.livreur_id===lv.id&&isActive(l));incForm(lv.id,a?a.commande_id:null)},
  sendPos:sendPosNow,
+ lMap:id=>{ui.mapOpen=ui.mapOpen||{};ui.mapOpen[id]=!ui.mapOpen[id];render()},
+ lAskGeo:id=>{const c=cmd(byId(S.livraisons,id).commande_id);geoLinkModal(c.client_id,c.adr.id,c.numero)},
+ geoLink:id=>{const[c,a]=id.split("|");geoLinkModal(c,a)},geoPick:id=>{const[c,a]=id.split("|");geoPickModal(c,a)},geoPaste:id=>{const[c,a]=id.split("|");geoPasteModal(c,a)},
+ copyLink:()=>{const v=$("#gl").value;(navigator.clipboard?navigator.clipboard.writeText(v):Promise.reject()).then(()=>toast("Lien copié","ok"),()=>{$("#gl").select();toast("Sélectionné : copiez-le (Ctrl+C)")})},
  myStatus:()=>{const lv=livreurOf(ME);lv.statut=lv.statut==="disponible"?"indisponible":"disponible";audit("Disponibilité livreur",lv.nom+" → "+lv.statut);done()}
 };
 document.addEventListener("click",e=>{const t=e.target.closest("[data-act]");if(!t)return;e.preventDefault();const f=ACT[t.dataset.act];if(f)f(t.dataset.id,t)});
@@ -675,12 +681,100 @@ document.addEventListener("change",e=>{const k=e.target.dataset&&e.target.datase
  if(e.target.id==="p_imp"&&e.target.files[0]){const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.v!==1||!d.commandes)throw 0;S=d;save();ME=null;sessionStorage.removeItem("angels_me");toast("Données importées","ok");render()}catch(x){toast("Fichier invalide","err")}};r.readAsText(e.target.files[0])}});
 window.addEventListener("storage",e=>{if(e.key!==KEY||!e.newValue||$("#modal").innerHTML)return;try{S=JSON.parse(e.newValue)}catch(x){return}
  if(ME){const u=usr(ME.id);if(!u||!u.actif){ME=null;sessionStorage.removeItem("angels_me");toast("Votre compte a été désactivé","err")}else ME=u}render()});
-setInterval(()=>{if(ME&&!$("#modal").innerHTML&&!document.activeElement.matches("input,select,textarea"))render()},60000);
+setInterval(()=>{if(ME&&!(ME.role==="livreur"&&Object.values(ui.mapOpen||{}).some(Boolean))&&!$("#modal").innerHTML&&!document.activeElement.matches("input,select,textarea"))render()},60000);
+
+/* ============================================================
+   CARTES & PORTAIL CLIENT (géopositionnement de l'adresse)
+   ============================================================ */
+let LP=null;
+function loadLeaflet(){if(window.L)return Promise.resolve();if(LP)return LP;
+ LP=new Promise((ok,ko)=>{const c=document.createElement("link");c.rel="stylesheet";c.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(c);
+  const sc=document.createElement("script");sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";sc.onload=ok;sc.onerror=()=>{LP=null;ko(new Error("hors ligne"))};document.head.appendChild(sc);setTimeout(()=>{if(!window.L){LP=null;ko(new Error("délai dépassé"))}},12000)});return LP}
+const pinIcon=e=>L.divIcon({html:`<div style="font-size:30px;line-height:30px;transform:translate(-50%,-100%)">${e}</div>`,className:"",iconSize:[0,0]});
+const osmLink=(lat,lng)=>`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=18/${lat}/${lng}`;
+/* Affiche une carte dans `el`. o.dest : destination ; o.me : position du livreur ; o.onPick(ll) : repère déplaçable */
+function mapInto(el,o){
+ const c=o.dest||o.center||{lat:5.345,lng:-4.02};
+ return loadLeaflet().then(()=>{
+  el.innerHTML="";const m=L.map(el).setView([c.lat,c.lng],o.dest?17:12);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(m);
+  let mk=null;const put=ll=>{if(mk)mk.setLatLng(ll);else{mk=L.marker(ll,{icon:pinIcon("📍"),draggable:!!o.onPick}).addTo(m);if(o.onPick)mk.on("dragend",()=>o.onPick(mk.getLatLng()))}};
+  if(o.dest)put([o.dest.lat,o.dest.lng]);
+  if(o.me){L.marker([o.me.lat,o.me.lng],{icon:pinIcon("🏍️")}).addTo(m);if(o.dest)m.fitBounds([[o.dest.lat,o.dest.lng],[o.me.lat,o.me.lng]],{padding:[35,35],maxZoom:17})}
+  if(o.onPick)m.on("click",e=>{put(e.latlng);o.onPick(e.latlng)});
+  setTimeout(()=>m.invalidateSize(),150);return{map:m,put}})
+ .catch(()=>{el.style.height="auto";el.innerHTML=`<div class="al warn sm" style="margin:0">Carte indisponible (pas de connexion Internet).${o.dest?` Coordonnées : ${o.dest.lat}, ${o.dest.lng} — <a target="_blank" rel="noopener" href="${osmLink(o.dest.lat,o.dest.lng)}">ouvrir</a>`:""}</div>`;return null})}
+function initMaps(){if(!ME||ME.role!=="livreur")return;const lv=livreurOf(ME);if(!lv)return;
+ for(const id in(ui.mapOpen||{})){if(!ui.mapOpen[id])continue;const el=$("#map_"+id),l=byId(S.livraisons,id);if(!el||!l)continue;const a=cmd(l.commande_id).adr;if(a.gps)mapInto(el,{dest:a.gps,me:S.pos[lv.id]})}}
+
+const b64=o=>btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+const unb64=t=>JSON.parse(decodeURIComponent(escape(atob(t.replace(/-/g,"+").replace(/_/g,"/")))));
+const portalLink=(c,a,ref)=>location.href.split("#")[0]+"#portail="+b64({cid:c.id,aid:a.id,n:c.nom,r:ref||"",a:[a.libelle,a.zone,a.quartier,a.repere].filter(Boolean).join(" · "),w:S.config.whatsapp,g:a.gps||null,org:S.config.org});
+const geoBadge=a=>a.gps?badge(a.gps_src==="client"?"📍 Position confirmée par le client":"📍 Position enregistrée"+(a.gps_src?" ("+a.gps_src+")":""),"ok"):badge("Pas de position GPS","wa");
+const geoBtns=(cid,aid)=>`<div class="flex noprint" style="margin-top:6px"><button type="button" class="btn sm ghost" data-act="geoLink" data-id="${cid}|${aid}">🔗 Lien portail client</button><button type="button" class="btn sm ghost" data-act="geoPick" data-id="${cid}|${aid}">📌 Placer sur la carte</button><button type="button" class="btn sm ghost" data-act="geoPaste" data-id="${cid}|${aid}">📋 Coller une position reçue</button></div>`;
+function applyGeo(cid,aid,lat,lng,src,acc,note){
+ const cl=cli(cid),a=cl&&cl.adresses.find(x=>x.id===aid);if(!a)return false;
+ a.gps={lat:+(+lat).toFixed(6),lng:+(+lng).toFixed(6)};a.gps_src=src;a.gps_ts=now();if(acc)a.gps_acc=Math.round(acc);if(note)a.instructions=(a.instructions?a.instructions+" — ":"")+note;
+ S.commandes.forEach(c=>{if(c.client_id===cid&&c.adr.id===aid&&!["livree","annulee","retour_recu"].includes(c.statut)){c.adr.gps=a.gps;c.adr.gps_src=src;if(note)c.adr.instructions=a.instructions}});
+ audit("Position GPS d'une adresse",`${cl.nom} — ${src} — ${a.gps.lat}, ${a.gps.lng}`);return true}
+/* Reconnaît : "lat,lng", lien Google Maps / OpenStreetMap, ou message du portail (GEO:cid|aid|lat|lng) */
+function parseGeo(t){t=String(t||"");let m=t.match(/GEO:([\w-]+)\|([\w-]+)\|(-?\d+\.?\d*)\|(-?\d+\.?\d*)/);if(m)return{cid:m[1],aid:m[2],lat:+m[3],lng:+m[4]};
+ m=t.match(/mlat=(-?\d+\.?\d*)&(?:amp;)?mlon=(-?\d+\.?\d*)/)||t.match(/[@?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/)||t.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/)||t.match(/#map=\d+\/(-?\d+\.?\d*)\/(-?\d+\.?\d*)/)||t.match(/(-?\d{1,2}\.\d+)\s*[,; ]\s*(-?\d{1,3}\.\d+)/);
+ if(!m)return null;const lat=+m[1],lng=+m[2];return Math.abs(lat)<=90&&Math.abs(lng)<=180?{lat,lng}:null}
+function geoLinkModal(cid,aid,ref){
+ const c=cli(cid),a=c.adresses.find(x=>x.id===aid),link=portalLink(c,a,ref),
+  msg=`Bonjour ${c.nom}, ${S.config.org}. Pour que notre livreur trouve facilement votre adresse, merci d'indiquer sa position exacte ici : ${link}`;
+ modal("Portail client — "+c.nom,`<p>Envoyez ce lien au client. Il place un repère sur la carte (ou utilise sa position actuelle) et vous renvoie sa position.</p>
+ <label>Lien personnel<input readonly id="gl" value="${esc(link)}" onclick="this.select()"></label>
+ <div class="flex"><a class="btn" target="_blank" rel="noopener" style="text-decoration:none" href="${waLink(c.tel,msg)}">Envoyer par WhatsApp</a><button type="button" class="btn ghost" data-act="copyLink">Copier le lien</button></div>
+ ${location.protocol==="file:"?`<div class="al warn sm">Ce lien pointe vers un fichier local : le client ne pourra pas l'ouvrir. Hébergez d'abord l'application sur Internet (Netlify, Vercel…) et ouvrez-la depuis son adresse web avant de générer les liens.</div>`:""}
+ <div class="sm mu">Quand le client répond, utilisez « 📋 Coller une position reçue » (le message contient la position). Avec un backend partagé (étape suivante), la position se mettra à jour automatiquement.</div>`,{focus:false})}
+function geoPickModal(cid,aid){
+ const cl=cli(cid),a=cl.adresses.find(x=>x.id===aid);let pos=a.gps?{lat:a.gps.lat,lng:a.gps.lng}:null,h=null;
+ modal("Position de livraison — "+cl.nom,`<div class="pill sm">${esc([a.libelle,a.zone,a.quartier,a.repere].filter(Boolean).join(" · "))}</div><div id="pm" style="height:320px;border-radius:10px;overflow:hidden;background:#e8ebf5"></div><div class="flex"><button type="button" class="btn sm ghost" id="pm_gps">📍 Ma position actuelle</button><span class="sm mu" id="pm_c">${pos?pos.lat+", "+pos.lng:"Touchez la carte pour placer le repère"}</span></div>`,
+ {wide:true,focus:false,label:"Enregistrer la position",onSubmit:()=>{if(!pos)return toast("Placez le repère sur la carte","err"),false;applyGeo(cid,aid,pos.lat,pos.lng,"saisie par le personnel");save();toast("Position enregistrée","ok");render()}});
+ const set=(lat,lng)=>{pos={lat:+lat.toFixed(6),lng:+lng.toFixed(6)};$("#pm_c").textContent=pos.lat+", "+pos.lng};
+ mapInto($("#pm"),{dest:pos,onPick:ll=>set(ll.lat,ll.lng)}).then(x=>h=x);
+ $("#pm_gps").onclick=()=>navigator.geolocation?navigator.geolocation.getCurrentPosition(p=>{set(p.coords.latitude,p.coords.longitude);if(h){h.put([pos.lat,pos.lng]);h.map.setView([pos.lat,pos.lng],17)}},e=>toast("Position impossible : "+e.message,"err"),{enableHighAccuracy:true,timeout:15000}):toast("Géolocalisation indisponible","err")}
+function geoPasteModal(cid,aid){
+ modal("Coller une position reçue",`<label>Message du client, lien Google Maps / OpenStreetMap ou coordonnées « lat, lng »<textarea name="t" rows="4" required></textarea></label>`,
+ {label:"Enregistrer",onSubmit:d=>{const g=parseGeo(d.t);if(!g)return toast("Aucune position reconnue dans ce texte","err"),false;
+  if(g.cid&&(g.cid!==cid||g.aid!==aid)){if(!cli(g.cid)||!confirm("Ce message concerne une autre adresse : "+cli(g.cid).nom+". L'appliquer à cette adresse-là ?"))return false;cid=g.cid;aid=g.aid}
+  const note=(String(d.t).match(/Précision\s*:\s*(.+)/)||[])[1];
+  if(!applyGeo(cid,aid,g.lat,g.lng,g.cid?"client":"saisie par le personnel",0,note))return toast("Adresse introuvable","err"),false;save();toast("Position enregistrée","ok");render()}})}
+
+/* ---------- Page publique du portail client ---------- */
+function renderPortal(p){
+ document.title=p.org+" — Position de livraison";
+ $("#app").innerHTML=`<div class="login"><div class="card"><div style="font-size:20px;font-weight:800;color:var(--b2)">${esc(p.org)}</div><div class="mu" style="margin-bottom:10px">Portail client · position de livraison</div>
+ <p>Bonjour <b>${esc(p.n)}</b>,<br>pour que notre livreur trouve votre adresse sans difficulté, placez le repère 📍 à l'endroit exact où vous souhaitez être livré.</p>
+ <div class="pill sm">Adresse enregistrée : ${esc(p.a)}${p.r?`<br>Référence : ${esc(p.r)}`:""}</div>
+ <button class="btn" id="pt_gps" style="width:100%;margin:10px 0">📍 Utiliser ma position actuelle</button>
+ <div id="pt_map" style="height:320px;border-radius:10px;overflow:hidden;background:#e8ebf5"></div>
+ <div class="sm mu" style="margin:6px 0 10px">Touchez la carte ou faites glisser le repère pour ajuster.</div>
+ <label>Précision utile (portail bleu, 2e étage, près de…)<input id="pt_note"></label>
+ <button class="btn ok" id="pt_ok" style="width:100%;margin-top:12px" disabled>Confirmer cette position</button><div id="pt_res"></div>
+ <p class="sm mu" style="margin-top:12px">Votre position n'est utilisée que pour cette livraison. Elle n'est partagée qu'avec ${esc(p.org)} et son livreur.</p></div></div>`;
+ let pos=p.g?{lat:p.g.lat,lng:p.g.lng}:null,acc=0,h=null;const ok=$("#pt_ok");if(pos)ok.disabled=false;
+ mapInto($("#pt_map"),{dest:pos,onPick:ll=>{pos={lat:ll.lat,lng:ll.lng};acc=0;ok.disabled=false}}).then(x=>h=x);
+ $("#pt_gps").onclick=()=>{if(!navigator.geolocation)return toast("Géolocalisation indisponible sur ce téléphone","err");
+  navigator.geolocation.getCurrentPosition(g=>{pos={lat:g.coords.latitude,lng:g.coords.longitude};acc=g.coords.accuracy;ok.disabled=false;if(h){h.put([pos.lat,pos.lng]);h.map.setView([pos.lat,pos.lng],18)}toast("Position trouvée. Ajustez le repère si besoin.","ok")},e=>toast("Position impossible : autorisez la localisation ou touchez la carte ("+e.message+")","err"),{enableHighAccuracy:true,timeout:20000})};
+ ok.onclick=()=>{if(!pos)return;const lat=+pos.lat.toFixed(6),lng=+pos.lng.toFixed(6),note=$("#pt_note").value.trim();
+  let saved=false;if(S&&cli(p.cid)){saved=applyGeo(p.cid,p.aid,lat,lng,"client",acc,note);if(saved)save()}
+  const msg=`Position de livraison — ${p.n}${p.r?" ("+p.r+")":""} : ${osmLink(lat,lng)}\nGEO:${p.cid}|${p.aid}|${lat}|${lng}${note?"\nPrécision : "+note:""}`;
+  let w=String(p.w||"").replace(/\D/g,"");if(w.length===10)w="225"+w;
+  $("#pt_res").innerHTML=`<div class="al" style="background:var(--okbg);margin-top:12px"><b>Merci ✔</b> Votre position est prête.<br>${saved?"Elle a été enregistrée.":"Envoyez-la-nous pour que votre livreur la reçoive :"}</div>${w?`<a class="btn" style="display:block;text-align:center;text-decoration:none;margin-top:8px" target="_blank" rel="noopener" href="https://wa.me/${w}?text=${encodeURIComponent(msg)}">Envoyer à ${esc(p.org)} par WhatsApp</a>`:""}<button class="btn ghost" id="pt_cp" style="width:100%;margin-top:8px">Copier le message</button>`;
+  $("#pt_cp").onclick=()=>{(navigator.clipboard?navigator.clipboard.writeText(msg):Promise.reject()).then(()=>toast("Message copié","ok"),()=>prompt("Copiez ce message :",msg))};ok.textContent="Position confirmée ✔"}}
 
 /* ---------- Démarrage ---------- */
-load();
-{const id=sessionStorage.getItem("angels_me");const u=id&&usr(id);if(u&&u.actif)ME=u}
-render();
+if(location.hash.startsWith("#portail=")){
+ try{const p=unb64(location.hash.slice(9));let d=null;try{d=JSON.parse(localStorage.getItem(KEY))}catch(e){}S=d&&d.v===1?d:null;renderPortal(p)}
+ catch(e){$("#app").innerHTML='<div class="login"><div class="card">Lien invalide ou expiré. Demandez-en un nouveau.</div></div>'}
+}else{
+ load();
+ {const id=sessionStorage.getItem("angels_me");const u=id&&usr(id);if(u&&u.actif)ME=u}
+ render();
+}
 </script>
 </body>
 </html>

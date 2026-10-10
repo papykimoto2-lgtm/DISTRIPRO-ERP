@@ -22,6 +22,7 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 | Commissions (fixe / % / mixte), avances, dépenses de mission | ✅ |
 | Rentabilité par livreur et par zone | ✅ (par moto : V2) |
 | Stock : sortie à la préparation, retour, ajustement tracé | ✅ |
+| Carte de l'adresse pour le livreur (destination + sa position) et portail client de géopositionnement | ✅ (voir ci-dessous) |
 | Rôles, désactivation immédiate d'un compte, journal d'audit | ✅ |
 | Incidents et réclamations | ✅ |
 
@@ -31,3 +32,10 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 - GPS en arrière-plan écran éteint non garanti en page web : à valider sur les téléphones réels, sinon application native.
 - Notifications SMS/WhatsApp : seul un lien WhatsApp pré-rempli pour le code client est fourni.
 - Facturation normalisée/fiscale, tournées optimisées, suggestions automatiques d'affectation, gestion des motos (rentabilité, entretien détaillé) : V2/V3.
+
+## Carte livreur et portail client
+- **Livreur :** sur chaque mission, « 🗺 Voir sur la carte » affiche la destination et sa propre position (Leaflet + OpenStreetMap, connexion Internet nécessaire). Si l'adresse n'a pas de position, un avertissement s'affiche et le livreur peut demander la position au client en un clic.
+- **Client :** le personnel (ou le livreur) génère un lien personnel (« 🔗 Lien portail client », envoi WhatsApp). Le client ouvre la page, place le repère 📍 sur la carte ou utilise sa position actuelle, ajoute une précision (« portail bleu… ») puis confirme.
+- **Retour de la position :** si le portail et le logiciel partagent le même stockage (démo, même navigateur), la position est enregistrée directement. Sinon le client l'envoie par WhatsApp et le personnel utilise « 📋 Coller une position reçue » (accepte aussi un lien Google Maps / OpenStreetMap ou « lat, lng »).
+- La position s'applique à l'adresse du client et aux commandes non terminées qui l'utilisent ; l'origine (« confirmée par le client » / « saisie par le personnel ») est affichée et tracée dans le journal.
+- **Pour que le client puisse ouvrir le lien**, l'application doit être hébergée sur une adresse web (Netlify, Vercel…). Avec un fichier local le lien ne marche que sur le même appareil. La mise à jour automatique sans copier-coller demande le backend partagé.
