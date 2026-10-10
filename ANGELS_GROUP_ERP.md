@@ -30,6 +30,7 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 | Documents numérotés : facture, reçu de paiement, avoir, bon de livraison (preuve de livraison distincte de la facture) | ✅ (voir ci-dessous) |
 | Notifications clients : messages automatiques par étape, modèles modifiables, journal d'envoi | ✅ envoi WhatsApp manuel en un clic |
 | Signature électronique du destinataire (obligatoire au-delà d'un seuil de valeur) | ✅ |
+| Étiquettes colis à QR code, scan à la prise en charge et à la remise, recherche par scan | ✅ (voir ci-dessous) |
 | Rôles, désactivation immédiate d'un compte, journal d'audit | ✅ |
 | Incidents et réclamations | ✅ |
 
@@ -68,3 +69,14 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 - **Avertissement :** ce sont des documents de gestion. Si l'entreprise est assujettie à la facturation normalisée électronique, la facture réglementaire doit être émise par le dispositif officiel ; la mention en pied de page, l'adresse, le NIF et le RCCM se règlent dans Paramètres.
 - **Notifications :** à la confirmation, au départ du livreur (avec l'heure estimée et le code à donner), à la livraison et en cas d'échec, un message est préparé et placé dans le menu « Notifications ». Le superviseur l'envoie par WhatsApp en un clic, le modifie ou l'ignore. « Envoyé » signifie que la conversation WhatsApp a été ouverte, pas que le client l'a reçue. Les modèles et les événements actifs se règlent dans Paramètres.
 - **Signature :** dans l'écran de confirmation du livreur, un cadre de signature au doigt est obligatoire dès un montant de commande réglable (100 000 F par défaut, 0 = jamais), facultatif en dessous. Elle apparaît sur le bon de livraison.
+
+## Étiquettes colis et QR codes
+- **Impression :** sur une commande confirmée, « 🏷 Étiquettes colis » demande le nombre de colis et génère une étiquette 100 × 150 mm par colis : numéro de commande, **QR code unique**, « 1/3 », zone de livraison en grand, quartier et repère, client, code court de 5 caractères sous le QR, expéditeur pour les vendeurs partenaires, mention URGENT. Le montant à encaisser et le téléphone du client ne s'impriment que si vous les activez dans Paramètres (le montant affiché dans l'application fait foi).
+- **Réimpression :** les mêmes QR codes sont conservés. Changer le nombre de colis invalide les étiquettes déjà collées (et c'est refusé dès qu'un colis a été scanné).
+- **Prise en charge :** quand la commande a des étiquettes, le livreur doit scanner chaque colis (caméra) avant de partir. Un colis d'une autre commande est refusé avec le numéro de la commande concernée ; une étiquette inventée ou périmée est refusée.
+- **Remise au client :** la confirmation de livraison exige de scanner de nouveau tous les colis remis.
+- **Secours :** si la caméra est refusée, absente ou si l'étiquette est abîmée, le livreur saisit le code de 5 caractères imprimé sous le QR ; l'application enregistre « saisi » plutôt que « scanné ».
+- **Personnel :** « 📷 Scanner une étiquette » (liste des commandes) ouvre la commande correspondante.
+- **Lecture :** BarcodeDetector du navigateur s'il existe, sinon jsQR (intégré au fichier, hors ligne). La caméra exige une page en **https** (ou localhost) ; depuis un simple fichier local ou une adresse http, elle peut être refusée : la saisie du code reste possible.
+- **Réglages :** le scan obligatoire se désactive dans Paramètres. Une alerte signale les commandes prêtes sans étiquettes.
+- **Composants intégrés :** qrcode-generator 1.4.4 (MIT) et jsQR 1.4.0 (Apache-2.0).
