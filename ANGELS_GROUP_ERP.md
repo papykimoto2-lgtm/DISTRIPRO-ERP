@@ -13,14 +13,17 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 | Clients, adresses multiples, historique | ✅ (l'adresse est copiée dans la commande : corriger une fiche ne réécrit pas l'historique) |
 | Commandes, 12 statuts, transitions contrôlées, horodatage + auteur | ✅ |
 | Centre de livraison : affectation, réaffectation motivée, alertes, filtres | ✅ |
-| Zones et tarifs paramétrables | ✅ (tournées multi-livraisons : V2) |
+| Zones et tarifs paramétrables | ✅ |
+| Tournées multi-livraisons : regroupement, ordre de passage proposé et ajustable, estimation distance/durée, suivi d'avancement | ✅ |
 | Application livreur mobile : accepter/refuser, prise en charge, départ, itinéraire, appel | ✅ |
 | Preuve de livraison par code à usage unique (photo/signature non systématiques) | ✅ code ; signature/photo : à venir |
 | GPS avec fraîcheur (récente / ancienne / obsolète), consentement, conservation limitée | ✅ (suivi uniquement pendant une course active) |
 | Échecs (motifs paramétrables), nouvelle tentative, retours avec réception et décision de stock | ✅ |
 | Paiement à la livraison, écart attendu/déclaré à valider, reversement validé par caissier | ✅ |
 | Commissions (fixe / % / mixte), avances, dépenses de mission | ✅ |
-| Rentabilité par livreur et par zone | ✅ (par moto : V2) |
+| Rentabilité par livreur, par zone et par moto | ✅ |
+| Motos : entretien et réparations (type, coût, km), prochain entretien, immobilisation, historique | ✅ |
+| Tableau de bord filtrable par période, zone, livreur et type de commande | ✅ |
 | Stock : sortie à la préparation, retour, ajustement tracé | ✅ |
 | Carte de l'adresse pour le livreur (destination + sa position) et portail client de géopositionnement | ✅ (voir ci-dessous) |
 | Vendeurs partenaires : dépôt de commandes (formulaire ou import CSV), suivi, règlements | ✅ (voir ci-dessous) |
@@ -32,7 +35,7 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 - Les PIN sont hachés de façon simple (démonstration) ; le journal d'audit n'est pas inviolable.
 - GPS en arrière-plan écran éteint non garanti en page web : à valider sur les téléphones réels, sinon application native.
 - Notifications SMS/WhatsApp : seul un lien WhatsApp pré-rempli pour le code client est fourni.
-- Facturation normalisée/fiscale, tournées optimisées, suggestions automatiques d'affectation, gestion des motos (rentabilité, entretien détaillé) : V2/V3.
+- Facturation normalisée/fiscale, optimisation de tournées avec trafic réel, suggestions automatiques d'affectation, notifications clients automatiques : V2/V3.
 
 ## Carte livreur et portail client
 - **Livreur :** sur chaque mission, « 🗺 Voir sur la carte » affiche la destination et sa propre position (Leaflet + OpenStreetMap, connexion Internet nécessaire). Si l'adresse n'a pas de position, un avertissement s'affiche et le livreur peut demander la position au client en un clic.
@@ -49,3 +52,9 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 - **Règlement du vendeur :** pour chaque commande livrée et entièrement payée, net = articles − commission (% fixé par vendeur) ; les frais de livraison restent à ANGEL'S GROUP. Le caissier enregistre les règlements (Finance → Vendeurs) ; le vendeur voit son solde. Vérifiez le reversement du livreur avant de régler.
 - Le vendeur ne voit ni le code de confirmation, ni les notes internes, ni les livreurs ; il peut annuler tant que la commande n'est pas préparée, et envoyer à son client le lien du portail de position.
 - **Limite :** comme le reste, l'isolation entre vendeurs n'est appliquée que dans l'interface tant qu'il n'y a pas de backend. Pour de vrais vendeurs externes sur Internet, le backend (Supabase + règles d'accès) est indispensable ; l'inscription en libre-service reste à construire.
+
+## Tournées et motos
+- **Tournée :** dans « Centre de livraison », « 🔁 Créer une tournée » regroupe au moins 2 commandes prêtes sur un livreur. L'ordre de passage est proposé (plus proche voisin depuis sa dernière position, adresses sans GPS en dernier) et reste ajustable avec ↑ ↓ tant que l'arrêt n'a pas démarré. Le livreur voit « Tournée T-0001 · arrêt 2/4 » et ses missions dans cet ordre ; il garde la liberté d'adapter son trajet.
+- **Estimation :** distance à vol d'oiseau × 1,35, 18 km/h en moyenne, 8 min par arrêt. C'est une indication, pas un itinéraire routier ; elle ignore le trafic (un vrai calcul d'itinéraire demande un service cartographique externe).
+- **Entretien :** bouton « 🔧 Entretien » par moto (vidange, pneus, freinage, réparation, pièces…) avec date, kilométrage, coût, prochain entretien, et statut de la moto après intervention. Une moto en panne ou immobilisée reste bloquée pour les missions.
+- **Rentabilité par moto :** frais de livraison − commissions − dépenses de mission − entretien. Les coûts d'entretien sont cumulés depuis le début, comme les livraisons ; ce n'est pas un bénéfice comptable.

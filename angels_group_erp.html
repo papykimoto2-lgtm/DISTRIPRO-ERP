@@ -233,7 +233,7 @@ function seed(){
    motifs:["Client absent","Client injoignable","Adresse incorrecte","Accès impossible","Client a refusé le colis","Paiement indisponible","Colis endommagé","Incident de moto","Conditions de sécurité défavorables","Autre motif"],
    cats:["Retard","Colis manquant","Colis endommagé","Mauvaise adresse","Erreur de montant","Contestation de livraison","Panne de moto","Incident de sécurité","Réclamation client"],
    zones:[["Cocody",1500,45],["Abobo",2000,60],["Yopougon",2000,60],["Marcory",1500,40],["Treichville",1500,40],["Koumassi",2000,50],["Port-Bouët",2500,60],["Plateau",1500,40]].map(z=>({id:uid("z"),nom:z[0],frais:z[1],delai_min:z[2]}))},
-  vendeurs:[],reglements:[],users:[],clients:[],produits:[],livreurs:[],motos:[],commandes:[],livraisons:[],fonds:[],paie:[],depenses:[],incidents:[],retours:[],stock_mvts:[],pos:{},gps_hist:[],audit:[]};
+  vendeurs:[],reglements:[],tournees:[],entretiens:[],users:[],clients:[],produits:[],livreurs:[],motos:[],commandes:[],livraisons:[],fonds:[],paie:[],depenses:[],incidents:[],retours:[],stock_mvts:[],pos:{},gps_hist:[],audit:[]};
  const mkU=(nom,role,pin)=>{const u={id:uid("u"),nom,role,pin_h:0,actif:true};u.pin_h=hashPin(u.id,pin);S.users.push(u);return u};
  mkU("Administrateur","admin","1234");mkU("Direction","direction","0000");mkU("Awa (superviseur)","superviseur","1111");mkU("Caissier Yao","caissier","2222");mkU("Commercial Koffi","commercial","3333");mkU("Préparateur Moussa","preparateur","4444");
  const mkM=(im,mod,km,st)=>{const m={id:uid("m"),immat:im,modele:mod,km,prochain_km:km+800,statut:st};S.motos.push(m);return m};
@@ -258,6 +258,8 @@ function seed(){
  [l5.affectee_at,l5.accept_at,l5.collecte_at,l5.depart_at,l5.fin_at].forEach((_,i)=>{});const back=h=>new Date(Date.now()-h*3600000).toISOString();l5.affectee_at=back(25.6);l5.depart_at=back(25.4);l5.fin_at=back(25);
  S.fonds.forEach(f=>{if(f.livraison_id===l5.id)f.ts=back(25)});
  const c6=mk(C3,0,[ln("P-SUC",3)],"livraison",true,"normale");toPrete(c6);const l6=affecter(c6,L2.id,"");accepter(l6);priseEnCharge(l6,1);demarrer(l6);echec(l6,"Client absent","Téléphone sur messagerie");
+ [[m1,"Vidange",-45,3500,13500],[m1,"Pneumatiques",-20,18000,14000],[m2,"Freinage",-30,6500,22000]].forEach(e=>S.entretiens.push({id:uid("e"),moto_id:e[0].id,ts:new Date(Date.now()+e[2]*864e5).toISOString(),type:e[1],km:e[4],cout:e[3],note:"",par:"Système"}));
+ {const c7=mk(C1,0,[ln("P-EAU",4)],"livraison",true,"normale"),c8=mk(C2,0,[ln("P-SAV",1)],"livraison",true,"normale"),c9=mk(C3,0,[ln("P-HUI",2)],"livraison",true,"normale");[c7,c8,c9].forEach(toPrete);creerTournee(L2.id,[c7.id,c8.id,c9.id])}
  {const vu=mkU("Aya Boutique en ligne","vendeur","5555");const V={id:uid("v"),user_id:vu.id,nom:"Aya Boutique en ligne",tel:"0707555555",commission_pct:5};S.vendeurs.push(V);
   creerCmdVendeur(V,{nom:"Mme Konan",tel:"0505777777",zone:"Abobo",quartier:"Anonkoua",repere:"Face à l'église",ins:"",lignes:[{desig:"Robe wax",qte:1,pu:15000},{desig:"Foulard",qte:2,pu:3000}],pay:"livraison",obs:""});
   const vo=creerCmdVendeur(V,{nom:"Cliente Fatou",tel:"0505444444",zone:"Cocody",quartier:"Angré",repere:"Château d'eau",ins:"",lignes:[{desig:"Sac à main",qte:2,pu:12000}],pay:"livraison",obs:""});
@@ -266,7 +268,7 @@ function seed(){
  save()}
 function load(){let d=null;try{d=JSON.parse(localStorage.getItem(KEY))}catch(e){}
  if(d&&d.v===1)S=d;else seed();
- S.vendeurs=S.vendeurs||[];S.reglements=S.reglements||[];
+ S.vendeurs=S.vendeurs||[];S.reglements=S.reglements||[];S.tournees=S.tournees||[];S.entretiens=S.entretiens||[];
  const lim=Date.now()-S.config.gps_retention_jours*864e5;S.gps_hist=S.gps_hist.filter(p=>new Date(p.ts)>lim)}
 
 /* ---------- Interface : utilitaires ---------- */
@@ -325,21 +327,23 @@ function alertes(){
  return a}
 function statsPer(){
  const t0=periodStart(),inP=i=>i&&new Date(i).getTime()>=t0;
- const L=S.livraisons,liv_ok=L.filter(l=>l.statut==="livree"&&inP(l.fin_at)),liv_ko=L.filter(l=>l.statut==="echouee"&&inP(l.fin_at));
- const cmds=S.commandes.filter(c=>inP(c.date));
+ const fz=ui.dz||"",fl=ui.dl||"",fc=ui.dc||"";
+ const okC=c=>(!fz||c.adr.zone===fz)&&(!fc||c.canal===fc),okL=l=>(!fl||l.livreur_id===fl)&&okC(cmd(l.commande_id));
+ const L=S.livraisons.filter(okL),liv_ok=L.filter(l=>l.statut==="livree"&&inP(l.fin_at)),liv_ko=L.filter(l=>l.statut==="echouee"&&inP(l.fin_at));
+ const cmds=S.commandes.filter(c=>inP(c.date)&&okC(c)&&(!fl||S.livraisons.some(l=>l.commande_id===c.id&&l.livreur_id===fl)));
  const dans=liv_ok.filter(l=>{const z=zone(cmd(l.commande_id).adr.zone);return(new Date(l.fin_at)-new Date(l.affectee_at))/60000<=(z?z.delai_min:60)}).length;
  const durs=liv_ok.map(l=>(new Date(l.fin_at)-new Date(l.depart_at||l.affectee_at))/60000);
  const cmdLiv=new Set(L.filter(l=>inP(l.affectee_at)).map(l=>l.commande_id));
  const tent=cmdLiv.size?[...cmdLiv].reduce((a,id)=>a+livsOf(id).filter(l=>!["reaffectee","refusee","annulee"].includes(l.statut)).length,0)/cmdLiv.size:0;
  const motifs={};liv_ko.forEach(l=>motifs[l.motif_echec]=(motifs[l.motif_echec]||0)+1);
  const frais=liv_ok.reduce((a,l)=>a+cmd(l.commande_id).frais,0),comm=liv_ok.reduce((a,l)=>a+commissionLiv(l),0);
- const dep=S.depenses.filter(d=>inP(d.ts)).reduce((a,d)=>a+d.montant,0);
+ const dep=S.depenses.filter(d=>inP(d.ts)&&(!fl||d.livreur_id===fl)&&((!fz&&!fc)||(d.commande_id&&okC(cmd(d.commande_id))))).reduce((a,d)=>a+d.montant,0);
  return{cmds:cmds.length,ok:liv_ok.length,ko:liv_ko.length,taux:liv_ok.length+liv_ko.length?liv_ok.length/(liv_ok.length+liv_ko.length)*100:0,
   delais:liv_ok.length?dans/liv_ok.length*100:0,duree:durs.length?durs.reduce((a,b)=>a+b,0)/durs.length:0,
-  parLiv:S.livreurs.length?liv_ok.length/S.livreurs.length:0,tent,retours:S.commandes.filter(c=>["retour_cours","retour_recu"].includes(c.statut)).length,
+  parLiv:(fl?1:S.livreurs.length)?liv_ok.length/(fl?1:S.livreurs.length):0,tent,retours:S.commandes.filter(c=>["retour_cours","retour_recu"].includes(c.statut)).length,
   motifs:Object.entries(motifs).sort((a,b)=>b[1]-a[1]),
   ca:liv_ok.reduce((a,l)=>a+cmd(l.commande_id).total,0),frais,comm,dep,marge:frais-comm-dep,
-  encaisse:S.fonds.filter(f=>f.type==="encaissement"&&inP(f.ts)).reduce((a,f)=>a+f.montant,0)}}
+  encaisse:S.fonds.filter(f=>f.type==="encaissement"&&inP(f.ts)&&(!fl||f.livreur_id===fl)&&okC(cmd(f.commande_id))).reduce((a,f)=>a+f.montant,0)}}
 VIEWS.dashboard=()=>{
  const s=statsPer(),al=alertes();
  const actifs=S.livraisons.filter(isActive),aEnc=actifs.reduce((a,l)=>a+l.montant_attendu,0),aRev=S.livreurs.reduce((a,l)=>a+Math.max(0,soldeLiv(l.id)),0);
@@ -347,13 +351,13 @@ VIEWS.dashboard=()=>{
  const enM=S.livreurs.filter(l=>S.livraisons.some(x=>x.livreur_id===l.id&&isActive(x))).length;
  const days=[...Array(7)].map((_,i)=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-6+i);const n=S.livraisons.filter(l=>l.statut==="livree"&&new Date(l.fin_at).toDateString()===d.toDateString()).length;return{l:d.toLocaleDateString("fr-FR",{weekday:"short"}),n}});
  const mx=Math.max(1,...days.map(d=>d.n));
- return`<div class="between"><h1>Tableau de bord</h1>${perSel()}</div>
+ return`<div class="between"><h1>Tableau de bord</h1><div class="flex">${perSel()}<select data-f="dz" style="width:auto"><option value="">Toutes zones</option>${opts(S.config.zones.map(z=>z.nom),ui.dz||"")}</select><select data-f="dl" style="width:auto"><option value="">Tous livreurs</option>${opts(S.livreurs.map(l=>({v:l.id,t:l.nom})),ui.dl||"")}</select><select data-f="dc" style="width:auto"><option value="">Tous types de commande</option>${opts(["Téléphone","WhatsApp","Vente en ligne","Commande directe","Vendeur partenaire","Autre"],ui.dc||"")}</select></div></div>
  <h2>Opérations en direct</h2><div class="grid">
  ${kpi("Prêtes à affecter",S.commandes.filter(c=>c.statut==="prete").length,"w")}${kpi("En cours",actifs.length)}${kpi("En retard",al.filter(a=>a.m.startsWith("Retard")).length,"e")}
  ${kpi("Échecs à traiter",S.commandes.filter(c=>c.statut==="echouee").length,"e")}${kpi("Retours à réceptionner",S.commandes.filter(c=>c.statut==="retour_cours").length,"w")}
  ${kpi("Livreurs disponibles",dispo,"o")}${kpi("Livreurs en mission",enM)}${kpi("Restant à encaisser",fcfa(aEnc),"w")}${kpi("Encaissé non reversé",fcfa(aRev),aRev?"e":"")}</div>
  <h2>Alertes</h2>${al.length?al.map(a=>`<div class="al ${a.k}">${esc(a.m)}</div>`).join(""):'<div class="al">Aucune alerte.</div>'}
- <h2>Performance (période)</h2><div class="grid">
+ <h2>Performance (période${ui.dz||ui.dl||ui.dc?" · filtrée":""})</h2><div class="grid">
  ${kpi("Commandes créées",s.cmds)}${kpi("Livrées",s.ok,"o")}${kpi("Échouées",s.ko,"e")}${kpi("Taux de réussite",s.taux.toFixed(0)+" %")}
  ${kpi("Livrées dans les délais",s.delais.toFixed(0)+" %")}${kpi("Durée moyenne",Math.round(s.duree)+" min")}${kpi("Livraisons / livreur",s.parLiv.toFixed(1))}${kpi("Tentatives / commande",s.tent.toFixed(2))}</div>
  <div class="g2" style="margin-top:14px"><div class="card"><b>Livraisons réussies — 7 jours</b><div class="bars" style="margin-top:10px">${days.map(d=>`<div><i style="height:${d.n/mx*90}px"></i>${d.n}<br>${d.l}</div>`).join("")}</div></div>
@@ -471,11 +475,12 @@ VIEWS.livraisons=()=>{
  const iframe=sel?`<div class="card"><div class="between"><b>Dernière position de ${esc(liv(ui.mapLiv).nom)}</b>${badge(fraicheur(sel).t,fraicheur(sel).k)}</div><iframe style="width:100%;height:280px;border:0;margin-top:8px;border-radius:8px" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=${sel.lng-0.012},${sel.lat-0.01},${sel.lng+0.012},${sel.lat+0.01}&layer=mapnik&marker=${sel.lat},${sel.lng}"></iframe><div class="sm mu">Carte OpenStreetMap (connexion Internet requise). Précision ±${Math.round(sel.acc||0)} m. <a target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=${sel.lat}&mlon=${sel.lng}#map=16/${sel.lat}/${sel.lng}">Ouvrir en grand</a></div></div>`:"";
  const ecarts=S.livraisons.filter(l=>l.ecart_statut==="a_valider");
  return`<h1>Centre de livraison</h1>
- <h2>À affecter (${prete.length})</h2>${tbl(["Commande","Destination","À encaisser","Priorité",""],prete.map(c=>`<tr><td><b>${c.numero}</b><br><span class="sm mu">${esc(cli(c.client_id).nom)}</span></td><td>${esc(c.adr.zone)} ${esc(c.adr.quartier||"")}</td><td>${fcfa(soldeCmd(c))}</td><td>${c.priorite==="urgente"?badge("URGENT","er"):badge(c.priorite,"mu")}</td><td><button class="btn sm" data-act="assign" data-id="${c.id}">Affecter</button></td></tr>`),"Aucune commande en attente d'affectation")}
+ <div class="between"><h2>À affecter (${prete.length})</h2>${prete.length>1?`<button class="btn sm" data-act="newTour">🔁 Créer une tournée</button>`:""}</div>${tbl(["Commande","Destination","À encaisser","Priorité",""],prete.map(c=>`<tr><td><b>${c.numero}</b><br><span class="sm mu">${esc(cli(c.client_id).nom)}</span></td><td>${esc(c.adr.zone)} ${esc(c.adr.quartier||"")}</td><td>${fcfa(soldeCmd(c))}</td><td>${c.priorite==="urgente"?badge("URGENT","er"):badge(c.priorite,"mu")}</td><td><button class="btn sm" data-act="assign" data-id="${c.id}">Affecter</button></td></tr>`),"Aucune commande en attente d'affectation")}
  <div class="between"><h2>Courses actives (${act.length})</h2><div class="flex"><select data-f="fz" style="width:auto"><option value="">Toutes zones</option>${opts(S.config.zones.map(z=>z.nom),fz)}</select><select data-f="fl" style="width:auto"><option value="">Tous livreurs</option>${opts(S.livreurs.map(l=>({v:l.id,t:l.nom})),fl)}</select></div></div>
  ${tbl(["Commande","Livreur","Statut","Destination","Position GPS","Délai",""],act.map(l=>{const c=cmd(l.commande_id),z=zone(c.adr.zone),f=fraicheur(S.pos[l.livreur_id]),min=Math.round((Date.now()-new Date(l.affectee_at))/60000),lim=z?z.delai_min:60;
   return`<tr><td><b>${c.numero}</b>${c.priorite==="urgente"?" "+badge("URGENT","er"):""}<br><span class="sm mu">${fcfa(l.montant_attendu)} à encaisser</span></td><td>${esc(liv(l.livreur_id).nom)}</td><td>${lb(l)}</td><td>${esc(c.adr.zone)} ${esc(c.adr.quartier||"")}</td><td>${badge(f.t,f.k)}${S.pos[l.livreur_id]?` <a href="#" data-act="mapLiv" data-id="${l.livreur_id}">carte</a>`:""}</td><td>${min>lim?badge("Retard +"+(min-lim)+" min","er"):badge(min+"/"+lim+" min","ok")}</td><td><button class="btn sm ghost" data-act="cmdDetail" data-id="${c.id}">Ouvrir</button></td></tr>`}),"Aucune course active")}
  ${iframe}
+ <h2>Tournées</h2>${tbl(["Tournée","Livreur","Avancement","Estimation","Statut",""],S.tournees.filter(t=>stopsOf(t).some(isActive)||new Date(t.ts).toDateString()===new Date().toDateString()).slice().reverse().map(t=>{const st=stopsOf(t),fin=st.filter(l=>["livree","echouee"].includes(l.statut)).length,e=estimTournee(t),open=st.some(isActive);return`<tr><td><b>${t.numero}</b></td><td>${esc((liv(t.livreur_id)||{}).nom||"?")}</td><td>${st.filter(l=>l.statut==="livree").length} livrée(s) · ${st.filter(l=>l.statut==="echouee").length} échec(s) · ${st.length-fin} restante(s)</td><td class="sm">${e?"≈ "+e.km.toFixed(1)+" km · "+fmtDur(e.min):"—"}</td><td>${open?badge("En cours","wa"):badge("Terminée","ok")}</td><td><button class="btn sm ghost" data-act="tourDetail" data-id="${t.id}">Détail</button></td></tr>`}),"Aucune tournée")}
  <h2>Livreurs</h2><div class="grid">${S.livreurs.map(l=>{const n=S.livraisons.filter(x=>x.livreur_id===l.id&&isActive(x)).length,f=fraicheur(S.pos[l.id]);return`<div class="card" style="margin:0"><b>${esc(l.nom)}</b><br>${n?badge("En mission ("+n+")","wa"):l.statut==="disponible"?badge("Disponible","ok"):badge("Indisponible","er")}<div class="sm mu" style="margin-top:6px">Zone ${esc(l.zone)}<br>GPS : ${f.t}</div>${S.pos[l.id]?`<a href="#" data-act="mapLiv" data-id="${l.id}" class="sm">Voir sur la carte</a>`:""}</div>`}).join("")}</div>
  <h2>Livraisons échouées à traiter</h2>${tbl(["Commande","Motif","Tentatives",""],S.commandes.filter(c=>c.statut==="echouee").map(c=>{const l=livsOf(c.id).filter(x=>x.statut==="echouee").slice(-1)[0];return`<tr><td><b>${c.numero}</b><br><span class="sm mu">${esc(cli(c.client_id).nom)}</span></td><td>${esc(l?l.motif_echec:"")}</td><td>${livsOf(c.id).filter(x=>["livree","echouee"].includes(x.statut)).length}</td><td><button class="btn sm" data-act="cmdDetail" data-id="${c.id}">Traiter</button></td></tr>`}),"Rien à traiter")}
  <h2>Écarts d'encaissement à valider (${ecarts.length})</h2>${ecartsTable(ecarts)}`};
@@ -511,7 +516,7 @@ function prodForm(p){modal(p?"Modifier le produit":"Nouveau produit",`<div class
 VIEWS.livreurs=()=>`<div class="between"><h1>Livreurs & motos</h1><div class="flex"><button class="btn" data-act="newLiv">➕ Livreur</button><button class="btn ghost" data-act="newMoto">➕ Moto</button></div></div>
  ${tbl(["Livreur","Téléphone","Zone","Moto","Statut","Rémunération","Missions",""],S.livreurs.map(l=>{const r=l.remu||S.config.remu,u=usr(l.user_id),mo=l.moto_id&&moto(l.moto_id);
   return`<tr><td><b>${esc(l.nom)}</b><br>${u&&u.actif?"":badge("compte désactivé","er")}</td><td>${esc(l.tel)}</td><td>${esc(l.zone)}</td><td>${mo?esc(mo.immat):"—"}</td><td>${l.statut==="disponible"?badge("Disponible","ok"):badge("Indisponible","er")}</td><td class="sm">${r.type==="fixe"?fcfa(r.fixe)+"/course":r.type==="pct"?r.pct+" % des frais":fcfa(r.fixe)+" + "+r.pct+" %"}${l.remu?"":' <span class="mu">(défaut)</span>'}</td><td>${S.livraisons.filter(x=>x.livreur_id===l.id&&x.statut==="livree").length} livrées</td><td><button class="btn sm ghost" data-act="editLiv" data-id="${l.id}">Modifier</button> <button class="btn sm ghost" data-act="togLiv" data-id="${l.id}">${l.statut==="disponible"?"Marquer indisponible":"Marquer disponible"}</button></td></tr>`}))}
- <h2>Motos</h2>${tbl(["Immatriculation","Modèle","Km","Prochain entretien","Statut","Affectée à",""],S.motos.map(m=>{const l=S.livreurs.find(x=>x.moto_id===m.id);return`<tr><td><b>${esc(m.immat)}</b></td><td>${esc(m.modele)}</td><td>${m.km}</td><td>${m.prochain_km} km ${m.km>=m.prochain_km?badge("dû","er"):""}</td><td>${badge(m.statut,m.statut==="disponible"?"ok":"er")}</td><td>${l?esc(l.nom):"—"}</td><td><button class="btn sm ghost" data-act="editMoto" data-id="${m.id}">Modifier</button></td></tr>`}))}
+ <h2>Motos</h2>${tbl(["Immatriculation","Modèle","Km","Prochain entretien","Statut","Affectée à","Coût d'entretien",""],S.motos.map(m=>{const l=S.livreurs.find(x=>x.moto_id===m.id),ce=S.entretiens.filter(e=>e.moto_id===m.id).reduce((a,e)=>a+e.cout,0);return`<tr><td><b>${esc(m.immat)}</b></td><td>${esc(m.modele)}</td><td>${m.km}</td><td>${m.prochain_km} km ${m.km>=m.prochain_km?badge("dû","er"):""}</td><td>${badge(m.statut,m.statut==="disponible"?"ok":"er")}</td><td>${l?esc(l.nom):"—"}</td><td>${fcfa(ce)}</td><td><button class="btn sm" data-act="entMoto" data-id="${m.id}">🔧 Entretien</button> <button class="btn sm ghost" data-act="histMoto" data-id="${m.id}">Historique</button> <button class="btn sm ghost" data-act="editMoto" data-id="${m.id}">Modifier</button></td></tr>`}))}
  <p class="mu sm">Une moto en panne ou immobilisée ne peut pas recevoir de nouvelle mission. Remettez-la au statut « disponible » après réparation.</p>`;
 function livForm(l){const u=l&&usr(l.user_id),r=(l&&l.remu)||S.config.remu;
  modal(l?"Modifier le livreur":"Nouveau livreur",`<div class="g2"><label>Nom et prénoms<input name="nom" required value="${esc(l?l.nom:"")}"></label><label>Téléphone<input name="tel" required value="${esc(l?l.tel:"")}"></label></div>
@@ -542,8 +547,9 @@ VIEWS.finance=()=>{
  if(t==="renta"){
   const rl=S.livreurs.map(l=>{const ok=S.livraisons.filter(x=>x.livreur_id===l.id&&x.statut==="livree"),fr=ok.reduce((a,x)=>a+cmd(x.commande_id).frais,0),co=commAcquise(l.id),de=S.depenses.filter(d=>d.livreur_id===l.id).reduce((a,d)=>a+d.montant,0);return{n:l.nom,k:ok.length,fr,co,de}});
   const rz=S.config.zones.map(z=>{const ok=S.livraisons.filter(x=>x.statut==="livree"&&cmd(x.commande_id).adr.zone===z.nom),fr=ok.reduce((a,x)=>a+cmd(x.commande_id).frais,0),co=ok.reduce((a,x)=>a+commissionLiv(x),0),de=S.depenses.filter(d=>d.commande_id&&cmd(d.commande_id).adr.zone===z.nom).reduce((a,d)=>a+d.montant,0);return{n:z.nom,k:ok.length,fr,co,de}}).filter(z=>z.k);
+  const rm=S.motos.map(m=>{const ok=S.livraisons.filter(x=>x.statut==="livree"&&(x.moto_id||(liv(x.livreur_id)||{}).moto_id)===m.id);return{n:m.immat,k:ok.length,fr:ok.reduce((a,x)=>a+cmd(x.commande_id).frais,0),co:ok.reduce((a,x)=>a+commissionLiv(x),0),de:S.depenses.filter(d=>d.commande_id&&ok.some(x=>x.commande_id===d.commande_id)).reduce((a,d)=>a+d.montant,0),en:S.entretiens.filter(e=>e.moto_id===m.id).reduce((a,e)=>a+e.cout,0)}});
   const row=r=>`<tr><td>${esc(r.n)}</td><td>${r.k}</td><td>${fcfa(r.fr)}</td><td>${fcfa(r.co)}</td><td>${fcfa(r.de)}</td><td><b style="color:${r.fr-r.co-r.de<0?"var(--er)":"var(--ok)"}">${fcfa(r.fr-r.co-r.de)}</b></td></tr>`;
-  body=`<h2>Par livreur</h2>${tbl(["Livreur","Livraisons","Frais facturés","Commissions","Dépenses","Marge estimée"],rl.map(row))}<h2>Par zone</h2>${tbl(["Zone","Livraisons","Frais facturés","Commissions","Dépenses","Marge estimée"],rz.map(row),"Aucune livraison")}<p class="mu sm">Marge estimée = frais de livraison − commissions − dépenses. Elle exclut le coût des produits, le carburant non saisi et l'entretien des motos : à ne pas confondre avec le bénéfice réel.</p>`}
+  body=`<h2>Par livreur</h2>${tbl(["Livreur","Livraisons","Frais facturés","Commissions","Dépenses","Marge estimée"],rl.map(row))}<h2>Par zone</h2>${tbl(["Zone","Livraisons","Frais facturés","Commissions","Dépenses","Marge estimée"],rz.map(row),"Aucune livraison")}<h2>Par moto</h2>${tbl(["Moto","Livraisons","Frais facturés","Commissions","Dépenses de mission","Entretien & réparations","Marge estimée"],rm.map(r=>`<tr><td>${esc(r.n)}</td><td>${r.k}</td><td>${fcfa(r.fr)}</td><td>${fcfa(r.co)}</td><td>${fcfa(r.de)}</td><td>${fcfa(r.en)}</td><td><b style="color:${r.fr-r.co-r.de-r.en<0?"var(--er)":"var(--ok)"}">${fcfa(r.fr-r.co-r.de-r.en)}</b></td></tr>`),"Aucune moto")}<p class="mu sm">Marge estimée = frais de livraison − commissions − dépenses de mission (− entretien pour les motos). Elle exclut le coût des produits, le carburant non saisi et les charges de structure : à ne pas confondre avec le bénéfice réel.</p>`}
  if(t==="ven")body=tbl(["Vendeur","Commission","Net acquis (livré et encaissé)","Déjà réglé","Reste à régler",""],S.vendeurs.map(v=>{const d=vendDue(v);return`<tr><td><b>${esc(v.nom)}</b></td><td>${v.commission_pct||0} %</td><td>${fcfa(d.acquis)}</td><td>${fcfa(d.regle)}</td><td><b style="color:${d.restant>0?"var(--er)":"var(--ok)"}">${fcfa(d.restant)}</b></td><td>${can("admin","caissier")&&d.restant>0?`<button class="btn sm" data-act="vReg" data-id="${v.id}">Enregistrer un règlement</button>`:""}</td></tr>`}),"Aucun vendeur partenaire")+`<p class="mu sm">Règle : pour chaque commande livrée dont le client a tout payé, le vendeur reçoit le prix de ses articles moins sa commission. La livraison reste acquise à ANGEL'S GROUP. Vérifiez que le livreur a bien reversé l'argent avant de régler le vendeur. Les commandes déjà payées au vendeur ne génèrent aucun règlement.</p>`;
  return`<h1>Finance</h1>${T}${body}`};
 
@@ -591,7 +597,7 @@ function sendPosNow(){if(!navigator.geolocation)return toast("Géolocalisation n
  navigator.geolocation.getCurrentPosition(p=>{pushPos(p,true);toast("Position envoyée","ok");render()},e=>toast("Position impossible : "+e.message,"err"),{enableHighAccuracy:true,timeout:15000})}
 function livreurHTML(){
  const lv=livreurOf(ME);if(!lv)return`<div class="lv"><div class="card">Compte livreur non rattaché. <a data-act="logout" href="#">Déconnexion</a></div></div>`;
- const mine=S.livraisons.filter(l=>l.livreur_id===lv.id),todo=mine.filter(isActive),today=new Date().toDateString(),done=mine.filter(l=>["livree","echouee"].includes(l.statut)&&new Date(l.fin_at).toDateString()===today);
+ const mine=S.livraisons.filter(l=>l.livreur_id===lv.id),todo=mine.filter(isActive).sort((a,b)=>(a.tournee_id?0:1)-(b.tournee_id?0:1)||(a.ordre||99)-(b.ordre||99)||new Date(a.affectee_at)-new Date(b.affectee_at)),today=new Date().toDateString(),done=mine.filter(l=>["livree","echouee"].includes(l.statut)&&new Date(l.fin_at).toDateString()===today);
  const aEnc=todo.reduce((a,l)=>a+l.montant_attendu,0),det=soldeLiv(lv.id);
  return`<div class="lv"><div class="lvh"><div class="between"><div><b style="font-size:17px">${esc(lv.nom)}</b><br><span style="opacity:.75" class="sm">${lv.statut==="disponible"?"🟢 Disponible":"🔴 Indisponible"}</span></div><div class="flex"><button class="btn sm ghost" data-act="myStatus">Statut</button><button class="btn sm ghost" data-act="logout">⏏</button></div></div>
  <div class="grid" style="margin-top:10px;grid-template-columns:repeat(3,1fr)"><div><div style="font-size:20px;font-weight:800">${todo.length}</div><div class="sm" style="opacity:.75">à faire</div></div><div><div style="font-size:20px;font-weight:800">${done.filter(l=>l.statut==="livree").length}</div><div class="sm" style="opacity:.75">livrées aujourd'hui</div></div><div><div style="font-size:20px;font-weight:800">${fcfa(det)}</div><div class="sm" style="opacity:.75">à reverser</div></div></div></div>
@@ -607,7 +613,8 @@ function missionCard(l){
  if(l.statut==="affectee")btn=`<div class="row"><button class="btn ok" data-act="lAcc" data-id="${l.id}">✔ Accepter</button><button class="btn er" data-act="lRef" data-id="${l.id}">✖ Impossible</button></div>`;
  if(l.statut==="acceptee")btn=!l.collecte_at?`<div class="row"><button class="btn" data-act="lPrise" data-id="${l.id}">📦 Colis pris en charge</button></div><div class="row"><button class="btn er" data-act="lRef" data-id="${l.id}">✖ Impossible</button></div>`:`<div class="row"><button class="btn ok" data-act="lGo" data-id="${l.id}">🏍 Démarrer la course</button></div>`;
  if(l.statut==="en_cours")btn=`<div class="row"><button class="btn ok" data-act="lConf" data-id="${l.id}">✔ Confirmer la livraison</button></div><div class="row"><button class="btn wa" data-act="lFail" data-id="${l.id}">Livraison impossible</button></div>`;
- return`<div class="mc ${c.priorite==="urgente"?"urg":""}"><div class="between"><b>${c.numero}</b><span>${c.priorite==="urgente"?badge("URGENT","er")+" ":""}${lb(l)}</span></div>
+ const tr=l.tournee_id&&byId(S.tournees,l.tournee_id);
+ return`<div class="mc ${c.priorite==="urgente"?"urg":""}">${tr?`<div class="sm" style="color:var(--b)"><b>🔁 Tournée ${tr.numero} · arrêt ${l.ordre}/${stopsOf(tr).length}</b></div>`:""}<div class="between"><b>${c.numero}</b><span>${c.priorite==="urgente"?badge("URGENT","er")+" ":""}${lb(l)}</span></div>
  <div><b>${esc(cl.nom)}</b><br>📍 ${esc(a.zone)} · ${esc(a.quartier||"")}<br><span class="mu">${esc(a.repere||"")}</span>${a.instructions?`<br><i>${esc(a.instructions)}</i>`:""}</div>
  ${a.gps?`<div class="flex sm">${geoBadge(a)}<button class="btn sm ghost" data-act="lMap" data-id="${l.id}">${ui.mapOpen&&ui.mapOpen[l.id]?"Masquer la carte":"🗺 Voir sur la carte"}</button></div>${ui.mapOpen&&ui.mapOpen[l.id]?`<div class="mapbox" id="map_${l.id}" style="height:260px;border-radius:10px;overflow:hidden;background:#e8ebf5"></div>`:""}`:`<div class="al warn sm" style="margin:0">Adresse non géolocalisée. <a href="#" data-act="lAskGeo" data-id="${l.id}">Demander sa position au client</a></div>`}
  <div class="between pill"><span>${c.lignes.reduce((s,x)=>s+x.qte,0)} article(s)${l.nb_colis?" · "+l.nb_colis+" colis":""}</span><span class="amt">${l.montant_attendu>0?fcfa(l.montant_attendu):"Déjà payé"}</span></div>
@@ -679,6 +686,11 @@ const ACT={
  lFail:id=>{const l=byId(S.livraisons,id);modal("Livraison impossible",`<label>Motif<select name="m">${opts(S.config.motifs)}</select></label><label>Observation<textarea name="o" rows="2"></textarea></label>`,{label:"Enregistrer l'échec",cls:"er",onSubmit:d=>{if(echec(l,d.m,d.o))done("Échec enregistré — le superviseur est informé")}})},
  myInc:()=>{const lv=livreurOf(ME),a=S.livraisons.find(l=>l.livreur_id===lv.id&&isActive(l));incForm(lv.id,a?a.commande_id:null)},
  sendPos:sendPosNow,
+ newTour:tourneeModal,tourDetail:id=>tourneeDetail(id),
+ tourMove:id=>{const[tid,lid,dir]=id.split("|"),t=byId(S.tournees,tid),st=stopsOf(t),i=st.findIndex(l=>l.id===lid),j=i+(+dir);if(i<0||j<0||j>=st.length)return;
+  if(!["affectee","acceptee"].includes(st[i].statut)||!["affectee","acceptee"].includes(st[j].statut))return toast("Arrêt déjà démarré : ordre figé","err");
+  const a=st[i].ordre;st[i].ordre=st[j].ordre;st[j].ordre=a;audit("Ordre de tournée modifié",t.numero);save();render();tourneeDetail(tid)},
+ entMoto:id=>entretienModal(moto(id)),histMoto:id=>histMoto(moto(id)),
  newVend:()=>vendForm(),editVend:id=>vendForm(vendOf(id)),newVCmd:vCmdForm,vImport:vImportModal,
  csvModel:()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["ref;client;tel;zone;quartier;repere;article;qte;prix\nA001;Mme Kouassi;0707123456;Cocody;Angré;Près de la pharmacie;Robe wax;2;12000\nA001;Mme Kouassi;0707123456;Cocody;Angré;Près de la pharmacie;Sandales;1;8000\nA002;M. Bamba;0505987654;Yopougon;Sicogi;Derrière l'école;Sac à main;1;15000\n"],{type:"text/csv"}));a.download="modele_commandes.csv";a.click()},
  vReg:id=>{const v=vendOf(id),d=vendDue(v);modal("Règlement — "+v.nom,`<div class="pill">Reste à régler : <b>${fcfa(d.restant)}</b></div><label>Montant réglé<input type="number" name="m" min="1" max="${d.restant}" required value="${d.restant}"></label><label>Mode<select name="mode">${opts(S.config.modes)}</select></label><label>Note / référence<input name="note"></label>`,{label:"Enregistrer",cls:"ok",onSubmit:x=>{const m=+x.m;if(m<=0||m>d.restant)return toast("Montant invalide","err"),false;S.reglements.push({id:uid("rg"),vendeur_id:id,montant:m,mode:x.mode,note:x.note,ts:now(),par:who()});audit("Règlement vendeur",`${v.nom} — ${fcfa(m)}`);done("Règlement enregistré")}})},
@@ -698,6 +710,59 @@ document.addEventListener("change",e=>{const k=e.target.dataset&&e.target.datase
 window.addEventListener("storage",e=>{if(e.key!==KEY||!e.newValue||$("#modal").innerHTML)return;try{S=JSON.parse(e.newValue)}catch(x){return}
  if(ME){const u=usr(ME.id);if(!u||!u.actif){ME=null;sessionStorage.removeItem("angels_me");toast("Votre compte a été désactivé","err")}else ME=u}render()});
 setInterval(()=>{if(ME&&!(ME.role==="livreur"&&Object.values(ui.mapOpen||{}).some(Boolean))&&!$("#modal").innerHTML&&!document.activeElement.matches("input,select,textarea"))render()},60000);
+
+/* ============================================================
+   TOURNÉES & MAINTENANCE DES MOTOS
+   ============================================================ */
+const haversine=(a,b)=>{const R=6371,r=x=>x*Math.PI/180,dl=r(b.lat-a.lat),dg=r(b.lng-a.lng),h=Math.sin(dl/2)**2+Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(dg/2)**2;return 2*R*Math.asin(Math.sqrt(h))};
+const fmtDur=m=>`${Math.floor(m/60)} h ${String(Math.round(m%60)).padStart(2,"0")}`;
+const stopsOf=t=>S.livraisons.filter(l=>l.tournee_id===t.id&&!["reaffectee","refusee","annulee"].includes(l.statut)).sort((a,b)=>a.ordre-b.ordre);
+/* Estimation à vol d'oiseau × 1,35, 18 km/h en moyenne et 8 min par arrêt : indicative, sans trafic. */
+function estimTournee(t){
+ const st=stopsOf(t),pts=st.map(l=>cmd(l.commande_id).adr.gps).filter(Boolean),lp=S.pos[t.livreur_id],path=(lp?[lp]:[]).concat(pts);
+ if(path.length<2)return null;let d=0;for(let i=1;i<path.length;i++)d+=haversine(path[i-1],path[i]);d*=1.35;
+ return{km:d,min:d/18*60+8*st.length,sans:st.length-pts.length}}
+/* Ordre de passage proposé : plus proche voisin depuis la dernière position connue ; les adresses sans GPS passent en dernier, groupées par zone. */
+function ordreTournee(cs,start){
+ let rest=cs.slice().sort((a,b)=>(a.adr.zone||"").localeCompare(b.adr.zone||"")||new Date(a.date)-new Date(b.date)),out=[],cur=start||null;
+ while(rest.length){let best=-1;
+  if(cur){let bd=1e9;rest.forEach((c,i)=>{if(c.adr.gps){const d=haversine(cur,c.adr.gps);if(d<bd){bd=d;best=i}}})}else best=rest.findIndex(c=>c.adr.gps);
+  if(best<0)best=0;const c=rest.splice(best,1)[0];out.push(c);if(c.adr.gps)cur=c.adr.gps}
+ return out}
+function creerTournee(lid,cids){
+ const lv=liv(lid),cs=cids.map(cmd).filter(Boolean);
+ if(!lv||cs.length<2||cs.some(c=>c.statut!=="prete")){toast("Sélectionnez au moins 2 commandes prêtes à livrer","err");return null}
+ const mo=lv.moto_id&&moto(lv.moto_id);if(mo&&!["disponible","affectee"].includes(mo.statut)){toast(`Moto ${mo.immat} ${mo.statut} : affectation impossible sans validation`,"err");return null}
+ const t={id:uid("t"),numero:"T-"+String(S.tournees.length+1).padStart(4,"0"),livreur_id:lid,ts:now(),par:who()};
+ ordreTournee(cs,S.pos[lid]).forEach((c,i)=>{const l=affecter(c,lid,"");if(l){l.tournee_id=t.id;l.ordre=i+1}});
+ S.tournees.push(t);audit("Création tournée",`${t.numero} — ${lv.nom} — ${cs.length} livraisons`);return t}
+function tourneeModal(){
+ const prete=S.commandes.filter(c=>c.statut==="prete").sort((a,b)=>(a.adr.zone||"").localeCompare(b.adr.zone||""));
+ modal("Créer une tournée",`<label>Livreur<select name="lid">${S.livreurs.map(l=>{const n=S.livraisons.filter(x=>x.livreur_id===l.id&&isActive(x)).length;return`<option value="${l.id}">${esc(l.nom)} — ${l.statut==="disponible"?"disponible":"indisponible"}, ${n} mission(s)</option>`}).join("")}</select></label>
+ <div class="sec">Commandes prêtes à regrouper (2 minimum)</div>
+ ${prete.map(c=>`<label style="display:flex;gap:10px;align-items:center;border:1px solid var(--bd);border-radius:10px;padding:8px;color:var(--tx)"><input type="checkbox" name="c_${c.id}" style="width:auto"><span style="flex:1"><b>${c.numero}</b> ${c.priorite==="urgente"?badge("URGENT","er"):""}<br><span class="sm mu">${esc(c.adr.zone)} ${esc(c.adr.quartier||"")} · ${esc(cli(c.client_id).nom)} · ${fcfa(soldeCmd(c))} à encaisser ${c.adr.gps?"":"· sans GPS"}</span></span></label>`).join("")}
+ <div class="sm mu">L'ordre de passage est proposé automatiquement (plus proche voisin) ; vous pourrez l'ajuster ensuite. Le livreur adapte son trajet selon la circulation.</div>`,
+ {label:"Créer et affecter",onSubmit:d=>{const ids=Object.keys(d).filter(k=>k.startsWith("c_")).map(k=>k.slice(2));const lv=liv(d.lid);
+  if(lv.statut!=="disponible"&&!confirm(lv.nom+" est indisponible. Affecter quand même ?"))return false;
+  const t=creerTournee(d.lid,ids);if(!t)return false;save();toast("Tournée "+t.numero+" créée ("+ids.length+" arrêts)","ok");render()}})}
+function tourneeDetail(id){
+ const t=byId(S.tournees,id),st=stopsOf(t),e=estimTournee(t),lv=liv(t.livreur_id)||{nom:"?"};
+ modal("Tournée "+t.numero+" — "+lv.nom,`<div class="pill">${st.filter(l=>l.statut==="livree").length}/${st.length} livrée(s)${e?` · estimation ≈ <b>${e.km.toFixed(1)} km</b>, <b>${fmtDur(e.min)}</b>${e.sans?` <span class="mu">(${e.sans} arrêt(s) sans GPS non comptés)</span>`:""}`:" · estimation indisponible (adresses sans GPS)"}<div class="sm mu">Estimation indicative à vol d'oiseau (×1,35), sans trafic.</div></div>
+ ${tbl(["#","Commande","Destination","Statut","Ordre"],st.map((l,i)=>{const c=cmd(l.commande_id),mv=["affectee","acceptee"].includes(l.statut);return`<tr><td><b>${l.ordre}</b></td><td>${c.numero}<br><span class="sm mu">${esc(cli(c.client_id).nom)}</span></td><td>${esc(c.adr.zone)} ${esc(c.adr.quartier||"")}</td><td>${lb(l)}</td><td>${mv&&i>0&&["affectee","acceptee"].includes(st[i-1].statut)?`<button class="btn sm ghost" data-act="tourMove" data-id="${t.id}|${l.id}|-1">↑</button>`:""} ${mv&&i<st.length-1?`<button class="btn sm ghost" data-act="tourMove" data-id="${t.id}|${l.id}|1">↓</button>`:""}</td></tr>`}))}
+ <div class="sm mu">L'ordre ne peut être changé que pour les arrêts non encore démarrés. Le livreur peut adapter son itinéraire selon la circulation et les accès.</div>`,{wide:true,focus:false})}
+const ENT_TYPES=["Vidange","Pneumatiques","Freinage","Réparation mécanique","Remplacement de pièces","Autre intervention"];
+function entretienModal(m){
+ modal("Entretien — "+m.immat,`<div class="g2"><label>Type d'intervention<select name="t">${opts(ENT_TYPES)}</select></label><label>Date<input type="date" name="d" required value="${new Date().toISOString().slice(0,10)}"></label></div>
+ <div class="g3"><label>Kilométrage au compteur<input type="number" name="km" min="0" required value="${m.km}"></label><label>Coût (F)<input type="number" name="c" min="0" required value="0"></label><label>Prochain entretien dans (km)<input type="number" name="p" min="0" value="1000"></label></div>
+ <label>Statut de la moto après l'intervention<select name="st">${opts([{v:"disponible",t:"Disponible"},{v:"immobilisee",t:"Immobilisée (réparation en cours)"},{v:"panne",t:"En panne"}],m.statut==="affectee"?"disponible":m.statut==="disponible"?"disponible":m.statut)}</select></label>
+ <label>Détail / pièces / garage<input name="n"></label>`,
+ {onSubmit:d=>{const km=+d.km;if(km<m.km&&!confirm("Le kilométrage saisi ("+km+") est inférieur à celui enregistré ("+m.km+"). Continuer ?"))return false;
+  S.entretiens.push({id:uid("e"),moto_id:m.id,ts:new Date(d.d+"T12:00:00").toISOString(),type:d.t,km,cout:+d.c||0,note:d.n,par:who()});
+  m.km=Math.max(m.km,km);if(+d.p>0)m.prochain_km=km+(+d.p);m.statut=d.st;
+  audit("Entretien moto",`${m.immat} — ${d.t} — ${fcfa(+d.c||0)} — statut ${d.st}`);save();toast("Intervention enregistrée","ok");render()}})}
+function histMoto(m){
+ const h=S.entretiens.filter(e=>e.moto_id===m.id).sort((a,b)=>new Date(b.ts)-new Date(a.ts));
+ modal("Historique — "+m.immat+" ("+esc(m.modele||"")+")",`<div class="pill">${h.length} intervention(s) · coût total <b>${fcfa(h.reduce((a,e)=>a+e.cout,0))}</b> · ${m.km} km · prochain entretien à ${m.prochain_km} km</div>${tbl(["Date","Type","Km","Coût","Détail"],h.map(e=>`<tr><td>${fdt(e.ts).slice(0,5)}</td><td>${esc(e.type)}</td><td>${e.km}</td><td>${fcfa(e.cout)}</td><td class="sm">${esc(e.note||"")}</td></tr>`),"Aucune intervention")}`,{focus:false})}
 
 /* ============================================================
    VENDEURS PARTENAIRES (vendeurs en ligne / fournisseurs)
