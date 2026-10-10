@@ -16,7 +16,7 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 | Zones et tarifs paramétrables | ✅ |
 | Tournées multi-livraisons : regroupement, ordre de passage proposé et ajustable, estimation distance/durée, suivi d'avancement | ✅ |
 | Application livreur mobile : accepter/refuser, prise en charge, départ, itinéraire, appel | ✅ |
-| Preuve de livraison par code à usage unique (photo/signature non systématiques) | ✅ code ; signature/photo : à venir |
+| Preuve de livraison par code à usage unique (photo/signature non systématiques) | ✅ code + signature ; photo : à venir (demande un stockage de fichiers côté serveur) |
 | GPS avec fraîcheur (récente / ancienne / obsolète), consentement, conservation limitée | ✅ (suivi uniquement pendant une course active) |
 | Échecs (motifs paramétrables), nouvelle tentative, retours avec réception et décision de stock | ✅ |
 | Paiement à la livraison, écart attendu/déclaré à valider, reversement validé par caissier | ✅ |
@@ -27,6 +27,9 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 | Stock : sortie à la préparation, retour, ajustement tracé | ✅ |
 | Carte de l'adresse pour le livreur (destination + sa position) et portail client de géopositionnement | ✅ (voir ci-dessous) |
 | Vendeurs partenaires : dépôt de commandes (formulaire ou import CSV), suivi, règlements | ✅ (voir ci-dessous) |
+| Documents numérotés : facture, reçu de paiement, avoir, bon de livraison (preuve de livraison distincte de la facture) | ✅ (voir ci-dessous) |
+| Notifications clients : messages automatiques par étape, modèles modifiables, journal d'envoi | ✅ envoi WhatsApp manuel en un clic |
+| Signature électronique du destinataire (obligatoire au-delà d'un seuil de valeur) | ✅ |
 | Rôles, désactivation immédiate d'un compte, journal d'audit | ✅ |
 | Incidents et réclamations | ✅ |
 
@@ -34,7 +37,7 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 - **Données stockées dans le navigateur d'un seul appareil.** Pour que le bureau et les téléphones des livreurs partagent les données, il faut un backend (Supabase/PostgreSQL, cahier des charges §17) avec authentification et règles d'accès **côté serveur**. Ici les droits ne sont appliqués que dans l'interface : ce n'est pas une sécurité.
 - Les PIN sont hachés de façon simple (démonstration) ; le journal d'audit n'est pas inviolable.
 - GPS en arrière-plan écran éteint non garanti en page web : à valider sur les téléphones réels, sinon application native.
-- Notifications SMS/WhatsApp : seul un lien WhatsApp pré-rempli pour le code client est fourni.
+- Notifications SMS/WhatsApp : les messages sont préparés automatiquement mais envoyés à la main (lien WhatsApp pré-rempli) ; l'envoi automatique demande une API.
 - Facturation normalisée/fiscale, optimisation de tournées avec trafic réel, suggestions automatiques d'affectation, notifications clients automatiques : V2/V3.
 
 ## Carte livreur et portail client
@@ -58,3 +61,10 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 - **Estimation :** distance à vol d'oiseau × 1,35, 18 km/h en moyenne, 8 min par arrêt. C'est une indication, pas un itinéraire routier ; elle ignore le trafic (un vrai calcul d'itinéraire demande un service cartographique externe).
 - **Entretien :** bouton « 🔧 Entretien » par moto (vidange, pneus, freinage, réparation, pièces…) avec date, kilométrage, coût, prochain entretien, et statut de la moto après intervention. Une moto en panne ou immobilisée reste bloquée pour les missions.
 - **Rentabilité par moto :** frais de livraison − commissions − dépenses de mission − entretien. Les coûts d'entretien sont cumulés depuis le début, comme les livraisons ; ce n'est pas un bénéfice comptable.
+
+## Documents, notifications, signature
+- **Documents :** depuis une commande — « Établir la facture », « Reçu de paiement », « ↩ Avoir », « 🖨 Bon de livraison ». Chaque document reçoit un numéro de séquence continue par année et par type (`FAC-2026-0001`, `REC-`, `AVO-`, `BL-`) et reste figé : il ne se modifie ni ne se supprime, une erreur se corrige par un avoir (limité au montant de la facture). Le menu « Documents » les liste et permet de les rouvrir ; impression ou PDF via le navigateur. Pour une commande de vendeur partenaire, la facture ne porte que les frais de livraison, établie au nom du vendeur ; les articles restent facturés par lui.
+- **Bon de livraison :** il atteste de la remise (livreur, date, destinataire, code validé, position GPS, signature) et précise qu'il ne tient pas lieu de facture.
+- **Avertissement :** ce sont des documents de gestion. Si l'entreprise est assujettie à la facturation normalisée électronique, la facture réglementaire doit être émise par le dispositif officiel ; la mention en pied de page, l'adresse, le NIF et le RCCM se règlent dans Paramètres.
+- **Notifications :** à la confirmation, au départ du livreur (avec l'heure estimée et le code à donner), à la livraison et en cas d'échec, un message est préparé et placé dans le menu « Notifications ». Le superviseur l'envoie par WhatsApp en un clic, le modifie ou l'ignore. « Envoyé » signifie que la conversation WhatsApp a été ouverte, pas que le client l'a reçue. Les modèles et les événements actifs se règlent dans Paramètres.
+- **Signature :** dans l'écran de confirmation du livreur, un cadre de signature au doigt est obligatoire dès un montant de commande réglable (100 000 F par défaut, 0 = jamais), facultatif en dessous. Elle apparaît sur le bon de livraison.

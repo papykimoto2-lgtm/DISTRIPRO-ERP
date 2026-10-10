@@ -115,6 +115,8 @@ const NAV=[
  {v:"dashboard",l:"Tableau de bord",i:"📊",r:["admin","direction","superviseur"]},
  {v:"commandes",l:"Commandes",i:"🧾",r:["admin","superviseur","commercial","preparateur"]},
  {v:"livraisons",l:"Centre de livraison",i:"🏍️",r:["admin","superviseur"]},
+ {v:"documents",l:"Documents",i:"📄",r:["admin","direction","commercial","caissier","superviseur"]},
+ {v:"notifs",l:"Notifications",i:"💬",r:["admin","superviseur","commercial"]},
  {v:"clients",l:"Clients",i:"👥",r:["admin","superviseur","commercial"]},
  {v:"produits",l:"Produits & stock",i:"📦",r:["admin","commercial","preparateur"]},
  {v:"livreurs",l:"Livreurs & motos",i:"🛵",r:["admin","superviseur"]},
@@ -165,7 +167,7 @@ const lb=l=>badge(LST[l.statut],LSTC[l.statut]);
 /* ---------- Métier : commandes ---------- */
 function setStatut(c,to,note){
  if(!TRANS[c.statut].includes(to)){toast(`Transition interdite : ${ST[c.statut]} → ${ST[to]}`,"err");return false}
- c.hist.push({ts:now(),de:c.statut,a:to,par:who(),note:note||""});c.statut=to;return true}
+ c.hist.push({ts:now(),de:c.statut,a:to,par:who(),note:note||""});c.statut=to;try{notifier(c,to,note)}catch(e){}return true}
 function numCmd(){S.seq.cmd++;return"CMD-"+new Date().getFullYear()+"-"+String(S.seq.cmd).padStart(4,"0")}
 function creerCmd(d){
  const c={id:uid("c"),numero:numCmd(),date:now(),vendeur_id:d.vendeur_id||null,vendeur_encaisse:!!d.vendeur_encaisse,client_id:d.client_id,adr:d.adr,lignes:d.lignes,frais:+d.frais||0,remise:+d.remise||0,paiement:d.paiement,mode:d.mode,priorite:d.priorite||"normale",canal:d.canal||"Téléphone",obs:d.obs||"",statut:"brouillon",hist:[{ts:now(),de:null,a:"brouillon",par:who(),note:"Création"}],cree_par:who(),stock_sorti:false};
@@ -214,7 +216,9 @@ function confirmer(l,d){
  if(m<0)return toast("Montant invalide","err"),false;
  const ecart=m-att;
  if(ecart!==0&&!String(d.ecart_note||"").trim())return toast(`Écart de ${fcfa(ecart)} : explication obligatoire`,"err"),false;
+ if(sigReq(c)&&!d.signature)return toast("Signature du destinataire obligatoire (commande ≥ "+fcfa(S.config.signature_seuil)+")","err"),false;
  if(!setStatut(c,"livree","Livrée — reçu par "+d.recu_par))return false;
+ if(d.signature&&/^data:image\/png;base64,/.test(d.signature)&&d.signature.length<80000)l.signature=d.signature;
  l.statut="livree";l.fin_at=now();l.recu_par=d.recu_par;l.obs=d.obs||"";l.montant_encaisse=m;l.mode=d.mode;l.ecart=ecart;
  l.gps_confirm=S.pos[l.livreur_id]?{lat:S.pos[l.livreur_id].lat,lng:S.pos[l.livreur_id].lng,ts:S.pos[l.livreur_id].ts}:null;
  if(ecart!==0){l.ecart_statut="a_valider";l.ecart_note=d.ecart_note}
@@ -234,6 +238,7 @@ function seed(){
    cats:["Retard","Colis manquant","Colis endommagé","Mauvaise adresse","Erreur de montant","Contestation de livraison","Panne de moto","Incident de sécurité","Réclamation client"],
    zones:[["Cocody",1500,45],["Abobo",2000,60],["Yopougon",2000,60],["Marcory",1500,40],["Treichville",1500,40],["Koumassi",2000,50],["Port-Bouët",2500,60],["Plateau",1500,40]].map(z=>({id:uid("z"),nom:z[0],frais:z[1],delai_min:z[2]}))},
   vendeurs:[],reglements:[],tournees:[],entretiens:[],users:[],clients:[],produits:[],livreurs:[],motos:[],commandes:[],livraisons:[],fonds:[],paie:[],depenses:[],incidents:[],retours:[],stock_mvts:[],pos:{},gps_hist:[],audit:[]};
+ ensureConfig();
  const mkU=(nom,role,pin)=>{const u={id:uid("u"),nom,role,pin_h:0,actif:true};u.pin_h=hashPin(u.id,pin);S.users.push(u);return u};
  mkU("Administrateur","admin","1234");mkU("Direction","direction","0000");mkU("Awa (superviseur)","superviseur","1111");mkU("Caissier Yao","caissier","2222");mkU("Commercial Koffi","commercial","3333");mkU("Préparateur Moussa","preparateur","4444");
  const mkM=(im,mod,km,st)=>{const m={id:uid("m"),immat:im,modele:mod,km,prochain_km:km+800,statut:st};S.motos.push(m);return m};
@@ -264,15 +269,16 @@ function seed(){
   creerCmdVendeur(V,{nom:"Mme Konan",tel:"0505777777",zone:"Abobo",quartier:"Anonkoua",repere:"Face à l'église",ins:"",lignes:[{desig:"Robe wax",qte:1,pu:15000},{desig:"Foulard",qte:2,pu:3000}],pay:"livraison",obs:""});
   const vo=creerCmdVendeur(V,{nom:"Cliente Fatou",tel:"0505444444",zone:"Cocody",quartier:"Angré",repere:"Château d'eau",ins:"",lignes:[{desig:"Sac à main",qte:2,pu:12000}],pay:"livraison",obs:""});
   setStatut(vo,"confirmee");toPrete(vo);const lv=affecter(vo,L1.id,"");accepter(lv);priseEnCharge(lv,1);demarrer(lv);confirmer(lv,{code:lv.code,montant:vo.total,mode:"Espèces",recu_par:"Fatou"})}
+ S.notifs=S.notifs.slice(-3);
  S.audit.push({ts:now(),user:"Système",role:"système",action:"Initialisation",detail:"Données de démonstration chargées"});
  save()}
 function load(){let d=null;try{d=JSON.parse(localStorage.getItem(KEY))}catch(e){}
  if(d&&d.v===1)S=d;else seed();
- S.vendeurs=S.vendeurs||[];S.reglements=S.reglements||[];S.tournees=S.tournees||[];S.entretiens=S.entretiens||[];
+ S.vendeurs=S.vendeurs||[];S.reglements=S.reglements||[];S.tournees=S.tournees||[];S.entretiens=S.entretiens||[];ensureConfig();
  const lim=Date.now()-S.config.gps_retention_jours*864e5;S.gps_hist=S.gps_hist.filter(p=>new Date(p.ts)>lim)}
 
 /* ---------- Interface : utilitaires ---------- */
-function modal(title,body,o){o=o||{};ui.onSubmit=o.onSubmit;
+function modal(title,body,o){o=o||{};ui.onSubmit=o.onSubmit;ui.mid=(ui.mid||0)+1;
  $("#modal").innerHTML=`<div class="ov"><div class="md ${o.wide?"wide":""}"><div class="mh"><b>${esc(title)}</b><button class="x" data-act="closeModal" type="button">✕</button></div><form id="mf" autocomplete="off"><div class="mb">${body}</div>${o.onSubmit?`<div class="mf"><button type="button" class="btn ghost" data-act="closeModal">Annuler</button><button class="btn ${o.cls||""}">${o.label||"Valider"}</button></div>`:""}</form></div></div>`;
  const f=$("#mf input:not([type=hidden]),#mf select");if(f&&o.focus!==false)f.focus()}
 const closeModal=()=>{$("#modal").innerHTML="";ui.onSubmit=null};
@@ -315,6 +321,7 @@ function alertes(){
   if(l.statut==="acceptee"&&(t-new Date(l.accept_at))/60000>15)a.push({k:"warn",m:`Course acceptée non démarrée depuis plus de 15 min : ${c.numero} (${lv.nom})`});
   if(l.statut==="affectee"&&(t-new Date(l.affectee_at))/60000>10)a.push({k:"warn",m:`Mission non acceptée depuis plus de 10 min : ${c.numero} (${lv.nom})`});
   if(l.statut==="en_cours"){const f=fraicheur(S.pos[l.livreur_id]);if(f.k!=="ok")a.push({k:"",m:`GPS ${f.k==="mu"?"absent":"non récent"} pour ${lv.nom} (${c.numero}). Cela ne prouve pas une faute : réseau, batterie ou téléphone possibles.`})}});
+ const nn=S.notifs.filter(n=>n.statut==="a_envoyer").length;if(nn)a.push({k:"",m:`${nn} message(s) client à envoyer (menu Notifications)`});
  const ec=S.livraisons.filter(l=>l.ecart_statut==="a_valider").length;if(ec)a.push({k:"err",m:`${ec} écart(s) d'encaissement à valider`});
  const nv=S.commandes.filter(c=>c.vendeur_id&&c.statut==="attente").length;if(nv)a.push({k:"warn",m:`${nv} commande(s) de vendeurs partenaires à confirmer`});
  const nf=S.commandes.filter(c=>c.statut==="echouee").length;if(nf)a.push({k:"warn",m:`${nf} livraison(s) échouée(s) à traiter`});
@@ -437,7 +444,11 @@ function cmdDetail(id){
   if(c.statut==="echouee")b.push(`<button class="btn" data-act="reprog" data-id="${c.id}">Reprogrammer</button><button class="btn wa" data-act="orgRetour" data-id="${c.id}">Organiser le retour</button>`);
   if(c.statut==="retour_cours")b.push(`<button class="btn" data-act="recepRetour" data-id="${c.id}">Réceptionner le retour</button>`)}
  if((can("admin","superviseur","commercial")&&!["livree","annulee","retour_recu","retour_cours","en_cours"].includes(c.statut))||(can("vendeur")&&["attente","confirmee"].includes(c.statut)))b.push(`<button class="btn er" data-act="cmdAnnul" data-id="${c.id}">Annuler</button>`);
- b.push(`<button class="btn ghost" data-act="printBL" data-id="${c.id}">🖨 Bon de livraison</button>`);
+ {const fac=docsOf(c.id,"facture").find(d=>avoirsDe(d.id)<d.total);
+  if(can("admin","commercial","caissier","superviseur")&&!["brouillon","attente","annulee"].includes(c.statut))b.push(`<button class="btn ghost" data-act="docFac" data-id="${c.id}">🧾 ${fac?"Facture "+fac.numero:"Établir la facture"}</button>`);
+  if(can("admin","commercial","caissier","superviseur")&&paye(c)>0)b.push(`<button class="btn ghost" data-act="docRecu" data-id="${c.id}">🧾 Reçu de paiement</button>`);
+  if(fac&&can("admin","commercial","caissier"))b.push(`<button class="btn ghost" data-act="docAvoir" data-id="${fac.id}">↩ Avoir</button>`);
+  if(can("admin","superviseur","commercial","preparateur","caissier")&&["prete","affectee","en_cours","livree","echouee","retour_cours","retour_recu"].includes(c.statut))b.push(`<button class="btn ghost" data-act="printBL" data-id="${c.id}">🖨 Bon de livraison${docsOf(c.id,"bl")[0]?" "+docsOf(c.id,"bl")[0].numero:""}</button>`)}
  if(can("admin"))b.push(`<button class="btn ghost" data-act="forceStatut" data-id="${c.id}">Correction exceptionnelle</button>`);
  modal(c.numero+" — "+cl.nom,`<div class="flex">${sb(c)}${c.priorite==="urgente"?badge("URGENT","er"):""}${badge(c.canal,"mu")}</div>
  <div class="pill"><b>Destination</b> : ${esc(a.libelle||"")} · ${esc(a.zone)} ${esc(a.quartier||"")}<br>Repère : ${esc(a.repere||"—")}${a.instructions?"<br>Instructions : "+esc(a.instructions):""}<br>Tél. client : <a href="tel:${esc(cl.tel)}">${esc(cl.tel)}</a><br>${geoBadge(a)}${can("admin","superviseur","commercial")?geoBtns(cl.id,a.id):can("vendeur")?`<div class="flex noprint" style="margin-top:6px"><button type="button" class="btn sm ghost" data-act="geoLink" data-id="${cl.id}|${a.id}">🔗 Lien portail client (position)</button></div>`:""}</div>
@@ -448,10 +459,6 @@ function cmdDetail(id){
  ${ls.length&&!can("vendeur")?`<div class="sec">Livraisons (${ls.length})</div>${tbl(["Tentative","Livreur","Statut","Encaissé","Détail"],ls.map(l=>`<tr><td>#${l.tentative}</td><td>${esc(liv(l.livreur_id).nom)}</td><td>${lb(l)}</td><td>${l.montant_encaisse!=null?fcfa(l.montant_encaisse):"—"}</td><td class="sm">${esc(l.motif_echec||l.motif||"")}${l.recu_par?"Reçu par "+esc(l.recu_par):""}</td></tr>`))}`:""}
  <div class="sec">Historique</div><div class="sm">${c.hist.slice().reverse().map(h=>`<div>${fdt(h.ts)} — <b>${ST[h.a]}</b> · ${can("vendeur")?"":esc(h.par)}${h.note&&!can("vendeur")?" · "+esc(h.note):""}</div>`).join("")}</div>
  <div class="flex noprint">${b.join("")}</div>`,{wide:true,focus:false})}
-function printBL(c){
- const cl=cli(c.client_id),w=window.open("","_blank");if(!w)return toast("Autorisez les fenêtres pop-up pour imprimer","err");
- w.document.write(`<html><head><title>${c.numero}</title><style>body{font:14px system-ui;padding:24px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #999;padding:6px;text-align:left}</style></head><body><h2>ANGEL'S GROUP — Bon de livraison</h2><p><b>${c.numero}</b> · ${new Date(c.date).toLocaleString("fr-FR")}<br>Client : ${esc(cl.nom)} · ${esc(cl.tel)}<br>Destination : ${esc(c.adr.zone)} ${esc(c.adr.quartier||"")} — ${esc(c.adr.repere||"")}</p><table><tr><th>Produit</th><th>Qté</th><th>P.U.</th><th>Total</th></tr>${c.lignes.map(l=>`<tr><td>${esc(lname(l))}</td><td>${l.qte}</td><td>${fcfa(l.pu)}</td><td>${fcfa(l.qte*l.pu)}</td></tr>`).join("")}</table><p>Livraison : ${fcfa(c.frais)} · Remise : ${fcfa(c.remise)}<br><b>Total : ${fcfa(c.total)}</b> · Reste à payer : <b>${fcfa(soldeCmd(c))}</b></p><p style="margin-top:50px">Nom et signature du destinataire : ________________________</p></body></html>`);
- w.document.close();w.focus();w.print()}
 
 function assignModal(c){
  const old=activeLiv(c.id),zn=c.adr.zone;
@@ -576,6 +583,9 @@ VIEWS.params=()=>{const c=S.config;return`<h1>Paramètres</h1>
  <h2>Rémunération par défaut & GPS</h2><div class="card"><div class="g3"><label>Modèle<select id="p_rt">${opts([{v:"fixe",t:"Fixe par course"},{v:"pct",t:"% des frais"},{v:"mixte",t:"Mixte"}],c.remu.type)}</select></label><label>Montant fixe (F)<input id="p_rf" type="number" value="${c.remu.fixe}"></label><label>% des frais<input id="p_rp" type="number" value="${c.remu.pct}"></label></div>
  <div class="g3" style="margin-top:10px"><label>Position « récente » (min)<input id="p_g1" type="number" value="${c.gps_stale_ok}"></label><label>Position « ancienne » jusqu'à (min)<input id="p_g2" type="number" value="${c.gps_stale_warn}"></label><label>Fréquence d'envoi GPS (s)<input id="p_g3" type="number" value="${c.gps_interval}"></label></div>
  <label style="margin-top:10px">Conservation de l'historique GPS (jours)<input id="p_g4" type="number" value="${c.gps_retention_jours}" style="max-width:200px"></label><button class="btn" style="margin-top:10px" data-act="saveParams">Enregistrer</button></div>
+ <h2>Société et documents</h2><div class="card"><div class="g2"><label>Adresse<input id="p_ad" value="${esc(c.ste.adresse)}"></label><label>Téléphones<input id="p_stel" value="${esc(c.ste.tel)}"></label></div><div class="g2" style="margin-top:10px"><label>NIF<input id="p_nif" value="${esc(c.ste.nif)}"></label><label>RCCM<input id="p_rccm" value="${esc(c.ste.rccm)}"></label></div>
+ <label style="margin-top:10px">Mention en bas des documents<textarea id="p_ml" rows="2">${esc(c.mention_legale)}</textarea></label><label style="margin-top:10px">Signature du destinataire obligatoire dès (F, 0 = jamais)<input id="p_sig" type="number" min="0" value="${c.signature_seuil}" style="max-width:220px"></label></div>
+ <h2>Notifications aux clients</h2><div class="card"><div class="sm mu" style="margin-bottom:8px">Variables : {client} {numero} {livreur} {heure} {code} {solde} {motif} {org}. Les messages sont préparés automatiquement puis envoyés depuis le menu Notifications (WhatsApp).</div>${[["confirmee","Commande confirmée"],["en_cours","Départ du livreur"],["livree","Livraison effectuée"],["echouee","Livraison échouée"]].map(e=>`<label style="display:flex;gap:8px;align-items:center;font-size:14px;color:var(--tx);font-weight:600;margin-top:8px"><input type="checkbox" id="pn_${e[0]}" style="width:auto" ${c.notif[e[0]]?"checked":""}> ${e[1]}</label><textarea id="pt_${e[0]}" rows="2">${esc(c.tpl[e[0]])}</textarea>`).join("")}<button class="btn" style="margin-top:10px" data-act="saveParams">Enregistrer</button></div>
  <h2>Données</h2><div class="card"><div class="flex"><button class="btn ghost" data-act="exportData">⬇ Exporter (JSON)</button><label class="btn ghost" style="margin:0;display:inline-block;cursor:pointer">⬆ Importer<input type="file" accept=".json" id="p_imp" class="hide"></label><button class="btn er" data-act="resetData">Réinitialiser la démo</button></div><p class="mu sm">Les données sont stockées dans le navigateur de cet appareil. Pour partager les données entre le bureau et les téléphones des livreurs, la prochaine étape est le backend (Supabase / PostgreSQL) décrit au cahier des charges, §17.</p></div>`};
 function zoneForm(z){modal(z?"Modifier la zone":"Nouvelle zone",`<label>Nom<input name="nom" required value="${esc(z?z.nom:"")}"></label><div class="g2"><label>Frais de livraison (F)<input type="number" name="frais" min="0" required value="${z?z.frais:1500}"></label><label>Délai indicatif (min)<input type="number" name="delai" min="1" required value="${z?z.delai_min:45}"></label></div>`,
  {onSubmit:d=>{if(z){Object.assign(z,{nom:d.nom,frais:+d.frais,delai_min:+d.delai})}else S.config.zones.push({id:uid("z"),nom:d.nom,frais:+d.frais,delai_min:+d.delai});audit("Zone de livraison",d.nom);save();render()}})}
@@ -650,7 +660,15 @@ const ACT={
    audit("Retour réceptionné",c.numero+" — "+d.dec);done("Retour enregistré")}})},
  forceStatut:id=>{const c=cmd(id);modal("Correction exceptionnelle — "+c.numero,`<div class="al warn">Réservé à l'administrateur. L'opération est tracée dans le journal d'audit. Le stock et les fonds ne sont pas recalculés automatiquement.</div><label>Nouveau statut<select name="s">${opts(Object.entries(ST).map(e=>({v:e[0],t:e[1]})),c.statut)}</select></label><label>Justification<textarea name="m" required rows="2"></textarea></label>`,
   {label:"Appliquer",cls:"er",onSubmit:d=>{const old=c.statut;c.hist.push({ts:now(),de:old,a:d.s,par:who(),note:"CORRECTION EXCEPTIONNELLE : "+d.m});c.statut=d.s;audit("Correction de statut",`${c.numero} : ${ST[old]} → ${ST[d.s]} — ${d.m}`);done("Statut corrigé")}})},
- printBL:id=>printBL(cmd(id)),
+ printBL:id=>{const c=cmd(id);const d=docsOf(id,"bl")[0]||emettreDoc("bl",c);save();docOpen(d)},
+ docFac:id=>{const c=cmd(id);let d=docsOf(id,"facture").find(x=>avoirsDe(x.id)<x.total);if(!d)d=emettreDoc("facture",c);save();docOpen(d)},
+ docRecu:id=>{const c=cmd(id);let d=docsOf(id,"recu").slice(-1)[0];if(!d||d.total_paye!==paye(c))d=emettreDoc("recu",c);if(!d)return toast("Aucun paiement enregistré","err");save();docOpen(d)},
+ docAvoir:id=>avoirModal(byId(S.docs,id)),
+ docOpen:id=>docOpen(byId(S.docs,id)),
+ printFrame:()=>{const f=$("#docf");if(f){f.contentWindow.focus();f.contentWindow.print()}},
+ notifSend:id=>{const n=byId(S.notifs,id);window.open(waLink(n.tel,n.message),"_blank","noopener");n.statut="envoye";n.envoye_at=now();n.par=who();audit("Notification envoyée (WhatsApp)",n.event+" — "+n.nom);save();render()},
+ notifIgnore:id=>{const n=byId(S.notifs,id);n.statut="ignore";n.par=who();save();render()},
+ notifEdit:id=>{const n=byId(S.notifs,id);modal("Modifier le message",`<label>Message pour ${esc(n.nom)}<textarea name="m" rows="5" required>${esc(n.message)}</textarea></label>`,{onSubmit:d=>{n.message=d.m;save();render()}})},
  mapLiv:id=>{ui.mapLiv=id;render()},
  ecartOk:id=>ask("Accepter l'écart","Décision / justification",m=>{const l=byId(S.livraisons,id);l.ecart_statut="valide";l.ecart_decision=m;l.ecart_par=who();audit("Écart validé",`${cmd(l.commande_id).numero} ${fcfa(l.ecart)} — ${m}`);done("Écart accepté")}),
  ecartKo:id=>ask("Rejeter l'écart","Motif du rejet (le livreur reste redevable)",m=>{const l=byId(S.livraisons,id);l.ecart_statut="rejete";l.ecart_decision=m;l.ecart_par=who();audit("Écart rejeté",`${cmd(l.commande_id).numero} ${fcfa(l.ecart)} — ${m}`);done("Écart rejeté")},{cls:"er"}),
@@ -671,7 +689,7 @@ const ACT={
  togUser:id=>{const u=usr(id);u.actif=!u.actif;audit(u.actif?"Compte réactivé":"Compte désactivé",u.nom);done()},
  pinUser:id=>{const u=usr(id);modal("Nouveau PIN — "+u.nom,`<label>PIN (4 à 8 chiffres)<input name="pin" pattern="[0-9]{4,8}" inputmode="numeric" required></label>`,{onSubmit:d=>{u.pin_h=hashPin(u.id,d.pin);audit("PIN réinitialisé",u.nom);done("PIN modifié")}})},
  newZone:()=>zoneForm(),editZone:id=>zoneForm(S.config.zones.find(z=>z.id===id)),
- saveParams:()=>{const c=S.config,L=id=>$(id).value.split("\n").map(s=>s.trim()).filter(Boolean);c.motifs=L("#p_motifs");c.cats=L("#p_cats");c.remu={type:$("#p_rt").value,fixe:+$("#p_rf").value||0,pct:+$("#p_rp").value||0};c.gps_stale_ok=+$("#p_g1").value||2;c.gps_stale_warn=+$("#p_g2").value||10;c.gps_interval=+$("#p_g3").value||20;c.gps_retention_jours=+$("#p_g4").value||30;audit("Paramètres modifiés","");done("Paramètres enregistrés")},
+ saveParams:()=>{const c=S.config,L=id=>$(id).value.split("\n").map(s=>s.trim()).filter(Boolean);c.motifs=L("#p_motifs");c.cats=L("#p_cats");c.remu={type:$("#p_rt").value,fixe:+$("#p_rf").value||0,pct:+$("#p_rp").value||0};c.gps_stale_ok=+$("#p_g1").value||2;c.gps_stale_warn=+$("#p_g2").value||10;c.gps_interval=+$("#p_g3").value||20;c.gps_retention_jours=+$("#p_g4").value||30;c.ste={adresse:$("#p_ad").value,tel:$("#p_stel").value,nif:$("#p_nif").value,rccm:$("#p_rccm").value};c.mention_legale=$("#p_ml").value;c.signature_seuil=Math.max(0,+$("#p_sig").value||0);["confirmee","en_cours","livree","echouee"].forEach(k=>{c.notif[k]=$("#pn_"+k).checked;c.tpl[k]=$("#pt_"+k).value.trim()||TPL_DEF[k]});audit("Paramètres modifiés","");done("Paramètres enregistrés")},
  exportData:()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:"application/json"}));a.download="angels_erp_"+new Date().toISOString().slice(0,10)+".json";a.click()},
  resetData:()=>{if(confirm("Effacer toutes les données et recharger la démonstration ?")){localStorage.removeItem(KEY);ME=null;sessionStorage.removeItem("angels_me");load();render()}},
  /* livreur */
@@ -679,10 +697,13 @@ const ACT={
  lRef:id=>ask("Mission impossible","Motif (obligatoire)",m=>{if(refuser(byId(S.livraisons,id),m))done("Le superviseur a été informé")},{cls:"er"}),
  lPrise:id=>{const l=byId(S.livraisons,id);modal("Prise en charge",`<div class="pill">Commande ${cmd(l.commande_id).numero}</div><label>Nombre de colis reçus<input type="number" name="n" min="1" value="1" required></label><label>État apparent<select name="e">${opts(["Bon état","Emballage abîmé"])}</select></label>`,{label:"Confirmer",onSubmit:d=>{if(priseEnCharge(l,+d.n)){l.etat_colis=d.e;done("Prise en charge enregistrée")}}})},
  lGo:id=>{const l=byId(S.livraisons,id);gpsConsent(()=>{if(demarrer(l)){done("Course démarrée — conduisez prudemment");syncGPS();navigator.geolocation&&navigator.geolocation.getCurrentPosition(p=>{pushPos(p,true);render()},()=>{},{timeout:10000})}})},
- lConf:id=>{const l=byId(S.livraisons,id),c=cmd(l.commande_id);
+ lConf:id=>{const l=byId(S.livraisons,id),c=cmd(l.commande_id),req=sigReq(c);
   modal("Confirmer la livraison — "+c.numero,`<div class="pill">Montant attendu : <span class="amt">${fcfa(l.montant_attendu)}</span></div><label>Code de confirmation (donné par le client)<input name="code" inputmode="numeric" maxlength="4" required style="font-size:22px;letter-spacing:6px;text-align:center"></label><label>Nom de la personne ayant reçu<input name="recu_par" required value="${esc(cli(c.client_id).nom)}"></label>
-  ${l.montant_attendu>0?`<div class="g2"><label>Montant encaissé (F)<input type="number" name="montant" min="0" required value="${l.montant_attendu}"></label><label>Mode<select name="mode">${opts(S.config.modes)}</select></label></div><label>Explication de l'écart (si montant ≠ attendu)<input name="ecart_note"></label>`:'<input type="hidden" name="montant" value="0"><input type="hidden" name="mode" value="—">'}<label>Commentaire (facultatif)<input name="obs"></label>`,
-  {label:"Valider la livraison",cls:"ok",onSubmit:d=>{if(!confirmer(l,d))return false;done("Livraison confirmée ✔")}})},
+  ${l.montant_attendu>0?`<div class="g2"><label>Montant encaissé (F)<input type="number" name="montant" min="0" required value="${l.montant_attendu}"></label><label>Mode<select name="mode">${opts(S.config.modes)}</select></label></div><label>Explication de l'écart (si montant ≠ attendu)<input name="ecart_note"></label>`:'<input type="hidden" name="montant" value="0"><input type="hidden" name="mode" value="—">'}
+  ${req?`<div class="sec">Signature du destinataire <span class="mu sm">(obligatoire dès ${fcfa(S.config.signature_seuil)})</span></div>`:`<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="sig_on" style="width:auto"> Recueillir la signature (facultatif)</label>`}
+  <div id="sig_box" class="${req?"":"hide"}"><canvas id="sig" width="440" height="160" style="width:100%;height:160px;border:1px dashed var(--mu);border-radius:8px;background:#fff;touch-action:none"></canvas><div class="flex"><button type="button" class="btn sm ghost" id="sig_clr">Effacer</button><span class="sm mu">Signez avec le doigt</span></div><input type="hidden" name="signature" id="sig_val"></div>
+  <label>Commentaire (facultatif)<input name="obs"></label>`,
+  {label:"Valider la livraison",cls:"ok",onSubmit:d=>{if(!confirmer(l,d))return false;done("Livraison confirmée ✔")}});initSig()},
  lFail:id=>{const l=byId(S.livraisons,id);modal("Livraison impossible",`<label>Motif<select name="m">${opts(S.config.motifs)}</select></label><label>Observation<textarea name="o" rows="2"></textarea></label>`,{label:"Enregistrer l'échec",cls:"er",onSubmit:d=>{if(echec(l,d.m,d.o))done("Échec enregistré — le superviseur est informé")}})},
  myInc:()=>{const lv=livreurOf(ME),a=S.livraisons.find(l=>l.livreur_id===lv.id&&isActive(l));incForm(lv.id,a?a.commande_id:null)},
  sendPos:sendPosNow,
@@ -702,7 +723,7 @@ const ACT={
 };
 document.addEventListener("click",e=>{const t=e.target.closest("[data-act]");if(!t)return;e.preventDefault();const f=ACT[t.dataset.act];if(f)f(t.dataset.id,t)});
 document.addEventListener("submit",e=>{
- if(e.target.id==="mf"){e.preventDefault();if(ui.onSubmit){const d=Object.fromEntries(new FormData(e.target));const r=ui.onSubmit(d,e.target);if(r!==false)closeModal()}}
+ if(e.target.id==="mf"){e.preventDefault();if(ui.onSubmit){const d=Object.fromEntries(new FormData(e.target));const mid=ui.mid,r=ui.onSubmit(d,e.target);if(r!==false&&ui.mid===mid)closeModal()}}
  if(e.target.id==="lf"){e.preventDefault();const d=Object.fromEntries(new FormData(e.target)),u=usr(d.u);
   if(u&&u.actif&&u.pin_h===hashPin(u.id,d.pin)){ME=u;sessionStorage.setItem("angels_me",u.id);view="dashboard";audit("Connexion",u.nom);save();render()}else toast("PIN incorrect","err")}});
 document.addEventListener("change",e=>{const k=e.target.dataset&&e.target.dataset.f;if(k){ui[k]=e.target.value;render()}
@@ -710,6 +731,95 @@ document.addEventListener("change",e=>{const k=e.target.dataset&&e.target.datase
 window.addEventListener("storage",e=>{if(e.key!==KEY||!e.newValue||$("#modal").innerHTML)return;try{S=JSON.parse(e.newValue)}catch(x){return}
  if(ME){const u=usr(ME.id);if(!u||!u.actif){ME=null;sessionStorage.removeItem("angels_me");toast("Votre compte a été désactivé","err")}else ME=u}render()});
 setInterval(()=>{if(ME&&!(ME.role==="livreur"&&Object.values(ui.mapOpen||{}).some(Boolean))&&!$("#modal").innerHTML&&!document.activeElement.matches("input,select,textarea"))render()},60000);
+
+/* ============================================================
+   DOCUMENTS COMMERCIAUX, NOTIFICATIONS CLIENT, SIGNATURE
+   ============================================================ */
+const TPL_DEF={
+ confirmee:"Bonjour {client}, votre commande {numero} est confirmée. Reste à régler à la livraison : {solde}. — {org}",
+ en_cours:"{client}, votre livreur {livreur} est parti avec votre commande {numero}. Arrivée estimée vers {heure}. Code à donner à la réception : {code}. — {org}",
+ livree:"Merci {client} ! Votre commande {numero} a été livrée. — {org}",
+ echouee:"{client}, nous n'avons pas pu vous livrer la commande {numero} ({motif}). Nous vous recontactons pour une nouvelle tentative. — {org}"};
+function ensureConfig(){
+ const c=S.config;
+ c.tpl=Object.assign({},TPL_DEF,c.tpl||{});
+ c.notif=Object.assign({confirmee:true,en_cours:true,livree:true,echouee:true},c.notif||{});
+ c.ste=Object.assign({adresse:"",nif:"",rccm:"",tel:"05 84 16 32 32 / 05 00 66 04 37 / 07 88 07 45 18"},c.ste||{});
+ if(c.mention_legale==null)c.mention_legale="Document de gestion. Si l'entreprise est assujettie à la facturation normalisée électronique, la facture réglementaire doit être émise via le dispositif officiel.";
+ if(c.signature_seuil==null)c.signature_seuil=100000;
+ S.docs=S.docs||[];S.notifs=S.notifs||[];S.seq=S.seq||{cmd:0,inc:0};S.seq.doc=S.seq.doc||{}}
+const fillTpl=(t,v)=>String(t).replace(/\{(\w+)\}/g,(_,k)=>v[k]!=null?v[k]:"");
+function notifier(c,to,note){
+ const cfg=S.config;if(!cfg.notif||cfg.notif[to]!==true||!cfg.tpl[to])return;
+ const cl=cli(c.client_id),l=activeLiv(c.id)||livsOf(c.id).slice(-1)[0],z=zone(c.adr.zone);
+ const eta=new Date(Date.now()+(z?z.delai_min:45)*60000).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+ const msg=fillTpl(cfg.tpl[to],{client:cl.nom,numero:c.numero,livreur:l&&liv(l.livreur_id)?liv(l.livreur_id).nom.split(" ")[0]:"",heure:eta,code:l?l.code:"",solde:fcfa(soldeCmd(c)),motif:String(note||"").replace(/^Échec : /,""),org:cfg.org});
+ S.notifs.push({id:uid("n"),ts:now(),commande_id:c.id,event:to,canal:"WhatsApp",tel:cl.tel,nom:cl.nom,message:msg,statut:"a_envoyer"})}
+const EV_L={confirmee:"Commande confirmée",en_cours:"Départ du livreur",livree:"Livrée",echouee:"Échec de livraison"};
+VIEWS.notifs=()=>{
+ const t=ui.nt||"att",att=S.notifs.filter(n=>n.statut==="a_envoyer"),his=S.notifs.filter(n=>n.statut!=="a_envoyer");
+ const list=(t==="att"?att:his).slice().reverse();
+ return`<h1>Notifications aux clients</h1>${tabs("nt",[["att","À envoyer ("+att.length+")"],["his","Historique"]])}
+ <div class="al sm">Les messages sont préparés automatiquement à chaque étape (confirmation, départ du livreur, livraison, échec). L'envoi se fait par WhatsApp en un clic ; le statut « envoyé » indique que vous avez ouvert la conversation, pas que le client l'a lue. Un envoi automatique demande une intégration (API WhatsApp / SMS).</div>
+ ${tbl(["Date","Commande","Client","Événement","Message",""],list.map(n=>`<tr><td>${fdt(n.ts)}</td><td>${(cmd(n.commande_id)||{}).numero||"—"}</td><td>${esc(n.nom)}<br><span class="sm mu">${esc(n.tel)}</span></td><td>${badge(EV_L[n.event]||n.event,"mu")}</td><td class="sm" style="max-width:340px">${esc(n.message)}</td><td>${n.statut==="a_envoyer"?`<button class="btn sm ok" data-act="notifSend" data-id="${n.id}">Envoyer (WhatsApp)</button> <button class="btn sm ghost" data-act="notifEdit" data-id="${n.id}">Modifier</button> <button class="btn sm ghost" data-act="notifIgnore" data-id="${n.id}">Ignorer</button>`:n.statut==="envoye"?badge("Ouvert dans WhatsApp le "+fdt(n.envoye_at),"ok"):badge("Ignoré","mu")}</td></tr>`),t==="att"?"Aucun message en attente":"Aucun historique")}`};
+
+/* ---- documents ---- */
+const DOC_L={facture:"Facture",recu:"Reçu de paiement",avoir:"Avoir",bl:"Bon de livraison"},DOC_P={facture:"FAC",recu:"REC",avoir:"AVO",bl:"BL"};
+function numDoc(type){const y=new Date().getFullYear(),k=DOC_P[type]+"-"+y;S.seq.doc[k]=(S.seq.doc[k]||0)+1;return k+"-"+String(S.seq.doc[k]).padStart(4,"0")}
+const docsOf=(cid,type)=>S.docs.filter(d=>d.commande_id===cid&&(!type||d.type===type));
+const avoirsDe=fid=>S.docs.filter(d=>d.type==="avoir"&&d.ref_doc===fid).reduce((a,d)=>a+d.montant,0);
+/* Un document émis n'est jamais modifié ni supprimé : toute correction passe par un avoir. */
+function emettreDoc(type,c,o){
+ o=o||{};const cl=cli(c.client_id),v=c.vendeur_id?vendOf(c.vendeur_id):null;
+ const d={id:uid("d"),type,numero:null,ts:now(),commande_id:c.id,cmd_numero:c.numero,par:who()};
+ if(type==="facture"){
+  if(v){d.client={nom:v.nom,tel:v.tel};d.lignes=[{desig:"Frais de livraison — "+c.adr.zone+" ("+c.numero+")",qte:1,pu:c.frais}];d.remise=0;d.total=c.frais;d.paye=0;d.note="Facture du service de livraison, établie au nom du vendeur partenaire. Les articles sont facturés par le vendeur."}
+  else{d.client={nom:cl.nom,tel:cl.tel};d.lignes=c.lignes.map(l=>({desig:lname(l),qte:l.qte,pu:l.pu})).concat(c.frais?[{desig:"Frais de livraison — "+c.adr.zone,qte:1,pu:c.frais}]:[]);d.remise=c.remise;d.total=c.total;d.paye=paye(c)}
+  d.solde=Math.max(0,d.total-d.paye)}
+ else if(type==="recu"){
+  const pm=S.fonds.filter(f=>f.commande_id===c.id&&(f.type==="acompte"||f.type==="encaissement")).map(f=>({ts:f.ts,type:f.type,mode:f.mode,montant:f.montant}));
+  if(!pm.length)return null;d.client={nom:cl.nom,tel:cl.tel};d.paiements=pm;d.total_paye=pm.reduce((a,x)=>a+x.montant,0);d.total=c.total;d.solde=Math.max(0,c.total-d.total_paye)}
+ else if(type==="avoir"){const f=o.fac;d.ref_doc=f.id;d.ref_num=f.numero;d.client=f.client;d.montant=o.montant;d.motif=o.motif}
+ else if(type==="bl"){d.client={nom:cl.nom,tel:cl.tel};d.adr={zone:c.adr.zone,quartier:c.adr.quartier,repere:c.adr.repere};d.lignes=c.lignes.map(l=>({desig:lname(l),qte:l.qte}));d.total=c.total}
+ d.numero=numDoc(type);S.docs.push(d);audit("Émission "+DOC_L[type],d.numero+" — "+c.numero);return d}
+function docHTML(d){
+ const g=S.config,ste=g.ste,L=d.lignes||[],c=cmd(d.commande_id),l=d.type==="bl"?livsOf(d.commande_id).filter(x=>x.statut==="livree").slice(-1)[0]:null;
+ const sig=l&&l.signature&&/^data:image\/png;base64,/.test(l.signature)?`<img src="${l.signature}" style="height:70px;border:1px solid #bbb;border-radius:4px">`:"";
+ const tr=L.map(x=>`<tr><td>${esc(x.desig)}</td><td style="text-align:right">${x.qte}</td>${d.type==="bl"?"":`<td style="text-align:right">${fcfa(x.pu)}</td><td style="text-align:right">${fcfa(x.qte*x.pu)}</td>`}</tr>`).join("");
+ let corps="";
+ if(d.type==="facture")corps=`<table><tr><th>Désignation</th><th>Qté</th><th>P.U.</th><th>Montant</th></tr>${tr}</table><p style="text-align:right">${d.remise?`Remise : −${fcfa(d.remise)}<br>`:""}<b style="font-size:16px">Total : ${fcfa(d.total)}</b><br>Déjà payé : ${fcfa(d.paye)}<br><b>Reste à payer : ${fcfa(d.solde)}</b></p>${d.note?`<p><i>${esc(d.note)}</i></p>`:""}`;
+ if(d.type==="recu")corps=`<table><tr><th>Date</th><th>Nature</th><th>Mode</th><th>Montant</th></tr>${d.paiements.map(x=>`<tr><td>${fdt(x.ts)}</td><td>${x.type==="acompte"?"Acompte / paiement d'avance":"Paiement à la livraison"}</td><td>${esc(x.mode||"")}</td><td style="text-align:right">${fcfa(x.montant)}</td></tr>`).join("")}</table><p style="text-align:right"><b style="font-size:16px">Total reçu : ${fcfa(d.total_paye)}</b><br>Montant de la commande : ${fcfa(d.total)}<br>Reste à payer : ${fcfa(d.solde)}</p>`;
+ if(d.type==="avoir")corps=`<p>Avoir se rapportant à la facture <b>${esc(d.ref_num)}</b>.</p><p>Motif : ${esc(d.motif)}</p><p style="text-align:right"><b style="font-size:18px">Montant de l'avoir : ${fcfa(d.montant)}</b></p>`;
+ if(d.type==="bl")corps=`<p>Destination : ${esc(d.adr.zone)} ${esc(d.adr.quartier||"")} — ${esc(d.adr.repere||"")}</p><table><tr><th>Désignation</th><th>Qté</th></tr>${tr}</table><p>Montant de la commande : ${fcfa(d.total)} · Reste à encaisser à la livraison : <b>${fcfa(c?soldeCmd(c):0)}</b></p>
+  <div style="border:1px solid #999;border-radius:6px;padding:10px;margin-top:14px"><b>Preuve de livraison</b><br>${l?`Livré le ${fdt(l.fin_at)} par ${esc((liv(l.livreur_id)||{}).nom||"")} · reçu par <b>${esc(l.recu_par||"")}</b> · code de confirmation validé${l.gps_confirm?" · position GPS enregistrée":""}<br>${sig||"<i>Pas de signature recueillie.</i>"}`:`Nom et signature du destinataire : ________________________`}</div>`;
+ return`<!doctype html><html><head><meta charset="utf-8"><style>body{font:13px system-ui,Arial,sans-serif;color:#111;padding:22px}table{width:100%;border-collapse:collapse;margin:10px 0}td,th{border:1px solid #999;padding:6px;text-align:left}th{background:#f0f0f0}h1{font-size:20px;margin:0}.top{display:flex;justify-content:space-between;gap:16px}.f{margin-top:26px;font-size:11px;color:#555;border-top:1px solid #ccc;padding-top:8px}</style></head><body>
+ <div class="top"><div><h1>${esc(g.org)}</h1>${esc(ste.adresse)}<br>${esc(ste.tel)}<br>${ste.nif?"NIF : "+esc(ste.nif)+" ":""}${ste.rccm?"· RCCM : "+esc(ste.rccm):""}</div><div style="text-align:right"><h1>${DOC_L[d.type].toUpperCase()}</h1><b>${esc(d.numero)}</b><br>${new Date(d.ts).toLocaleDateString("fr-FR")}<br>Commande ${esc(d.cmd_numero)}</div></div>
+ <p style="margin-top:16px"><b>Client :</b> ${esc(d.client.nom)} · ${esc(d.client.tel||"")}</p>${corps}<div class="f">${esc(g.mention_legale)}${d.type==="bl"?"<br>Ce bon de livraison atteste de la remise de la marchandise ; il ne tient pas lieu de facture.":""}</div></body></html>`}
+function docOpen(d){
+ modal(DOC_L[d.type]+" "+d.numero,`<iframe id="docf" style="width:100%;height:540px;border:1px solid var(--bd);border-radius:8px;background:#fff" srcdoc="${esc(docHTML(d))}"></iframe><div class="flex noprint"><button type="button" class="btn" data-act="printFrame">🖨 Imprimer / enregistrer en PDF</button></div>`,{wide:true,focus:false})}
+function avoirModal(f){
+ const reste=f.total-avoirsDe(f.id);
+ modal("Avoir sur la facture "+f.numero,`<div class="pill">Facture : ${fcfa(f.total)} · avoirs déjà émis : ${fcfa(avoirsDe(f.id))} · <b>maximum : ${fcfa(reste)}</b></div><label>Montant de l'avoir (F)<input type="number" name="m" min="1" required value="${reste}"></label><label>Motif (obligatoire)<input name="mo" required></label><div class="sm mu">Un avoir est un document : il ne rembourse pas automatiquement le client. Le remboursement éventuel doit être traité séparément.</div>`,
+ {label:"Émettre l'avoir",onSubmit:d=>{const m=+d.m;if(!(m>0)||m>reste)return toast("Montant invalide (maximum "+fcfa(reste)+")","err"),false;const a=emettreDoc("avoir",cmd(f.commande_id),{fac:f,montant:m,motif:d.mo.trim()});save();docOpen(a)}})}
+VIEWS.documents=()=>{
+ const ty=ui.dt||"",q=(ui.dq||"").toLowerCase();
+ const rows=S.docs.filter(d=>(!ty||d.type===ty)&&(!q||(d.numero+d.cmd_numero+d.client.nom).toLowerCase().includes(q))).slice().reverse().slice(0,300);
+ return`<h1>Documents commerciaux</h1><div class="flex" style="margin-bottom:10px"><input data-f="dq" placeholder="N°, commande, client puis Entrée" value="${esc(ui.dq||"")}" style="max-width:300px"><select data-f="dt" style="width:auto"><option value="">Tous les documents</option>${opts(Object.entries(DOC_L).map(e=>({v:e[0],t:e[1]})),ty)}</select></div>
+ ${tbl(["Numéro","Type","Date","Commande","Client","Montant","Émis par",""],rows.map(d=>`<tr><td><b>${esc(d.numero)}</b></td><td>${esc(DOC_L[d.type])}</td><td>${fdt(d.ts)}</td><td>${esc(d.cmd_numero)}</td><td>${esc(d.client.nom)}</td><td>${d.type==="avoir"?"−"+fcfa(d.montant):fcfa(d.total_paye!=null?d.total_paye:d.total)}</td><td>${esc(d.par)}</td><td><button class="btn sm ghost" data-act="docOpen" data-id="${d.id}">Ouvrir</button></td></tr>`),"Aucun document émis. Ouvrez une commande pour établir une facture, un reçu ou un bon de livraison.")}
+ <p class="mu sm">Les numéros suivent une séquence continue par année et par type (FAC, REC, AVO, BL). Un document émis n'est jamais modifié ni supprimé : une erreur se corrige par un avoir. Vérifiez avec votre comptable si la facturation normalisée électronique s'applique à vos opérations.</p>`};
+
+/* ---- signature électronique (canvas) ---- */
+const sigReq=c=>S.config.signature_seuil>0&&c.total>=S.config.signature_seuil;
+function initSig(){
+ const cv=$("#sig");if(!cv)return;const cx=cv.getContext("2d"),val=$("#sig_val");let dr=false,any=false;
+ cx.lineWidth=3;cx.lineCap="round";cx.lineJoin="round";cx.strokeStyle="#111";
+ const pt=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]};
+ cv.onpointerdown=e=>{dr=true;cv.setPointerCapture(e.pointerId);const[x,y]=pt(e);cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+.1,y+.1);cx.stroke()};
+ cv.onpointermove=e=>{if(!dr)return;const[x,y]=pt(e);cx.lineTo(x,y);cx.stroke();any=true};
+ const end=()=>{if(!dr)return;dr=false;any=true;val.value=cv.toDataURL("image/png")};
+ cv.onpointerup=end;cv.onpointercancel=end;
+ $("#sig_clr").onclick=()=>{cx.clearRect(0,0,cv.width,cv.height);val.value="";any=false};
+ const on=$("#sig_on");if(on)on.onchange=()=>$("#sig_box").classList.toggle("hide",!on.checked)}
 
 /* ============================================================
    TOURNÉES & MAINTENANCE DES MOTOS
