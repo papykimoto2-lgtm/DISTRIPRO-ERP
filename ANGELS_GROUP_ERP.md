@@ -38,7 +38,7 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 - **Données stockées dans le navigateur d'un seul appareil.** Pour que le bureau et les téléphones des livreurs partagent les données, il faut un backend (Supabase/PostgreSQL, cahier des charges §17) avec authentification et règles d'accès **côté serveur**. Ici les droits ne sont appliqués que dans l'interface : ce n'est pas une sécurité.
 - Les PIN sont hachés de façon simple (démonstration) ; le journal d'audit n'est pas inviolable.
 - GPS en arrière-plan écran éteint non garanti en page web : à valider sur les téléphones réels, sinon application native.
-- Notifications SMS/WhatsApp : les messages sont préparés automatiquement mais envoyés à la main (lien WhatsApp pré-rempli) ; l'envoi automatique demande une API.
+- Notifications SMS/WhatsApp : les messages sont préparés automatiquement mais envoyés à la main (lien WhatsApp pré-rempli) ; l'envoi automatique (WhatsApp / SMS via Twilio ou WhatsApp Cloud) est préparé côté serveur dans `supabase/` (guide : `supabase/MESSAGERIE.md`) et s'active avec le backend.
 - Facturation normalisée/fiscale, optimisation de tournées avec trafic réel, suggestions automatiques d'affectation, notifications clients automatiques : V2/V3.
 
 ## Carte livreur et portail client

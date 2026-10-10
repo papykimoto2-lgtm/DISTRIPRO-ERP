@@ -7,7 +7,9 @@ Projet **dédié** à ce logiciel (ne pas le mélanger avec les autres applicati
 |---|---|
 | `migrations/20261010000000_angels_erp_schema.sql` | 25 tables, RLS, machine à états des commandes, journaux « ajout seul », 22 fonctions RPC (+ 1 d'amorçage) |
 | `functions/creer-utilisateur/index.ts` | Edge Function admin : crée compte + profil (livreur, vendeur, personnel) |
-| `tests/` | 84 vérifications de sécurité et de règles métier (voir plus bas) |
+| `migrations/20261011000000_notifications.sql` | File de notifications clients, modèles de messages, réservation et reprises d'envoi, accusés de réception |
+| `functions/envoyer-notifications`, `functions/messagerie-webhook`, `functions/_shared/messagerie.ts` | **Envoi automatique** WhatsApp / SMS (Twilio ou WhatsApp Cloud) — voir `MESSAGERIE.md` |
+| `tests/` | 84 vérifications de sécurité/règles métier + 43 sur les notifications (SQL) + 14 sur la logique d'envoi (Node) |
 
 ## Mise en route
 1. Créer le projet Supabase (région proche d'Abidjan : `eu-west-3`).
@@ -37,12 +39,14 @@ Les tests tournent sur un PostgreSQL local avec de faux rôles Supabase :
 ```bash
 psql -d test -f supabase/tests/stub_supabase.sql
 psql -d test -f supabase/migrations/20261010000000_angels_erp_schema.sql
-psql -d test -f supabase/tests/test_securite.sql   # affiche PASS / FAIL pour chaque règle
+psql -d test -f supabase/migrations/20261011000000_notifications.sql
+psql -d test -f supabase/tests/test_securite.sql      # affiche PASS / FAIL pour chaque règle
+# (base neuve pour chaque fichier de test) psql -d test2 ... -f supabase/tests/test_notifications.sql
 ```
 Ils couvrent : isolation entre sociétés, vendeurs et livreurs ; statuts et stock non modifiables en direct ; double validation ; écarts ; reversements ; règlements vendeurs ; portail public ; journaux inviolables ; purge GPS.
 
 ## Écart entre l'application et le schéma (à combler avant le branchement)
-L'application a reçu après le schéma : les **tournées** (`tournee_id`, `ordre` sur les livraisons), l'**entretien des motos** (table `entretiens`), les **documents numérotés** (table `documents` + compteurs, émission par RPC, jamais modifiables), les **colis étiquetés** (table `colis` : commande, n°, jeton ; scans de prise en charge et de remise) , les **notifications clients** (table `notifications`), la **signature** de livraison (colonne dans `livraisons`, ou fichier dans Supabase Storage) et les paramètres de société (`organisations.config`). Ces éléments sont à ajouter dans une seconde migration, avec les mêmes principes (RLS, RPC, ajout seul pour les documents).
+L'application a reçu après le schéma : les **tournées** (`tournee_id`, `ordre` sur les livraisons), l'**entretien des motos** (table `entretiens`), les **documents numérotés** (table `documents` + compteurs, émission par RPC, jamais modifiables), les **colis étiquetés** (table `colis` : commande, n°, jeton ; scans de prise en charge et de remise) , les **notifications clients** (couvertes par la migration `…_notifications.sql`), la **signature** de livraison (colonne dans `livraisons`, ou fichier dans Supabase Storage) et les paramètres de société (`organisations.config`). Ces éléments sont à ajouter dans une seconde migration, avec les mêmes principes (RLS, RPC, ajout seul pour les documents).
 
 ## Étape suivante : brancher l'application HTML
 `angels_group_erp.html` utilise encore le stockage du navigateur. Il faut remplacer sa couche de données par `supabase-js` (lecture via tables, écriture via les RPC ci-dessus, connexion par identifiant + mot de passe/PIN) pour que bureau, livreurs et vendeurs partagent les mêmes données.
