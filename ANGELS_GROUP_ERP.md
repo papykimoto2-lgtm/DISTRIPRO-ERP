@@ -1,6 +1,6 @@
 # ANGEL'S GROUP ERP — V1 Livraisons à moto
 
-Fichier unique : `angels_group_erp.html` (aucune dépendance, ouvrable par double-clic ; la carte OpenStreetMap demande Internet).
+Fichier unique : `angels-group/index.html` (dossier publié sur Vercel) (aucune dépendance, ouvrable par double-clic ; la carte OpenStreetMap demande Internet).
 Il est indépendant de `index.html` (AFRI-BAR).
 
 ## Démonstration
@@ -80,3 +80,7 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 - **Lecture :** BarcodeDetector du navigateur s'il existe, sinon jsQR (intégré au fichier, hors ligne). La caméra exige une page en **https** (ou localhost) ; depuis un simple fichier local ou une adresse http, elle peut être refusée : la saisie du code reste possible.
 - **Réglages :** le scan obligatoire se désactive dans Paramètres. Une alerte signale les commandes prêtes sans étiquettes.
 - **Composants intégrés :** qrcode-generator 1.4.4 (MIT) et jsQR 1.4.0 (Apache-2.0).
+
+## Déploiement (Vercel)
+Le projet Vercel utilise **`angels-group/` comme dossier racine** : seul `index.html` (+ `vercel.json`, en-têtes de sécurité) est publié. Le reste du dépôt (`index.html` d'AFRI-BAR, `supabase/`, tests) n'est jamais exposé. Aucun build : fichier statique en **https**, ce qui rend possibles la caméra (scan des colis), le portail client et le partage de position.
+Attention : la page de connexion affiche les PIN de démonstration et les données restent dans le navigateur de chaque visiteur. C'est une démo, pas une mise en production : avant tout usage réel, brancher Supabase et retirer l'encart de démonstration.
