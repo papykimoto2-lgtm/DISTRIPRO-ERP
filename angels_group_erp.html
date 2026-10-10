@@ -110,7 +110,7 @@ const TRANS={brouillon:["attente","confirmee","annulee"],attente:["confirmee","a
 const STC={livree:"ok",retour_recu:"ok",echouee:"er",annulee:"mu",brouillon:"mu",retour_cours:"wa",en_cours:"wa",affectee:"wa"};
 const LST={affectee:"À accepter",acceptee:"Acceptée",en_cours:"En course",livree:"Livrée",echouee:"Échouée",refusee:"Refusée",reaffectee:"Réaffectée",annulee:"Annulée"};
 const LSTC={livree:"ok",echouee:"er",refusee:"er",reaffectee:"mu",annulee:"mu",en_cours:"wa",affectee:"wa"};
-const ROLES={admin:"Administrateur",direction:"Direction générale",superviseur:"Superviseur des livraisons",commercial:"Responsable commercial",preparateur:"Préparateur",caissier:"Caissier",livreur:"Livreur"};
+const ROLES={admin:"Administrateur",direction:"Direction générale",superviseur:"Superviseur des livraisons",commercial:"Responsable commercial",preparateur:"Préparateur",caissier:"Caissier",livreur:"Livreur",vendeur:"Vendeur partenaire"};
 const NAV=[
  {v:"dashboard",l:"Tableau de bord",i:"📊",r:["admin","direction","superviseur"]},
  {v:"commandes",l:"Commandes",i:"🧾",r:["admin","superviseur","commercial","preparateur"]},
@@ -122,12 +122,18 @@ const NAV=[
  {v:"incidents",l:"Incidents & retours",i:"⚠️",r:["admin","superviseur","preparateur"]},
  {v:"utilisateurs",l:"Utilisateurs",i:"🔐",r:["admin"]},
  {v:"audit",l:"Journal d'audit",i:"📜",r:["admin","direction"]},
+ {v:"vendeurs",l:"Vendeurs partenaires",i:"🏪",r:["admin","commercial","superviseur"]},
+ {v:"mesCmd",l:"Mes commandes",i:"🛍️",r:["vendeur"]},
+ {v:"mesReg",l:"Mes règlements",i:"💳",r:["vendeur"]},
  {v:"params",l:"Paramètres",i:"⚙️",r:["admin"]}
 ];
 
 /* ---------- Accès aux données ---------- */
 const byId=(a,id)=>a.find(x=>x.id===id);
 const cmd=id=>byId(S.commandes,id),cli=id=>byId(S.clients,id),liv=id=>byId(S.livreurs,id),prod=id=>byId(S.produits,id),moto=id=>byId(S.motos,id),usr=id=>byId(S.users,id);
+const lname=l=>l.produit_id?((prod(l.produit_id)||{}).nom||"?"):(l.desig||"Article");
+const vend=()=>ME&&S.vendeurs.find(v=>v.user_id===ME.id);
+const vendOf=id=>S.vendeurs.find(v=>v.id===id);
 const zone=n=>S.config.zones.find(z=>z.nom===n);
 const livsOf=cid=>S.livraisons.filter(l=>l.commande_id===cid);
 const isActive=l=>["affectee","acceptee","en_cours"].includes(l.statut);
@@ -162,7 +168,7 @@ function setStatut(c,to,note){
  c.hist.push({ts:now(),de:c.statut,a:to,par:who(),note:note||""});c.statut=to;return true}
 function numCmd(){S.seq.cmd++;return"CMD-"+new Date().getFullYear()+"-"+String(S.seq.cmd).padStart(4,"0")}
 function creerCmd(d){
- const c={id:uid("c"),numero:numCmd(),date:now(),client_id:d.client_id,adr:d.adr,lignes:d.lignes,frais:+d.frais||0,remise:+d.remise||0,paiement:d.paiement,mode:d.mode,priorite:d.priorite||"normale",canal:d.canal||"Téléphone",obs:d.obs||"",statut:"brouillon",hist:[{ts:now(),de:null,a:"brouillon",par:who(),note:"Création"}],cree_par:who(),stock_sorti:false};
+ const c={id:uid("c"),numero:numCmd(),date:now(),vendeur_id:d.vendeur_id||null,vendeur_encaisse:!!d.vendeur_encaisse,client_id:d.client_id,adr:d.adr,lignes:d.lignes,frais:+d.frais||0,remise:+d.remise||0,paiement:d.paiement,mode:d.mode,priorite:d.priorite||"normale",canal:d.canal||"Téléphone",obs:d.obs||"",statut:"brouillon",hist:[{ts:now(),de:null,a:"brouillon",par:who(),note:"Création"}],cree_par:who(),stock_sorti:false};
  calcCmd(c);S.commandes.unshift(c);
  let ac=d.paiement==="avance"?c.total:d.paiement==="partiel"?Math.min(+d.acompte||0,c.total):0;
  if(ac>0)S.fonds.push({id:uid("f"),type:"acompte",commande_id:c.id,montant:ac,mode:d.mode,ts:now(),par:who()});
@@ -171,14 +177,14 @@ function creerCmd(d){
  return c}
 function stockMvt(p,qte,type,ref){p.stock+=qte;S.stock_mvts.push({id:uid("m"),ts:now(),produit_id:p.id,type,qte,ref,par:who()})}
 function marquerPrete(c){
- for(const l of c.lignes){const p=prod(l.produit_id);if(!p||p.stock<l.qte){toast(`Stock insuffisant : ${p?p.nom:"?"} (${p?p.stock:0} dispo, ${l.qte} requis)`,"err");return false}}
+ for(const l of c.lignes){if(!l.produit_id)continue;const p=prod(l.produit_id);if(!p||p.stock<l.qte){toast(`Stock insuffisant : ${p?p.nom:"?"} (${p?p.stock:0} dispo, ${l.qte} requis)`,"err");return false}}
  if(!setStatut(c,"prete","Préparation terminée"))return false;
- c.lignes.forEach(l=>stockMvt(prod(l.produit_id),-l.qte,"sortie_commande",c.numero));c.stock_sorti=true;return true}
+ c.lignes.forEach(l=>{if(l.produit_id)stockMvt(prod(l.produit_id),-l.qte,"sortie_commande",c.numero)});c.stock_sorti=true;return true}
 function annuler(c,motif){
  const act=activeLiv(c.id);
  if(!setStatut(c,"annulee","Annulée : "+motif))return false;
  if(act){act.statut="annulee";act.fin_at=now()}
- if(c.stock_sorti){c.lignes.forEach(l=>stockMvt(prod(l.produit_id),l.qte,"annulation",c.numero));c.stock_sorti=false}
+ if(c.stock_sorti){c.lignes.forEach(l=>{if(l.produit_id)stockMvt(prod(l.produit_id),l.qte,"annulation",c.numero)});c.stock_sorti=false}
  audit("Annulation commande",c.numero+" — "+motif);return true}
 function affecter(c,lid,motif){
  const lv=liv(lid),old=activeLiv(c.id);
@@ -227,7 +233,7 @@ function seed(){
    motifs:["Client absent","Client injoignable","Adresse incorrecte","Accès impossible","Client a refusé le colis","Paiement indisponible","Colis endommagé","Incident de moto","Conditions de sécurité défavorables","Autre motif"],
    cats:["Retard","Colis manquant","Colis endommagé","Mauvaise adresse","Erreur de montant","Contestation de livraison","Panne de moto","Incident de sécurité","Réclamation client"],
    zones:[["Cocody",1500,45],["Abobo",2000,60],["Yopougon",2000,60],["Marcory",1500,40],["Treichville",1500,40],["Koumassi",2000,50],["Port-Bouët",2500,60],["Plateau",1500,40]].map(z=>({id:uid("z"),nom:z[0],frais:z[1],delai_min:z[2]}))},
-  users:[],clients:[],produits:[],livreurs:[],motos:[],commandes:[],livraisons:[],fonds:[],paie:[],depenses:[],incidents:[],retours:[],stock_mvts:[],pos:{},gps_hist:[],audit:[]};
+  vendeurs:[],reglements:[],users:[],clients:[],produits:[],livreurs:[],motos:[],commandes:[],livraisons:[],fonds:[],paie:[],depenses:[],incidents:[],retours:[],stock_mvts:[],pos:{},gps_hist:[],audit:[]};
  const mkU=(nom,role,pin)=>{const u={id:uid("u"),nom,role,pin_h:0,actif:true};u.pin_h=hashPin(u.id,pin);S.users.push(u);return u};
  mkU("Administrateur","admin","1234");mkU("Direction","direction","0000");mkU("Awa (superviseur)","superviseur","1111");mkU("Caissier Yao","caissier","2222");mkU("Commercial Koffi","commercial","3333");mkU("Préparateur Moussa","preparateur","4444");
  const mkM=(im,mod,km,st)=>{const m={id:uid("m"),immat:im,modele:mod,km,prochain_km:km+800,statut:st};S.motos.push(m);return m};
@@ -252,10 +258,15 @@ function seed(){
  [l5.affectee_at,l5.accept_at,l5.collecte_at,l5.depart_at,l5.fin_at].forEach((_,i)=>{});const back=h=>new Date(Date.now()-h*3600000).toISOString();l5.affectee_at=back(25.6);l5.depart_at=back(25.4);l5.fin_at=back(25);
  S.fonds.forEach(f=>{if(f.livraison_id===l5.id)f.ts=back(25)});
  const c6=mk(C3,0,[ln("P-SUC",3)],"livraison",true,"normale");toPrete(c6);const l6=affecter(c6,L2.id,"");accepter(l6);priseEnCharge(l6,1);demarrer(l6);echec(l6,"Client absent","Téléphone sur messagerie");
+ {const vu=mkU("Aya Boutique en ligne","vendeur","5555");const V={id:uid("v"),user_id:vu.id,nom:"Aya Boutique en ligne",tel:"0707555555",commission_pct:5};S.vendeurs.push(V);
+  creerCmdVendeur(V,{nom:"Mme Konan",tel:"0505777777",zone:"Abobo",quartier:"Anonkoua",repere:"Face à l'église",ins:"",lignes:[{desig:"Robe wax",qte:1,pu:15000},{desig:"Foulard",qte:2,pu:3000}],pay:"livraison",obs:""});
+  const vo=creerCmdVendeur(V,{nom:"Cliente Fatou",tel:"0505444444",zone:"Cocody",quartier:"Angré",repere:"Château d'eau",ins:"",lignes:[{desig:"Sac à main",qte:2,pu:12000}],pay:"livraison",obs:""});
+  setStatut(vo,"confirmee");toPrete(vo);const lv=affecter(vo,L1.id,"");accepter(lv);priseEnCharge(lv,1);demarrer(lv);confirmer(lv,{code:lv.code,montant:vo.total,mode:"Espèces",recu_par:"Fatou"})}
  S.audit.push({ts:now(),user:"Système",role:"système",action:"Initialisation",detail:"Données de démonstration chargées"});
  save()}
 function load(){let d=null;try{d=JSON.parse(localStorage.getItem(KEY))}catch(e){}
  if(d&&d.v===1)S=d;else seed();
+ S.vendeurs=S.vendeurs||[];S.reglements=S.reglements||[];
  const lim=Date.now()-S.config.gps_retention_jours*864e5;S.gps_hist=S.gps_hist.filter(p=>new Date(p.ts)>lim)}
 
 /* ---------- Interface : utilitaires ---------- */
@@ -279,7 +290,7 @@ function loginHTML(){
  <form id="lf"><label>Utilisateur<select name="u">${act.map(u=>`<option value="${u.id}">${esc(u.nom)} — ${ROLES[u.role]}</option>`).join("")}</select></label>
  <label style="margin-top:10px">Code PIN<input name="pin" type="password" inputmode="numeric" autocomplete="off" required></label>
  <button class="btn" style="width:100%;margin-top:14px">Se connecter</button></form>
- <div class="al warn sm" style="margin-top:14px"><b>Mode démonstration.</b> PIN : admin 1234 · direction 0000 · superviseur 1111 · caissier 2222 · commercial 3333 · préparateur 4444 · livreurs 0001 / 0002 / 0003.<br>Astuce : ouvrez un second onglet pour jouer le livreur pendant que vous supervisez.</div></div></div>`}
+ <div class="al warn sm" style="margin-top:14px"><b>Mode démonstration.</b> PIN : admin 1234 · direction 0000 · superviseur 1111 · caissier 2222 · commercial 3333 · préparateur 4444 · livreurs 0001 / 0002 / 0003 · vendeur partenaire 5555.<br>Astuce : ouvrez un second onglet pour jouer le livreur pendant que vous supervisez.</div></div></div>`}
 
 /* ---------- Gabarit ---------- */
 function render(){
@@ -303,6 +314,7 @@ function alertes(){
   if(l.statut==="affectee"&&(t-new Date(l.affectee_at))/60000>10)a.push({k:"warn",m:`Mission non acceptée depuis plus de 10 min : ${c.numero} (${lv.nom})`});
   if(l.statut==="en_cours"){const f=fraicheur(S.pos[l.livreur_id]);if(f.k!=="ok")a.push({k:"",m:`GPS ${f.k==="mu"?"absent":"non récent"} pour ${lv.nom} (${c.numero}). Cela ne prouve pas une faute : réseau, batterie ou téléphone possibles.`})}});
  const ec=S.livraisons.filter(l=>l.ecart_statut==="a_valider").length;if(ec)a.push({k:"err",m:`${ec} écart(s) d'encaissement à valider`});
+ const nv=S.commandes.filter(c=>c.vendeur_id&&c.statut==="attente").length;if(nv)a.push({k:"warn",m:`${nv} commande(s) de vendeurs partenaires à confirmer`});
  const nf=S.commandes.filter(c=>c.statut==="echouee").length;if(nf)a.push({k:"warn",m:`${nf} livraison(s) échouée(s) à traiter`});
  const ng=S.commandes.filter(c=>!["livree","annulee","retour_recu","brouillon"].includes(c.statut)&&!c.adr.gps).length;if(ng)a.push({k:"",m:`${ng} commande(s) active(s) sans position GPS : envoyez le lien du portail au client`});
  const np=S.commandes.filter(c=>c.statut==="prete").length;if(np)a.push({k:"",m:`${np} commande(s) prête(s) à affecter`});
@@ -355,7 +367,7 @@ VIEWS.dashboard=()=>{
 VIEWS.commandes=()=>{
  const q=(ui.q||"").toLowerCase(),fs=ui.fs||"",rows=S.commandes.filter(c=>(!fs||c.statut===fs)&&(!q||(c.numero+cli(c.client_id).nom+c.adr.zone).toLowerCase().includes(q))).slice(0,200).map(c=>{
   const l=activeLiv(c.id)||livsOf(c.id).slice(-1)[0];
-  return`<tr><td><b>${c.numero}</b><br><span class="mu sm">${fdt(c.date)}</span></td><td>${esc(cli(c.client_id).nom)}<br><span class="mu sm">${esc(c.adr.zone)} · ${esc(c.adr.quartier||"")}</span></td><td>${fcfa(c.total)}<br><span class="mu sm">solde ${fcfa(soldeCmd(c))}</span></td><td>${sb(c)}${c.priorite==="urgente"?" "+badge("URGENT","er"):""}</td><td>${l?esc(liv(l.livreur_id).nom):"—"}</td><td><button class="btn sm ghost" data-act="cmdDetail" data-id="${c.id}">Ouvrir</button></td></tr>`});
+  return`<tr><td><b>${c.numero}</b><br><span class="mu sm">${fdt(c.date)}</span></td><td>${esc(cli(c.client_id).nom)}<br><span class="mu sm">${esc(c.adr.zone)} · ${esc(c.adr.quartier||"")}</span>${c.vendeur_id?`<br>${badge("🏪 "+(vendOf(c.vendeur_id)||{nom:"?"}).nom,"mu")}`:""}</td><td>${fcfa(c.total)}<br><span class="mu sm">solde ${fcfa(soldeCmd(c))}</span></td><td>${sb(c)}${c.priorite==="urgente"?" "+badge("URGENT","er"):""}</td><td>${l?esc(liv(l.livreur_id).nom):"—"}</td><td><button class="btn sm ghost" data-act="cmdDetail" data-id="${c.id}">Ouvrir</button></td></tr>`});
  return`<div class="between"><h1>Commandes</h1>${can("admin","commercial","superviseur")?'<button class="btn" data-act="newCmd">➕ Nouvelle commande</button>':""}</div>
  <div class="flex" style="margin-bottom:10px"><input data-f="q" placeholder="Rechercher (n°, client, zone) puis Entrée" value="${esc(ui.q||"")}" style="max-width:320px"><select data-f="fs" style="width:auto"><option value="">Tous les statuts</option>${opts(Object.entries(ST).map(e=>({v:e[0],t:e[1]})),fs)}</select></div>
  ${tbl(["Commande","Client / destination","Total","Statut","Livreur",""],rows,"Aucune commande")}`};
@@ -415,26 +427,26 @@ function cmdDetail(id){
  const c=cmd(id),cl=cli(c.client_id),a=c.adr,ls=livsOf(c.id),act=activeLiv(c.id);
  const b=[];
  if(can("admin","commercial","superviseur")&&["brouillon","attente"].includes(c.statut))b.push(`<button class="btn ok" data-act="cmdConfirm" data-id="${c.id}">Confirmer</button>`);
- if(can("admin","preparateur")){if(c.statut==="confirmee")b.push(`<button class="btn" data-act="cmdPrep" data-id="${c.id}">Démarrer la préparation</button>`);if(c.statut==="preparation")b.push(`<button class="btn ok" data-act="cmdPrete" data-id="${c.id}">Marquer prête</button>`)}
+ if(can("admin","preparateur")){if(c.statut==="confirmee")b.push(`<button class="btn" data-act="cmdPrep" data-id="${c.id}">${c.vendeur_id?"Marchandise reçue — démarrer la préparation":"Démarrer la préparation"}</button>`);if(c.statut==="preparation")b.push(`<button class="btn ok" data-act="cmdPrete" data-id="${c.id}">Marquer prête</button>`)}
  if(can("admin","superviseur")){if(c.statut==="prete")b.push(`<button class="btn" data-act="assign" data-id="${c.id}">Affecter un livreur</button>`);
   if(act)b.push(`<button class="btn wa" data-act="assign" data-id="${c.id}">Réaffecter</button>`);
   if(c.statut==="echouee")b.push(`<button class="btn" data-act="reprog" data-id="${c.id}">Reprogrammer</button><button class="btn wa" data-act="orgRetour" data-id="${c.id}">Organiser le retour</button>`);
   if(c.statut==="retour_cours")b.push(`<button class="btn" data-act="recepRetour" data-id="${c.id}">Réceptionner le retour</button>`)}
- if(can("admin","superviseur","commercial")&&!["livree","annulee","retour_recu","retour_cours","en_cours"].includes(c.statut))b.push(`<button class="btn er" data-act="cmdAnnul" data-id="${c.id}">Annuler</button>`);
+ if((can("admin","superviseur","commercial")&&!["livree","annulee","retour_recu","retour_cours","en_cours"].includes(c.statut))||(can("vendeur")&&["attente","confirmee"].includes(c.statut)))b.push(`<button class="btn er" data-act="cmdAnnul" data-id="${c.id}">Annuler</button>`);
  b.push(`<button class="btn ghost" data-act="printBL" data-id="${c.id}">🖨 Bon de livraison</button>`);
  if(can("admin"))b.push(`<button class="btn ghost" data-act="forceStatut" data-id="${c.id}">Correction exceptionnelle</button>`);
  modal(c.numero+" — "+cl.nom,`<div class="flex">${sb(c)}${c.priorite==="urgente"?badge("URGENT","er"):""}${badge(c.canal,"mu")}</div>
- <div class="pill"><b>Destination</b> : ${esc(a.libelle||"")} · ${esc(a.zone)} ${esc(a.quartier||"")}<br>Repère : ${esc(a.repere||"—")}${a.instructions?"<br>Instructions : "+esc(a.instructions):""}<br>Tél. client : <a href="tel:${esc(cl.tel)}">${esc(cl.tel)}</a><br>${geoBadge(a)}${can("admin","superviseur","commercial")?geoBtns(cl.id,a.id):""}</div>
- ${tbl(["Produit","Qté","P.U.","Total"],c.lignes.map(l=>`<tr><td>${esc(prod(l.produit_id).nom)}</td><td>${l.qte}</td><td>${fcfa(l.pu)}</td><td>${fcfa(l.qte*l.pu)}</td></tr>`))}
+ <div class="pill"><b>Destination</b> : ${esc(a.libelle||"")} · ${esc(a.zone)} ${esc(a.quartier||"")}<br>Repère : ${esc(a.repere||"—")}${a.instructions?"<br>Instructions : "+esc(a.instructions):""}<br>Tél. client : <a href="tel:${esc(cl.tel)}">${esc(cl.tel)}</a><br>${geoBadge(a)}${can("admin","superviseur","commercial")?geoBtns(cl.id,a.id):can("vendeur")?`<div class="flex noprint" style="margin-top:6px"><button type="button" class="btn sm ghost" data-act="geoLink" data-id="${cl.id}|${a.id}">🔗 Lien portail client (position)</button></div>`:""}</div>
+ ${tbl(["Produit","Qté","P.U.","Total"],c.lignes.map(l=>`<tr><td>${esc(lname(l))}</td><td>${l.qte}</td><td>${fcfa(l.pu)}</td><td>${fcfa(l.qte*l.pu)}</td></tr>`))}
  <div class="pill">Produits ${fcfa(c.montant_produits)} + livraison ${fcfa(c.frais)} − remise ${fcfa(c.remise)} = <b>${fcfa(c.total)}</b><br>Déjà payé : ${fcfa(paye(c))} · Reste dû : <b>${fcfa(soldeCmd(c))}</b> (${c.paiement==="avance"?"payé d'avance":c.paiement==="partiel"?"paiement partiel":"à la livraison"})</div>
  ${c.obs?`<div class="pill">Observations : ${esc(c.obs)}</div>`:""}
- ${act?`<div class="pill"><b>Mission en cours</b> : ${esc(liv(act.livreur_id).nom)} · ${lb(act)} · code client <b style="font-size:18px">${act.code}</b> <a class="btn sm ghost" target="_blank" rel="noopener" href="${waLink(cl.tel,`ANGEL'S GROUP — votre livraison ${c.numero} arrive. Code de confirmation à donner au livreur : ${act.code}`)}">Envoyer le code (WhatsApp)</a></div>`:""}
- ${ls.length?`<div class="sec">Livraisons (${ls.length})</div>${tbl(["Tentative","Livreur","Statut","Encaissé","Détail"],ls.map(l=>`<tr><td>#${l.tentative}</td><td>${esc(liv(l.livreur_id).nom)}</td><td>${lb(l)}</td><td>${l.montant_encaisse!=null?fcfa(l.montant_encaisse):"—"}</td><td class="sm">${esc(l.motif_echec||l.motif||"")}${l.recu_par?"Reçu par "+esc(l.recu_par):""}</td></tr>`))}`:""}
- <div class="sec">Historique</div><div class="sm">${c.hist.slice().reverse().map(h=>`<div>${fdt(h.ts)} — <b>${ST[h.a]}</b> · ${esc(h.par)}${h.note?" · "+esc(h.note):""}</div>`).join("")}</div>
+ ${act&&!can("vendeur")?`<div class="pill"><b>Mission en cours</b> : ${esc(liv(act.livreur_id).nom)} · ${lb(act)} · code client <b style="font-size:18px">${act.code}</b> <a class="btn sm ghost" target="_blank" rel="noopener" href="${waLink(cl.tel,`ANGEL'S GROUP — votre livraison ${c.numero} arrive. Code de confirmation à donner au livreur : ${act.code}`)}">Envoyer le code (WhatsApp)</a></div>`:""}
+ ${ls.length&&!can("vendeur")?`<div class="sec">Livraisons (${ls.length})</div>${tbl(["Tentative","Livreur","Statut","Encaissé","Détail"],ls.map(l=>`<tr><td>#${l.tentative}</td><td>${esc(liv(l.livreur_id).nom)}</td><td>${lb(l)}</td><td>${l.montant_encaisse!=null?fcfa(l.montant_encaisse):"—"}</td><td class="sm">${esc(l.motif_echec||l.motif||"")}${l.recu_par?"Reçu par "+esc(l.recu_par):""}</td></tr>`))}`:""}
+ <div class="sec">Historique</div><div class="sm">${c.hist.slice().reverse().map(h=>`<div>${fdt(h.ts)} — <b>${ST[h.a]}</b> · ${can("vendeur")?"":esc(h.par)}${h.note&&!can("vendeur")?" · "+esc(h.note):""}</div>`).join("")}</div>
  <div class="flex noprint">${b.join("")}</div>`,{wide:true,focus:false})}
 function printBL(c){
  const cl=cli(c.client_id),w=window.open("","_blank");if(!w)return toast("Autorisez les fenêtres pop-up pour imprimer","err");
- w.document.write(`<html><head><title>${c.numero}</title><style>body{font:14px system-ui;padding:24px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #999;padding:6px;text-align:left}</style></head><body><h2>ANGEL'S GROUP — Bon de livraison</h2><p><b>${c.numero}</b> · ${new Date(c.date).toLocaleString("fr-FR")}<br>Client : ${esc(cl.nom)} · ${esc(cl.tel)}<br>Destination : ${esc(c.adr.zone)} ${esc(c.adr.quartier||"")} — ${esc(c.adr.repere||"")}</p><table><tr><th>Produit</th><th>Qté</th><th>P.U.</th><th>Total</th></tr>${c.lignes.map(l=>`<tr><td>${esc(prod(l.produit_id).nom)}</td><td>${l.qte}</td><td>${fcfa(l.pu)}</td><td>${fcfa(l.qte*l.pu)}</td></tr>`).join("")}</table><p>Livraison : ${fcfa(c.frais)} · Remise : ${fcfa(c.remise)}<br><b>Total : ${fcfa(c.total)}</b> · Reste à payer : <b>${fcfa(soldeCmd(c))}</b></p><p style="margin-top:50px">Nom et signature du destinataire : ________________________</p></body></html>`);
+ w.document.write(`<html><head><title>${c.numero}</title><style>body{font:14px system-ui;padding:24px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #999;padding:6px;text-align:left}</style></head><body><h2>ANGEL'S GROUP — Bon de livraison</h2><p><b>${c.numero}</b> · ${new Date(c.date).toLocaleString("fr-FR")}<br>Client : ${esc(cl.nom)} · ${esc(cl.tel)}<br>Destination : ${esc(c.adr.zone)} ${esc(c.adr.quartier||"")} — ${esc(c.adr.repere||"")}</p><table><tr><th>Produit</th><th>Qté</th><th>P.U.</th><th>Total</th></tr>${c.lignes.map(l=>`<tr><td>${esc(lname(l))}</td><td>${l.qte}</td><td>${fcfa(l.pu)}</td><td>${fcfa(l.qte*l.pu)}</td></tr>`).join("")}</table><p>Livraison : ${fcfa(c.frais)} · Remise : ${fcfa(c.remise)}<br><b>Total : ${fcfa(c.total)}</b> · Reste à payer : <b>${fcfa(soldeCmd(c))}</b></p><p style="margin-top:50px">Nom et signature du destinataire : ________________________</p></body></html>`);
  w.document.close();w.focus();w.print()}
 
 function assignModal(c){
@@ -517,7 +529,7 @@ function motoForm(m){modal(m?"Modifier la moto":"Nouvelle moto",`<div class="g2"
 /* ---------- Finance ---------- */
 VIEWS.finance=()=>{
  const t=ui.fin||"enc";
- const T=tabs("fin",[["enc","Encaissements & reversements"],["ecarts","Écarts"],["comm","Commissions"],["dep","Dépenses"],["renta","Rentabilité"]]);
+ const T=tabs("fin",[["enc","Encaissements & reversements"],["ecarts","Écarts"],["comm","Commissions"],["dep","Dépenses"],["ven","Vendeurs"],["renta","Rentabilité"]]);
  let body="";
  if(t==="enc"){
   const rows=S.livreurs.map(l=>{const att=S.livraisons.filter(x=>x.livreur_id===l.id&&isActive(x)).reduce((a,x)=>a+x.montant_attendu,0),s=soldeLiv(l.id);
@@ -532,6 +544,7 @@ VIEWS.finance=()=>{
   const rz=S.config.zones.map(z=>{const ok=S.livraisons.filter(x=>x.statut==="livree"&&cmd(x.commande_id).adr.zone===z.nom),fr=ok.reduce((a,x)=>a+cmd(x.commande_id).frais,0),co=ok.reduce((a,x)=>a+commissionLiv(x),0),de=S.depenses.filter(d=>d.commande_id&&cmd(d.commande_id).adr.zone===z.nom).reduce((a,d)=>a+d.montant,0);return{n:z.nom,k:ok.length,fr,co,de}}).filter(z=>z.k);
   const row=r=>`<tr><td>${esc(r.n)}</td><td>${r.k}</td><td>${fcfa(r.fr)}</td><td>${fcfa(r.co)}</td><td>${fcfa(r.de)}</td><td><b style="color:${r.fr-r.co-r.de<0?"var(--er)":"var(--ok)"}">${fcfa(r.fr-r.co-r.de)}</b></td></tr>`;
   body=`<h2>Par livreur</h2>${tbl(["Livreur","Livraisons","Frais facturés","Commissions","Dépenses","Marge estimée"],rl.map(row))}<h2>Par zone</h2>${tbl(["Zone","Livraisons","Frais facturés","Commissions","Dépenses","Marge estimée"],rz.map(row),"Aucune livraison")}<p class="mu sm">Marge estimée = frais de livraison − commissions − dépenses. Elle exclut le coût des produits, le carburant non saisi et l'entretien des motos : à ne pas confondre avec le bénéfice réel.</p>`}
+ if(t==="ven")body=tbl(["Vendeur","Commission","Net acquis (livré et encaissé)","Déjà réglé","Reste à régler",""],S.vendeurs.map(v=>{const d=vendDue(v);return`<tr><td><b>${esc(v.nom)}</b></td><td>${v.commission_pct||0} %</td><td>${fcfa(d.acquis)}</td><td>${fcfa(d.regle)}</td><td><b style="color:${d.restant>0?"var(--er)":"var(--ok)"}">${fcfa(d.restant)}</b></td><td>${can("admin","caissier")&&d.restant>0?`<button class="btn sm" data-act="vReg" data-id="${v.id}">Enregistrer un règlement</button>`:""}</td></tr>`}),"Aucun vendeur partenaire")+`<p class="mu sm">Règle : pour chaque commande livrée dont le client a tout payé, le vendeur reçoit le prix de ses articles moins sa commission. La livraison reste acquise à ANGEL'S GROUP. Vérifiez que le livreur a bien reversé l'argent avant de régler le vendeur. Les commandes déjà payées au vendeur ne génèrent aucun règlement.</p>`;
  return`<h1>Finance</h1>${T}${body}`};
 
 /* ---------- Incidents & retours ---------- */
@@ -623,9 +636,9 @@ const ACT={
  reprog:id=>{if(setStatut(cmd(id),"prete","Nouvelle tentative programmée")){audit("Nouvelle tentative",cmd(id).numero);done("Prête pour une nouvelle tentative — à affecter");cmdDetail(id)}},
  orgRetour:id=>{if(setStatut(cmd(id),"retour_cours","Retour du colis organisé")){audit("Retour organisé",cmd(id).numero);done("Retour en cours");cmdDetail(id)}},
  recepRetour:id=>{const c=cmd(id);
-  modal("Réceptionner le retour — "+c.numero,`<div class="sec">Quantités retournées</div>${c.lignes.map((l,i)=>`<label>${esc(prod(l.produit_id).nom)} (envoyé : ${l.qte})<input type="number" name="q${i}" min="0" max="${l.qte}" value="${l.qte}"></label>`).join("")}<label>État du colis<select name="etat">${opts(["Intact","Endommagé","Partiel"])}</select></label><label>Décision<select name="dec">${opts([{v:"stock",t:"Remise en stock"},{v:"quarantaine",t:"Mise en quarantaine"},{v:"autre",t:"Autre traitement"}])}</select></label><label>Motif du retour<input name="motif" value="${esc((livsOf(c.id).filter(l=>l.motif_echec).slice(-1)[0]||{}).motif_echec||"")}" required></label>`,
+  modal("Réceptionner le retour — "+c.numero,`<div class="sec">Quantités retournées</div>${c.lignes.map((l,i)=>`<label>${esc(lname(l))} (envoyé : ${l.qte})<input type="number" name="q${i}" min="0" max="${l.qte}" value="${l.qte}"></label>`).join("")}<label>État du colis<select name="etat">${opts(["Intact","Endommagé","Partiel"])}</select></label><label>Décision<select name="dec">${opts([{v:"stock",t:"Remise en stock"},{v:"quarantaine",t:"Mise en quarantaine"},{v:"autre",t:"Autre traitement"}])}</select></label><label>Motif du retour<input name="motif" value="${esc((livsOf(c.id).filter(l=>l.motif_echec).slice(-1)[0]||{}).motif_echec||"")}" required></label>`,
   {label:"Confirmer la réception",onSubmit:d=>{if(!setStatut(c,"retour_recu","Réceptionné"))return false;
-   if(d.dec==="stock"&&c.stock_sorti){c.lignes.forEach((l,i)=>{const q=Math.min(l.qte,Math.max(0,+d["q"+i]||0));if(q>0)stockMvt(prod(l.produit_id),q,"retour_stock",c.numero)});c.stock_sorti=false}
+   if(d.dec==="stock"&&c.stock_sorti){c.lignes.forEach((l,i)=>{const q=Math.min(l.qte,Math.max(0,+d["q"+i]||0));if(q>0&&l.produit_id)stockMvt(prod(l.produit_id),q,"retour_stock",c.numero)});c.stock_sorti=false}
    S.retours.push({id:uid("r"),commande_id:c.id,ts:now(),motif:d.motif,etat:d.etat,decision:d.dec==="stock"?"Remise en stock":d.dec==="quarantaine"?"Quarantaine":"Autre",par:who(),qtes:c.lignes.map((l,i)=>+d["q"+i]||0)});
    audit("Retour réceptionné",c.numero+" — "+d.dec);done("Retour enregistré")}})},
  forceStatut:id=>{const c=cmd(id);modal("Correction exceptionnelle — "+c.numero,`<div class="al warn">Réservé à l'administrateur. L'opération est tracée dans le journal d'audit. Le stock et les fonds ne sont pas recalculés automatiquement.</div><label>Nouveau statut<select name="s">${opts(Object.entries(ST).map(e=>({v:e[0],t:e[1]})),c.statut)}</select></label><label>Justification<textarea name="m" required rows="2"></textarea></label>`,
@@ -666,6 +679,9 @@ const ACT={
  lFail:id=>{const l=byId(S.livraisons,id);modal("Livraison impossible",`<label>Motif<select name="m">${opts(S.config.motifs)}</select></label><label>Observation<textarea name="o" rows="2"></textarea></label>`,{label:"Enregistrer l'échec",cls:"er",onSubmit:d=>{if(echec(l,d.m,d.o))done("Échec enregistré — le superviseur est informé")}})},
  myInc:()=>{const lv=livreurOf(ME),a=S.livraisons.find(l=>l.livreur_id===lv.id&&isActive(l));incForm(lv.id,a?a.commande_id:null)},
  sendPos:sendPosNow,
+ newVend:()=>vendForm(),editVend:id=>vendForm(vendOf(id)),newVCmd:vCmdForm,vImport:vImportModal,
+ csvModel:()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["ref;client;tel;zone;quartier;repere;article;qte;prix\nA001;Mme Kouassi;0707123456;Cocody;Angré;Près de la pharmacie;Robe wax;2;12000\nA001;Mme Kouassi;0707123456;Cocody;Angré;Près de la pharmacie;Sandales;1;8000\nA002;M. Bamba;0505987654;Yopougon;Sicogi;Derrière l'école;Sac à main;1;15000\n"],{type:"text/csv"}));a.download="modele_commandes.csv";a.click()},
+ vReg:id=>{const v=vendOf(id),d=vendDue(v);modal("Règlement — "+v.nom,`<div class="pill">Reste à régler : <b>${fcfa(d.restant)}</b></div><label>Montant réglé<input type="number" name="m" min="1" max="${d.restant}" required value="${d.restant}"></label><label>Mode<select name="mode">${opts(S.config.modes)}</select></label><label>Note / référence<input name="note"></label>`,{label:"Enregistrer",cls:"ok",onSubmit:x=>{const m=+x.m;if(m<=0||m>d.restant)return toast("Montant invalide","err"),false;S.reglements.push({id:uid("rg"),vendeur_id:id,montant:m,mode:x.mode,note:x.note,ts:now(),par:who()});audit("Règlement vendeur",`${v.nom} — ${fcfa(m)}`);done("Règlement enregistré")}})},
  lMap:id=>{ui.mapOpen=ui.mapOpen||{};ui.mapOpen[id]=!ui.mapOpen[id];render()},
  lAskGeo:id=>{const c=cmd(byId(S.livraisons,id).commande_id);geoLinkModal(c.client_id,c.adr.id,c.numero)},
  geoLink:id=>{const[c,a]=id.split("|");geoLinkModal(c,a)},geoPick:id=>{const[c,a]=id.split("|");geoPickModal(c,a)},geoPaste:id=>{const[c,a]=id.split("|");geoPasteModal(c,a)},
@@ -682,6 +698,97 @@ document.addEventListener("change",e=>{const k=e.target.dataset&&e.target.datase
 window.addEventListener("storage",e=>{if(e.key!==KEY||!e.newValue||$("#modal").innerHTML)return;try{S=JSON.parse(e.newValue)}catch(x){return}
  if(ME){const u=usr(ME.id);if(!u||!u.actif){ME=null;sessionStorage.removeItem("angels_me");toast("Votre compte a été désactivé","err")}else ME=u}render()});
 setInterval(()=>{if(ME&&!(ME.role==="livreur"&&Object.values(ui.mapOpen||{}).some(Boolean))&&!$("#modal").innerHTML&&!document.activeElement.matches("input,select,textarea"))render()},60000);
+
+/* ============================================================
+   VENDEURS PARTENAIRES (vendeurs en ligne / fournisseurs)
+   ============================================================ */
+function vendDue(v){
+ const mine=S.commandes.filter(c=>c.vendeur_id===v.id);
+ const net=c=>Math.round((c.montant_produits-c.remise)*(1-(+v.commission_pct||0)/100));
+ const elig=mine.filter(c=>c.statut==="livree"&&!c.vendeur_encaisse&&soldeCmd(c)===0);
+ const acquis=elig.reduce((a,c)=>a+net(c),0),regle=S.reglements.filter(r=>r.vendeur_id===v.id).reduce((a,r)=>a+r.montant,0);
+ const attente=mine.filter(c=>["confirmee","preparation","prete","affectee","en_cours"].includes(c.statut)&&!c.vendeur_encaisse).reduce((a,c)=>a+net(c),0);
+ return{acquis,regle,restant:acquis-regle,attente,elig,net}}
+const normTxt=t=>String(t||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim();
+function creerCmdVendeur(v,d){
+ const tel=d.tel.replace(/\s/g,"");
+ let cl=S.clients.find(c=>c.vendeur_id===v.id&&c.tel.replace(/\s/g,"")===tel);
+ if(!cl){cl={id:uid("cl"),nom:d.nom.trim(),tel:d.tel.trim(),tel2:"",adresses:[],note:"",vendeur_id:v.id};S.clients.push(cl)}
+ let ad=cl.adresses.find(a=>a.zone===d.zone&&normTxt(a.quartier)===normTxt(d.quartier)&&normTxt(a.repere)===normTxt(d.repere));
+ if(!ad){ad={id:uid("a"),libelle:"Livraison",zone:d.zone,quartier:(d.quartier||"").trim(),repere:(d.repere||"").trim(),gps:null,instructions:(d.ins||"").trim(),defaut:!cl.adresses.length};cl.adresses.push(ad)}
+ const prods=d.lignes.reduce((a,l)=>a+l.qte*l.pu,0),paye=d.pay==="paye";
+ const c=creerCmd({vendeur_id:v.id,vendeur_encaisse:paye,client_id:cl.id,adr:Object.assign({},ad),lignes:d.lignes.map(l=>({produit_id:null,desig:l.desig,qte:l.qte,pu:l.pu})),frais:(zone(d.zone)||{}).frais||0,remise:0,paiement:paye?"partiel":"livraison",acompte:paye?prods:0,mode:paye?"Payé au vendeur":"Espèces",priorite:"normale",canal:"Vendeur partenaire",obs:d.obs||"",confirmer:false});
+ setStatut(c,"attente","Commande déposée par le vendeur");return c}
+
+VIEWS.mesCmd=()=>{
+ const v=vend();if(!v)return'<div class="card">Compte vendeur non rattaché à une fiche vendeur. Contactez ANGEL\'S GROUP.</div>';
+ const mine=S.commandes.filter(c=>c.vendeur_id===v.id),d=vendDue(v),n=f=>mine.filter(f).length;
+ return`<div class="between"><h1>Mes commandes à livrer</h1><div class="flex"><button class="btn" data-act="newVCmd">➕ Nouvelle commande</button><button class="btn ghost" data-act="vImport">⬆ Importer un fichier CSV</button></div></div>
+ <p class="mu">Bienvenue <b>${esc(v.nom)}</b>. Déposez ici les commandes de vos clients : ANGEL'S GROUP confirme, prépare et livre à moto, puis vous règle le prix de vos articles.</p>
+ <div class="grid">${kpi("À confirmer",n(c=>c.statut==="attente"),"w")}${kpi("En cours",n(c=>["confirmee","preparation","prete","affectee","en_cours"].includes(c.statut)))}${kpi("Livrées",n(c=>c.statut==="livree"),"o")}${kpi("Échecs / retours",n(c=>["echouee","retour_cours","retour_recu"].includes(c.statut)),"e")}${kpi("Reste à recevoir",fcfa(d.restant),"o")}</div>
+ <h2>Mes commandes</h2>${tbl(["Commande","Client / destination","Total client","Statut",""],mine.map(c=>`<tr><td><b>${c.numero}</b><br><span class="mu sm">${fdt(c.date)}</span></td><td>${esc(cli(c.client_id).nom)}<br><span class="mu sm">${esc(c.adr.zone)} · ${esc(c.adr.quartier||"")}</span></td><td>${fcfa(c.total)}<br><span class="mu sm">${c.vendeur_encaisse?"produits déjà payés":"à encaisser "+fcfa(soldeCmd(c))}</span></td><td>${sb(c)}</td><td><button class="btn sm ghost" data-act="cmdDetail" data-id="${c.id}">Ouvrir</button></td></tr>`),"Aucune commande pour le moment")}`};
+VIEWS.mesReg=()=>{
+ const v=vend();if(!v)return'<div class="card">Compte vendeur non rattaché.</div>';const d=vendDue(v);
+ return`<h1>Mes règlements</h1><div class="grid">${kpi("Net acquis (livré et encaissé)",fcfa(d.acquis))}${kpi("Déjà réglé",fcfa(d.regle),"o")}${kpi("Reste à recevoir",fcfa(d.restant),d.restant?"w":"")}${kpi("En cours de livraison (à venir)",fcfa(d.attente))}</div>
+ <p class="mu sm">Net = prix de vos articles − commission de ${v.commission_pct||0} %. Les frais de livraison reviennent à ANGEL'S GROUP. Un règlement est dû dès que la commande est livrée et entièrement payée par le client.</p>
+ <h2>Commandes à régler / réglées</h2>${tbl(["Commande","Livrée le","Articles","Net pour vous"],d.elig.map(c=>`<tr><td>${c.numero}</td><td>${fdt((livsOf(c.id).filter(l=>l.statut==="livree").slice(-1)[0]||{}).fin_at)}</td><td class="sm">${c.lignes.map(l=>esc(l.qte+"× "+lname(l))).join(", ")}</td><td><b>${fcfa(d.net(c))}</b></td></tr>`),"Aucune commande livrée")}
+ <h2>Règlements reçus</h2>${tbl(["Date","Montant","Mode","Note"],S.reglements.filter(r=>r.vendeur_id===v.id).slice().reverse().map(r=>`<tr><td>${fdt(r.ts)}</td><td><b>${fcfa(r.montant)}</b></td><td>${esc(r.mode)}</td><td class="sm">${esc(r.note||"")}</td></tr>`),"Aucun règlement")}`};
+VIEWS.vendeurs=()=>`<div class="between"><h1>Vendeurs partenaires</h1>${can("admin","commercial")?'<button class="btn" data-act="newVend">➕ Vendeur partenaire</button>':""}</div>
+ <p class="mu">Vendeurs en ligne et fournisseurs qui déposent eux-mêmes leurs commandes à livrer. Chacun ne voit que ses propres commandes.</p>
+ ${tbl(["Vendeur","Téléphone","Commission","Commandes","À confirmer","Reste à régler","Compte",""],S.vendeurs.map(v=>{const u=usr(v.user_id),d=vendDue(v),m=S.commandes.filter(c=>c.vendeur_id===v.id);return`<tr><td><b>${esc(v.nom)}</b></td><td>${esc(v.tel)}</td><td>${v.commission_pct||0} %</td><td>${m.length}</td><td>${m.filter(c=>c.statut==="attente").length||"—"}</td><td>${fcfa(d.restant)}</td><td>${u&&u.actif?badge("Actif","ok"):badge("Désactivé","er")}</td><td>${can("admin","commercial")?`<button class="btn sm ghost" data-act="editVend" data-id="${v.id}">Modifier</button>`:""}</td></tr>`}),"Aucun vendeur partenaire. Créez-en un pour qu'il puisse déposer ses commandes.")}`;
+function vendForm(v){const u=v&&usr(v.user_id);
+ modal(v?"Modifier le vendeur":"Nouveau vendeur partenaire",`<div class="g2"><label>Nom / boutique<input name="nom" required value="${esc(v?v.nom:"")}"></label><label>Téléphone<input name="tel" required value="${esc(v?v.tel:"")}"></label></div><div class="g2"><label>Commission sur ses articles (%)<input type="number" name="com" min="0" max="100" step="0.5" value="${v?v.commission_pct||0:0}"></label><label>${v?"Nouveau PIN (vide = inchangé)":"PIN de connexion (4 à 8 chiffres)"}<input name="pin" inputmode="numeric" pattern="[0-9]{4,8}" ${v?"":"required"}></label></div>${v?`<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" name="actif" style="width:auto" ${u&&u.actif?"checked":""}> Compte actif</label>`:""}`,
+ {onSubmit:d=>{if(v){v.nom=d.nom;v.tel=d.tel;v.commission_pct=+d.com||0;u.nom=d.nom;u.actif=!!d.actif;if(d.pin)u.pin_h=hashPin(u.id,d.pin);audit("Modification vendeur",d.nom)}
+  else{const nu={id:uid("u"),nom:d.nom,role:"vendeur",actif:true};nu.pin_h=hashPin(nu.id,d.pin);S.users.push(nu);S.vendeurs.push({id:uid("v"),user_id:nu.id,nom:d.nom,tel:d.tel,commission_pct:+d.com||0});audit("Création vendeur partenaire",d.nom)}save();render()}})}
+function vCmdForm(){
+ const v=vend();const row=()=>`<div class="vrow flex" style="margin-bottom:6px"><input class="vd" placeholder="Article" style="flex:2"><input class="vq" type="number" min="1" value="1" style="width:70px"><input class="vp" type="number" min="0" placeholder="Prix unitaire" style="width:110px"><button type="button" class="btn sm er vdel">✕</button></div>`;
+ modal("Nouvelle commande à livrer",`<div class="sec">Client à livrer</div><div class="g2"><label>Nom du client<input name="nom" required></label><label>Téléphone<input name="tel" inputmode="tel" required></label></div>
+ <div class="g3"><label>Zone<select name="zone" id="v_zone">${opts(S.config.zones.map(z=>z.nom))}</select></label><label>Quartier<input name="quartier"></label><label>Point de repère<input name="repere"></label></div><label>Instructions d'accès<input name="ins"></label>
+ <div class="sec">Articles (prix de vente au client)</div><div id="v_lignes">${row()}</div><button type="button" class="btn sm ghost" id="v_add">+ Ajouter un article</button>
+ <label>Paiement<select name="pay" id="v_pay"><option value="livraison">Le client paie tout à la livraison (articles + livraison)</option><option value="paye">Articles déjà payés au vendeur — le client ne paie que la livraison</option></select></label><label>Note pour le livreur<input name="obs"></label>
+ <div class="card" style="margin:0;background:#f7f8fd"><div class="between"><span>Articles <b id="v_p">0 F</b></span><span>Livraison <b id="v_f">0 F</b></span><span>Total client <b id="v_t">0 F</b></span></div><div class="between sm mu" style="margin-top:4px"><span>Le livreur encaisse <b id="v_s">0 F</b></span><span>Vous recevrez <b id="v_n">0 F</b> (commission ${v.commission_pct||0} %)</span></div></div>
+ <div class="sm mu">Le tarif de livraison dépend de la zone. Vous pourrez envoyer au client un lien pour qu'il indique sa position exacte sur la carte.</div>`,
+ {wide:true,label:"Déposer la commande",onSubmit:(d,f)=>{
+  const lignes=[...f.querySelectorAll(".vrow")].map(r=>({desig:r.querySelector(".vd").value.trim(),qte:+r.querySelector(".vq").value,pu:+r.querySelector(".vp").value})).filter(l=>l.desig);
+  if(!lignes.length||lignes.some(l=>!(l.qte>0)||!(l.pu>=0)||isNaN(l.pu)))return toast("Ajoutez au moins un article avec quantité et prix","err"),false;
+  if(!d.quartier.trim()&&!d.repere.trim())return toast("Indiquez le quartier ou un point de repère","err"),false;
+  const c=creerCmdVendeur(v,Object.assign({},d,{lignes}));save();toast("Commande "+c.numero+" déposée. ANGEL'S GROUP va la confirmer.","ok");render()}});
+ const calc=()=>{const rows=[...document.querySelectorAll(".vrow")],pr=rows.reduce((a,r)=>a+(+r.querySelector(".vq").value||0)*(+r.querySelector(".vp").value||0),0),fr=(zone($("#v_zone").value)||{}).frais||0,paye=$("#v_pay").value==="paye";
+  $("#v_p").textContent=fcfa(pr);$("#v_f").textContent=fcfa(fr);$("#v_t").textContent=fcfa(pr+fr);$("#v_s").textContent=fcfa(paye?fr:pr+fr);$("#v_n").textContent=paye?"— (déjà payé)":fcfa(pr*(1-(+v.commission_pct||0)/100))};
+ const bind=r=>r.querySelector(".vdel").onclick=()=>{if(document.querySelectorAll(".vrow").length>1){r.remove();calc()}};
+ document.querySelectorAll(".vrow").forEach(bind);
+ $("#v_add").onclick=()=>{const t=document.createElement("div");t.innerHTML=row();const r=t.firstChild;$("#v_lignes").appendChild(r);bind(r)};
+ $("#mf").addEventListener("input",calc);$("#mf").addEventListener("change",calc);calc()}
+/* Import CSV : ref;client;tel;zone;quartier;repere;article;qte;prix */
+function parseCSV(t){
+ const lines=String(t).split(/\r?\n/).filter(l=>l.trim());if(!lines.length)return{orders:[],err:["Fichier vide"]};
+ const cnt=x=>(lines[0].split(x).length-1),sep=[";","\t",","].sort((a,b)=>cnt(b)-cnt(a))[0];
+ const cell=x=>x.trim().replace(/^"|"$/g,"").trim();
+ let start=0;if(/^(ref|r[eé]f|client|nom)/i.test(cell(lines[0].split(sep)[0])||""))start=1;
+ const orders=new Map(),err=[];
+ for(let i=start;i<lines.length;i++){const c=lines[i].split(sep).map(cell),n="Ligne "+(i+1)+" : ";
+  const [ref,nom,tel,zn,quartier,repere,article,qte,prix]=c;const z=S.config.zones.find(z=>normTxt(z.nom)===normTxt(zn));
+  const q=+String(qte).replace(",","."),pu=+String(prix).replace(/\s/g,"").replace(",",".");
+  if(!nom||!tel){err.push(n+"nom et téléphone requis");continue}
+  if(!z){err.push(n+"zone inconnue « "+(zn||"")+" » (zones : "+S.config.zones.map(z=>z.nom).join(", ")+")");continue}
+  if(!quartier&&!repere){err.push(n+"quartier ou repère requis");continue}
+  if(!article){err.push(n+"article manquant");continue}
+  if(!(q>0)||!Number.isInteger(q)){err.push(n+"quantité invalide");continue}
+  if(!(pu>=0)||isNaN(pu)){err.push(n+"prix invalide");continue}
+  const key=ref||"L"+i;let o=orders.get(key);
+  if(!o){o={nom,tel,zone:z.nom,quartier:quartier||"",repere:repere||"",ins:"",pay:"livraison",obs:ref?"Réf. vendeur : "+ref:"",lignes:[]};orders.set(key,o)}
+  else if(o.tel.replace(/\s/g,"")!==tel.replace(/\s/g,"")){err.push(n+"la référence "+ref+" est utilisée pour deux clients différents");continue}
+  o.lignes.push({desig:article,qte:q,pu})}
+ return{orders:[...orders.values()],err}}
+function vImportModal(){
+ modal("Importer des commandes (CSV)",`<p class="sm">Une ligne par article. Colonnes séparées par « ; » :<br><code>ref ; client ; tel ; zone ; quartier ; repere ; article ; qte ; prix</code><br>Les lignes qui ont la même <b>ref</b> forment une seule commande. Les commandes sont payables à la livraison.</p>
+ <div class="flex"><button type="button" class="btn sm ghost" data-act="csvModel">⬇ Télécharger un modèle</button><label class="btn sm ghost" style="margin:0;cursor:pointer;display:inline-block">Choisir un fichier<input type="file" accept=".csv,.txt" id="v_file" class="hide"></label></div>
+ <label>Ou collez le contenu ici<textarea name="csv" id="v_csv" rows="7" required></textarea></label>`,
+ {label:"Importer",wide:true,focus:false,onSubmit:d=>{const r=parseCSV(d.csv);
+  if(r.err.length)return toast(r.err.slice(0,3).join(" · ")+(r.err.length>3?" … (+"+(r.err.length-3)+" autres)":"")+" — aucune commande créée","err"),false;
+  if(!r.orders.length)return toast("Aucune commande à importer","err"),false;
+  const v=vend();r.orders.forEach(o=>creerCmdVendeur(v,o));audit("Import CSV vendeur",v.nom+" — "+r.orders.length+" commande(s)");save();toast(r.orders.length+" commande(s) déposée(s)","ok");render()}});
+ $("#v_file").onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{$("#v_csv").value=rd.result};rd.readAsText(f)}}
 
 /* ============================================================
    CARTES & PORTAIL CLIENT (géopositionnement de l'adresse)
