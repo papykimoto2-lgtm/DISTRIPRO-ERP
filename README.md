@@ -1,410 +1,85 @@
-# 🍺 AFRI-BAR Manager v2.1 — Guide de démarrage rapide
+# ANGEL'S GROUP ERP — V1 Livraisons à moto
 
-> Application monobloc HTML5 pour la gestion de **dépôts/concessionnaires de boissons** en Côte d'Ivoire.
-> Conforme au cahier des charges + extensions **Ristournes** et **Facture 3 lignes DGI** v2.2 — Juin 2026
+Fichier unique : `index.html` (aucune dépendance, ouvrable par double-clic ; la carte OpenStreetMap demande Internet).
 
----
+## Démonstration
+PIN : admin `1234` · direction `0000` · superviseur `1111` · caissier `2222` · commercial `3333` · préparateur `4444` · livreurs `0001` (Issa) / `0002` (Kouamé) / `0003` (Sékou).
+La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livreur) ; ils se synchronisent via le stockage local.
 
-## 📦 Contenu de la livraison
-
-| Fichier | Rôle |
+## Couverture du cahier des charges (V1)
+| Module | État |
 |---|---|
-| `AfriBar_Manager.html` | **L'application complète** (~180 Ko, tout-en-un) |
-| `DEMARRER_AFRI_BAR.bat` | Lanceur Windows (serveur local Python sur port 8080) |
-| `README.md` | Ce fichier |
-
-**Zéro dépendance, zéro internet requis.** Persistance localStorage.
-
----
-
-## 🚀 Démarrage en 3 secondes
-
-- **Firefox** : double-clic sur `AfriBar_Manager.html` → ça marche directement
-- **Chrome Windows** : double-clic sur `DEMARRER_AFRI_BAR.bat` (nécessite Python)
-- **Android** : héberger sur un PC du même Wi-Fi, ouvrir avec Chrome mobile
-- **Production** : upload sur n'importe quel serveur statique (Netlify, OVH...)
-
----
-
-## ✅ Modules livrés
-
-| # | Module | Fonctionnalités clés |
-|---|---|---|
-| 📊 | **Tableau de bord** | 8 KPI temps réel, graphe CA 7j, alertes prioritaires consolidées, actions rapides |
-| 🏭 | **Concessionnaires** | NIF + agrément + territoire (SOLIBRA, SIFCA, Import Elite) |
-| 📦 | **Fournisseurs** | Fournisseurs annexes (emballages, glace, consommables) |
-| 🛒 | **Achats / Entrées** | Saisie BL, lignes multiples, MAJ stock auto |
-| 🔁 | **Transferts inter-dépôts** | BL, prix de transfert, mouvements out/in |
-| 🍺 | **Articles** | Modèle unifié **liquide + bouteille + casier** |
-| 📦 | **Stock unifié** | 3 composants synchronisés, seuils, alertes |
-| 📜 | **Journal mouvements** | Historique filtré par type (achat/vente/transfert/retour/perte/ajustement) |
-| 🧾 | **Inventaire physique** | Saisie écart, ajustement automatique du stock |
-| 👥 | **Clients** | NIF, type, solde et consignation visibles en un coup d'œil |
-| 🧾 | **Factures FNE** | Format DGI CI complet : NIF, HT/TVA/TTC, **montant en lettres**, QR, impression, **partage WhatsApp** |
-| 💰 | **Encaissements** | 7 modes : Espèces, Wave, OM, MTN, Moov, Chèque, Virement |
-| 🚨 | **Surveillance emballages** | Alertes **3j🟠 / 7j🔴**, badge nav, valeur exposée, appel direct, signalement perte, retour différé |
-| 🎁 | **🆕 Ristournes** | **Module complet** : 4 types × 2 directions × 3 modes — voir détail ci-dessous |
-| 🌐 | **Réseau distribution** | Vue hiérarchique 4 niveaux |
-| 🏬 | **Dépôts & sous-dépôts** | Gestion hiérarchique |
-| ⚙️ | **Paramétrage** | 6 sections (identité, FNE, seuils, modes paiement, export, zone danger) |
-
----
-
-## 🎁 Module Ristournes (extension v2.1)
-
-Conçu pour les utilisateurs qui sont **à la fois concessionnaires** (recevant des ristournes des brasseurs) **et grossistes** (accordant des ristournes à leurs propres dépôts/clients).
-
-### 4 types de ristournes gérés par contrat
-
-| Type | Description | Configurable |
-|---|---|---|
-| 📊 **Volume / Palier** | % du CA HT (ou F/casier) avec paliers progressifs (ex : 0–500k=0%, 500k–2.5M=1.5%, 2.5M+=3%) | base + paliers illimités |
-| 🎯 **Objectif** | Forfait fixe si l'objectif (casiers ou CA) est atteint dans la période | objectif + bonus |
-| ⏱ **Escompte comptant** | % du HT si paiement dans le délai (ex : 1.5% sous 7 jours) | délai + taux |
-| 🎁 **Bonus nature** | X casiers offerts pour Y casiers achetés (ex : 1 pour 50) | seuil + casiers offerts |
-
-### 2 directions
-
-- ⬇️ **Reçue** : contrat avec un concessionnaire (calcul sur vos achats chez lui)
-- ⬆️ **Accordée** : contrat avec un dépôt/sous-dépôt/client (calcul sur vos ventes ou transferts vers lui)
-
-La direction est déterminée automatiquement par le type de partenaire choisi.
-
-### 3 modes d'application (configurables PAR contrat)
-
-- **Avoir sur facture suivante** (le plus courant)
-- **Avoir en compte cumulé** (à utiliser quand vous voulez)
-- **Virement séparé fin de période**
-
-→ vous gérez le « mix selon le concessionnaire » de votre cas.
-
-### Calcul automatique
-
-- Recalcul **à chaque ouverture du module** ou via le bouton 🔄
-- Calcule la **période courante ET précédente** (pour voir les ristournes acquises mais pas encore appliquées)
-- Périodes : mensuelle / trimestrielle / annuelle
-- Le tableau de bord affiche **Ristournes nettes (reçues − accordées)** → indicateur de marge réelle
-
-### Données démo fournies
-
-5 contrats pré-configurés :
-1. **SOLIBRA** (reçue, mensuelle) : volume 4 paliers % du CA + escompte 1.5% à 7j → mode avoir facture
-2. **SIFCA** (reçue, mensuelle) : volume 3 paliers % du CA + objectif 1.5M / 50k bonus + 1 casier offert tous les 50 → mode avoir compte
-3. **Import Elite** (reçue, trimestrielle) : 1% sur tout le CA + 2% escompte comptant → mode virement séparé
-4. **Sous-dépôt Yopougon** (accordée, mensuelle) : palier casiers + objectif 150c / 25k bonus → mode avoir facture
-5. **Sous-dépôt Marcory** (accordée, mensuelle) : escompte 1% à 3j → mode avoir facture
-
----
-
-
----
-
-## 🧾 Structure facture conforme DGI (v2.2)
-
-Chaque produit récupérable génère **3 lignes** sur la facture FNE :
-
-| Ligne | Désignation | Quantité | P.U. | TVA |
-|---|---|---|---|---|
-| 1 | **💧 Liquide** (le contenu) | en bouteilles | prix btl | ✓ 18% |
-| 2 | **🍺 Bouteilles vides consignées** | en bouteilles | consigne btl (ex 25 F) | hors TVA |
-| 3 | **🧺 Casier vide consigné** | en casiers | consigne casier (ex 300 F) | hors TVA |
-
-Les produits **perdus** (canettes, vins importés) génèrent 1 seule ligne (liquide).
-
-**Conformité DGI** : la consigne d'emballage récupérable n'est pas soumise à la TVA (dépôt de garantie remboursable). Seul le liquide est taxable.
-
-**Retour à la livraison** : saisi globalement, alloué FIFO aux consignations actives, affiché en ligne d'avoir négatif sur la facture.
-
-Exemple — Facture 2 casiers de Flag, aucun retour :
-
-```
-💧 Flag 65cl — Liquide                    24 btl × 600 F = 14 400 F  [TVA]
-🍺 Bouteilles vides consignées — Flag     24 btl ×  25 F =    600 F  [hors]
-🧺 Casiers vides consignés — Flag          2 cas × 300 F =    600 F  [hors]
-                                                            ─────────
-                                          Liquide HT            14 400 F
-                                          TVA 18%                2 592 F
-                                          Consigne emballages    1 200 F
-                                          ────────────────────────────
-                                          TOTAL TTC             18 192 F
-```
-
-**Consignation client** : pour chaque produit récupérable, une consignation active est créée avec le montant **plein** facturé. Elle est ensuite réduite par les retours (à la livraison ou différés). Tant que reste > 0, l'alerte 🟠/🔴 s'applique.
-## 🧺 Gestion des emballages (cœur du métier)
-
-Modèle unifié 3 composants : 💧 Liquide + 🍺 Bouteille (consignée 25 F) + 🧺 Casier (consigné 300 F).
-
-À la facturation : calcul automatique des emballages attendus, saisie des rapportés, calcul déficit, intégration consignation. 3 scénarios couverts (retour complet / partiel / aucun).
-
-Surveillance : alertes 🟠 à 3 jours / 🔴 à 7 jours, badge rouge dans la nav, bouton appel direct.
-
----
-
-
----
-
-## 🚚 Module Livraison (v2.3 — nouveau)
-
-Chaîne complète : badge client → tournée → bordereau → mode livreur → réconciliation.
-
-### 🪪 Badges clients
-
-**Génération automatique** d'un code unique par client à la création :
-- Format : 3 lettres du nom + tiret + 3 chars hex (ex : `BUV-9UE` pour Buvette Chez Marie)
-- Identicon visuel symétrique unique par client (pour identité visuelle de la carte)
-- Carte format **74 × 52 mm** (carte fidélité standard) imprimable depuis la vue 🪪 Badges
-- Le client garde le badge dans son établissement
-- Coût d'impression : ~50 F dans un cybercafé
-
-→ Vue **🪪 Badges clients** : grille de toutes les cartes, clic = impression individuelle, bouton « Imprimer tous » pour planche de cartes A4
-
-### 🚚 Tournées de livraison
-
-Workflow en 4 phases (statut visible en temps réel) :
-
-| Phase | État | Actions |
-|---|---|---|
-| 1. Préparation | 📋 Préparée | Créer, ajouter livraisons (= factures), imprimer BL |
-| 2. Départ | 🚦 En cours | Le livreur effectue les livraisons une par une |
-| 3. Retour | ⏳ Terminée | Tournée close, en attente réconciliation manager |
-| 4. Réconciliation | ✓ Réconciliée | Cash physique compté, vides comptés, écart calculé, validation |
-
-Chaque tournée contient :
-- Livreur (sélection dans `STATE.config.livreurs`)
-- Véhicule (Tricycle, Scooter, Pick-up, Camion, À pied)
-- Zone (texte libre, ex : « Yopougon + Treichville »)
-- Liste de livraisons liées à des factures existantes
-
-### 🧾 Bordereau de Livraison (BL)
-
-**Document de transport distinct de la facture FNE** :
-- Format A4 imprimable, structuré par client
-- Inclut : nom + code badge, articles à livrer, vides à reprendre, montant TTC
-- Zone de signature contradictoire (livreur + client)
-- Mention explicite : « Document non fiscal, sert de bon de transport »
-- La facture FNE reste le seul document fiscal
-
-→ Bouton « 🖨 Imprimer BL » sur la vue détail tournée
-
-### 📱 Mode livreur
-
-**Interface dédiée**, simplifiée pour usage terrain :
-- Bouton « Identifier client » avec saisie code badge **gros et clair** + sélection dans la liste tournée en fallback
-- Carte par client à livrer (gros titre, code badge mis en valeur, prix, lien appel direct)
-- Header noir avec stats temps réel : Livrés / Encaissé / Vides
-- Card cliquable → modal « Effectuer livraison » avec 4 statuts : ✓ Livré · ⚠ Partiel · ❌ Absent · 🚫 Refusé
-- Saisie consolidée : vides rapportés + encaissement (7 modes) + note + référence
-
-→ Vue **📱 Mode livreur** affiche la tournée du jour en cours automatiquement
-
-### ✓ Réconciliation fin de tournée
-
-À la fermeture, le manager saisit :
-- **Cash physique compté** (espèces seulement) → écart caisse calculé automatiquement (positif = cash en plus, négatif = manquant)
-- **Vides physiques comptés** (vs déclarés par livreur)
-- Note de réconciliation libre
-
-L'écart est mis en valeur en couleur (🔴 si négatif). La tournée passe en statut « ✓ Réconciliée » avec historique complet (créée, démarrée, terminée, réconciliée).
-
-### Workflow type d'une journée
-
-```
-07h00 — Manager au dépôt
-  └─ Crée tournée TRN-20260603-01 (Issa, tricycle, zone Yopougon)
-  └─ Ajoute 8 factures à livrer (clients connus, montants pré-saisis)
-  └─ Imprime BL → remet au livreur
-
-08h00 — Issa démarre
-  └─ Tournée en_cours
-  └─ Charge le tricycle avec articles + vides à reprendre
-
-09h-15h — Sur le terrain (Issa, app mode livreur)
-  └─ Arrive chez "Buvette Chez Marie"
-  └─ Scanne (ou tape) code BUV-9UE → modal s'ouvre
-  └─ Confirme livraison · saisie vides rapportés · Wave 18 192 F
-  └─ Validation → passe au client suivant
-  └─ 7 autres livraisons + 1 absent (reporté)
-
-15h30 — Retour dépôt
-  └─ Issa : "Terminer la tournée"
-  └─ Statut = terminée
-
-16h00 — Manager réconcilie
-  └─ Compte cash physique : 80 200 F vs prévu 80 000 F → +200 F (pourboires)
-  └─ Compte vides physiques : 32c + 280b conformes
-  └─ Validation → Réconciliée ✓
-```
-
-### Limitations actuelles (Phase 1 prototype)
-
-| Fonctionnalité | État | Phase 2 |
-|---|---|---|
-| Badges 6 chars + identicon | ✓ Implémenté | + Vrai QR code scannable |
-| Saisie manuelle du code | ✓ Implémenté | + Scanner caméra |
-| Bordereau imprimable | ✓ Implémenté | + Signature numérique sur tablette |
-| Mode livreur simplifié | ✓ Implémenté | + Auth livreur séparée + sync cloud |
-| Réconciliation cash+vides | ✓ Implémenté | + Photos justificatives |
-
----
-
-## ↩ Module Retours marchandise (v2.4 — nouveau)
-
-Distinct du retour d'emballages vides : ce module gère la **reprise de produits livrés non vendus**, avec génération d'un **avoir FNE**, gestion fiscale conforme DGI, et option de **réaffectation directe à un autre client en urgence**.
-
-### Le scénario type
-
-Un client (ou sous-dépôt) est livré sur crédit (BL + facture émise non payée). Il n'arrive pas à écouler la marchandise. Vous avez **besoin urgent** de ces produits pour un autre client. L'app gère :
-1. La saisie du retour (total ou partiel, ligne par ligne)
-2. La génération d'un **avoir FNE** (document fiscal miroir de la facture)
-3. La **réaffectation immédiate** facultative à un autre client (nouvelle facture FNE créée automatiquement)
-4. La mise à jour cascade : stock, facture origine, consignations, ristournes
-
-### Document AVOIR FNE (format DGI)
-
-L'avoir respecte la pratique fiscale DGI :
-- Numérotation distincte : `AV-2026XXX`
-- Référence obligatoire à la facture origine
-- Structure 3 lignes par produit (en miroir négatif de la facture)
-- TVA aussi créditée (sur le liquide uniquement)
-- Mention claire « AVOIR DE RETOUR — en miroir de FNE-XXX »
-- Montant en lettres
-
-### Les 3 décisions par retour (toutes flexibles)
-
-**1. Consigne reprise ou pas ?** (par ligne d'article)
-- ☑ Cochée par défaut → la consigne (vides) est aussi remboursée, la consignation associée est soldée. Cas typique : casier(s) rendu(s) PLEIN(S) et fermé(s).
-- ☐ Décochée → seul le liquide est remboursé, le client garde les vides et la consignation reste active.
-
-**2. Destination des produits récupérés**
-- 🏬 **Stock du dépôt** → réintégration au stock liquide. Stock = +qty retournée
-- 🔁 **Réaffectation directe à un autre client** (votre cas urgence !) → une nouvelle facture FNE est émise immédiatement pour le client B avec ces produits. Net sur le stock = 0 (entrée+sortie simultanées). Traçabilité totale entre les 3 documents (facture A → avoir → facture B)
-
-**3. Mode d'application de l'avoir**
-- 📌 **Déduction du reste à payer** de la facture origine (par défaut)
-- 💼 **Avoir en compte client** (cumul utilisable pour une future facture)
-- 🏦 **Remboursement effectif** (cash / Wave / OM... — rare)
-
-### Workflow type
-
-```
-Lundi   : Livraison à crédit chez Grossiste KTL : 10 casiers Flag (FNE-2026003 · 129 360 F)
-Mardi   : Grossiste appelle "je n'arrive pas à vendre 3 casiers"
-Mardi+1 : Buvette du Carrefour téléphone : "j'ai un événement, j'ai besoin urgent de Flag"
-
-Dans l'app :
-  1. Ouvrir FNE-2026003 → bouton "↩ Retourner produits"
-  2. Indiquer 3 casiers Flag, consigne reprise ☑
-  3. Destination : 🔁 Réaffectation → choisir Buvette du Carrefour
-  4. Application : 📌 Déduction du reste à payer
-  5. Motif : ⚡ Urgence autre client
-  6. Validation
-
-Effets automatiques :
-  • Avoir AV-2026001 émis : −27 288 F
-  • Facture FNE-2026003 : TTC ajusté à 102 072 F, reste à payer 52 072 F
-  • Nouvelle facture FNE-2026008 pour Buvette du Carrefour : 27 288 F (impayée)
-  • Stock Flag : inchangé (transfert logique A → B)
-  • Consignation Grossiste : réduite de 3c+36b
-  • Nouvelle consignation Buvette Carrefour : 3c+36b
-  • Mouvement "retour_marchandise" + mouvement "vente" tracés
-  • Ristournes recalculées sur les nouveaux CA HT
-```
-
-### Tests mathématiques vérifiés
-
-Scénario réaffectation directe (vérifié end-to-end) :
-- Stock liquide initial Flag : 696 btl
-- Retour de 3 casiers + réaffectation à client B
-- Stock final : **696 btl (delta 0)** — la marchandise est passée directement de A à B sans transit physique
-
-Scénario retour total au stock :
-- Stock initial : 696 btl
-- Retour total facture Buvette (2 casiers Flag = 24 btl)
-- Stock final : **720 btl (delta +24)** — marchandise réintégrée
-
-Recalcul ristournes : automatique après chaque retour (le CA HT baisse, les ristournes accordées/reçues sont ajustées).
-## 🎨 Charte graphique respectée
-
-`#0F8A5F` Vert Émeraude · `#F28C28` Orange Énergie · `#1D3557` Bleu Nuit · `#DC2626` Rouge. Mobile-first avec sidebar PC + bottom-nav Android (breakpoint 768px).
-
----
-
-## 📲 Conformité Côte d'Ivoire
-
-- ✅ **Facture Normalisée Électronique (FNE)** : format DGI CI complet
-- ✅ **Mobile Money** : Wave, Orange Money, MTN MoMo, Moov Money + Ristourne pré-configurés
-- ✅ **Hors ligne** : `localStorage` avec fallback mémoire
-- ✅ **Mobile-first** : touch targets ≥ 44px, bottom nav
-
----
-
-## 💾 Sauvegarde
-
-Auto après chaque action. Export manuel : Paramétrage → Export JSON ou CSV. Reset démo : bouton 🔄 en haut.
-
-**💡 Conseil** : exportez le JSON chaque fin de journée pour archivage.
-
----
-
-
----
-
-## 📦 Données de démonstration (rechargeable via 🔄)
-
-Au premier lancement (ou après reset), le système se peuple avec un jeu de données réaliste reflétant 3 jours d'activité.
-
-### Tournées (3)
-
-| N° | Date | Livreur | Véhicule | Zone | Statut | Détail |
-|---|---|---|---|---|---|---|
-| TRN-...0530 | J-2 | Issa Traoré | Tricycle | Yopougon + Treichville | ✓ Réconciliée | 4/4 livrées · 57 702 F encaissés (Wave + Espèces) · 7c+90b vides · écart 0 |
-| TRN-...0531 | J-1 | Aboubacar Konaté | Pick-up | Cocody + Marcory | ✓ Réconciliée | 3/4 livrées + 1 absent · 137 352 F · +500 F pourboires |
-| TRN-...0601 | Auj. | Sékou Camara | Tricycle | Plateau + Treichville | 📋 Préparée | 4 livraisons impayées prêtes à démarrer |
-
-### Retours marchandise (3) — couvrent les 3 cas business
-
-| N° | Motif | Client | Destination | Application | Montant |
-|---|---|---|---|---|---|
-| AV-2026001 | ⚡ Urgence autre client | Grossiste KTL | 🔁 Réaffectation → Buvette du Carrefour (nouvelle FNE) | 📌 Déduction facture | −27 288 F |
-| AV-2026002 | 📉 Invendu | Restaurant Saveurs d'Ici (vins + Corona perdus) | 🏬 Stock | 💼 Avoir compte | −77 880 F |
-| AV-2026003 | ❌ Défectueux | Maquis La Référence (Malta) | 🏬 Stock | 🏦 Remboursement Wave | −12 058 F |
-
-### Volumétrie totale au démarrage
-
-- **16 factures** (3 lignes par produit récupérable, structure FNE complète)
-- **12 encaissements** (mix Wave, Espèces, Orange Money sur historique)
-- **8 consignations actives** (sur factures impayées et historique non totalement repris)
-- **3 tournées** dont 1 préparée à démarrer
-- **3 avoirs** illustrant les 3 modes d'application
-- **5 contrats de ristournes** (3 reçues SOLIBRA/SIFCA/Elite + 2 accordées sous-dépôts)
-- **5 transferts** inter-dépôts + **5 achats** concessionnaires
-- **8 clients** avec badges générés automatiquement
-- **8 articles** (5 récupérables + 3 perdus)
-- **6 mouvements de stock** par catégorie (achat/vente/transfert/retour_emballage/retour_marchandise/ajustement)
-
-### Cas business démonstrés
-
-✅ Vente complète (livraison du jour + paiement)  
-✅ Vente à crédit (livré, non payé)  
-✅ Vente partiellement payée (acompte)  
-✅ Retour total emballages à la livraison (Hôtel Akwaba)  
-✅ Retour partiel emballages (Supérette)  
-✅ Vente btl vrac sans casier (Bar Tropical)  
-✅ Vente produits perdus uniquement (Restaurant)  
-✅ Tournée historique réconciliée (cash compté, écart calculé)  
-✅ Client absent à la livraison (reporté)  
-✅ Pourboires en cash (écart caisse positif)  
-✅ **Réaffectation urgence A → B** (votre cas métier)  
-✅ Retour total invendu → avoir compte client  
-✅ Retour produit défectueux → remboursement Mobile Money  
-✅ Consignation soldée par retour marchandise (consigne reprise)  
-✅ Ristournes calculées en cascade sur tous les CA modifiés
-## 🛣 Roadmap Phase 2 (selon cahier des charges)
-
-1. Migration React + Node.js + PostgreSQL (3 mois, 5.4M F CFA)
-2. Auth JWT 3 rôles, PWA Service Worker, API Wave/OM/MTN, certification FNE auto
-3. App Android native, alertes WhatsApp Business API, multi-dépôts centralisés
-
----
-
-**🍺 AFRI-BAR Manager v2.1** · Mobile-first · Offline-first · Made for 🇨🇮
+| Clients, adresses multiples, historique | ✅ (l'adresse est copiée dans la commande : corriger une fiche ne réécrit pas l'historique) |
+| Commandes, 12 statuts, transitions contrôlées, horodatage + auteur | ✅ |
+| Centre de livraison : affectation, réaffectation motivée, alertes, filtres | ✅ |
+| Zones et tarifs paramétrables | ✅ |
+| Tournées multi-livraisons : regroupement, ordre de passage proposé et ajustable, estimation distance/durée, suivi d'avancement | ✅ |
+| Application livreur mobile : accepter/refuser, prise en charge, départ, itinéraire, appel | ✅ |
+| Preuve de livraison par code à usage unique (photo/signature non systématiques) | ✅ code + signature ; photo : à venir (demande un stockage de fichiers côté serveur) |
+| GPS avec fraîcheur (récente / ancienne / obsolète), consentement, conservation limitée | ✅ (suivi uniquement pendant une course active) |
+| Échecs (motifs paramétrables), nouvelle tentative, retours avec réception et décision de stock | ✅ |
+| Paiement à la livraison, écart attendu/déclaré à valider, reversement validé par caissier | ✅ |
+| Commissions (fixe / % / mixte), avances, dépenses de mission | ✅ |
+| Rentabilité par livreur, par zone et par moto | ✅ |
+| Motos : entretien et réparations (type, coût, km), prochain entretien, immobilisation, historique | ✅ |
+| Tableau de bord filtrable par période, zone, livreur et type de commande | ✅ |
+| Stock : sortie à la préparation, retour, ajustement tracé | ✅ |
+| Carte de l'adresse pour le livreur (destination + sa position) et portail client de géopositionnement | ✅ (voir ci-dessous) |
+| Vendeurs partenaires : dépôt de commandes (formulaire ou import CSV), suivi, règlements | ✅ (voir ci-dessous) |
+| Documents numérotés : facture, reçu de paiement, avoir, bon de livraison (preuve de livraison distincte de la facture) | ✅ (voir ci-dessous) |
+| Notifications clients : messages automatiques par étape, modèles modifiables, journal d'envoi | ✅ envoi WhatsApp manuel en un clic |
+| Signature électronique du destinataire (obligatoire au-delà d'un seuil de valeur) | ✅ |
+| Étiquettes colis à QR code, scan à la prise en charge et à la remise, recherche par scan | ✅ (voir ci-dessous) |
+| Rôles, désactivation immédiate d'un compte, journal d'audit | ✅ |
+| Incidents et réclamations | ✅ |
+
+## Limites assumées (à traiter avant production)
+- **Données stockées dans le navigateur d'un seul appareil.** Pour que le bureau et les téléphones des livreurs partagent les données, il faut un backend (Supabase/PostgreSQL, cahier des charges §17) avec authentification et règles d'accès **côté serveur**. Ici les droits ne sont appliqués que dans l'interface : ce n'est pas une sécurité.
+- Les PIN sont hachés de façon simple (démonstration) ; le journal d'audit n'est pas inviolable.
+- GPS en arrière-plan écran éteint non garanti en page web : à valider sur les téléphones réels, sinon application native.
+- Notifications SMS/WhatsApp : les messages sont préparés automatiquement mais envoyés à la main (lien WhatsApp pré-rempli) ; l'envoi automatique (WhatsApp / SMS via Twilio ou WhatsApp Cloud) est préparé côté serveur dans `supabase/` (guide : `supabase/MESSAGERIE.md`) et s'active avec le backend.
+- Facturation normalisée/fiscale, optimisation de tournées avec trafic réel, suggestions automatiques d'affectation, notifications clients automatiques : V2/V3.
+
+## Carte livreur et portail client
+- **Livreur :** sur chaque mission, « 🗺 Voir sur la carte » affiche la destination et sa propre position (Leaflet + OpenStreetMap, connexion Internet nécessaire). Si l'adresse n'a pas de position, un avertissement s'affiche et le livreur peut demander la position au client en un clic.
+- **Client :** le personnel (ou le livreur) génère un lien personnel (« 🔗 Lien portail client », envoi WhatsApp). Le client ouvre la page, place le repère 📍 sur la carte ou utilise sa position actuelle, ajoute une précision (« portail bleu… ») puis confirme.
+- **Retour de la position :** si le portail et le logiciel partagent le même stockage (démo, même navigateur), la position est enregistrée directement. Sinon le client l'envoie par WhatsApp et le personnel utilise « 📋 Coller une position reçue » (accepte aussi un lien Google Maps / OpenStreetMap ou « lat, lng »).
+- La position s'applique à l'adresse du client et aux commandes non terminées qui l'utilisent ; l'origine (« confirmée par le client » / « saisie par le personnel ») est affichée et tracée dans le journal.
+- **Pour que le client puisse ouvrir le lien**, l'application doit être hébergée sur une adresse web (Netlify, Vercel…). Avec un fichier local le lien ne marche que sur le même appareil. La mise à jour automatique sans copier-coller demande le backend partagé.
+
+## Vendeurs en ligne / fournisseurs
+- **Compte vendeur partenaire** (créé dans « Vendeurs partenaires », PIN de démo `5555`) : le vendeur ne voit que ses commandes et ses règlements.
+- **Dépôt de commande :** formulaire (client, adresse, articles libres avec prix, mode de paiement) ou **import CSV** (`ref;client;tel;zone;quartier;repere;article;qte;prix`, modèle téléchargeable, tout-ou-rien avec messages d'erreur par ligne). Les lignes de même `ref` forment une seule commande.
+- **Circuit :** la commande arrive « En attente de confirmation » (alerte au superviseur) → confirmation → réception de la marchandise et préparation (sans mouvement de stock : les articles appartiennent au vendeur) → affectation et livraison comme les autres. La livraison est facturée au client selon la zone.
+- **Deux modes de paiement :** le client paie tout au livreur ; ou les articles sont déjà payés au vendeur et le client ne règle que la livraison.
+- **Règlement du vendeur :** pour chaque commande livrée et entièrement payée, net = articles − commission (% fixé par vendeur) ; les frais de livraison restent à ANGEL'S GROUP. Le caissier enregistre les règlements (Finance → Vendeurs) ; le vendeur voit son solde. Vérifiez le reversement du livreur avant de régler.
+- Le vendeur ne voit ni le code de confirmation, ni les notes internes, ni les livreurs ; il peut annuler tant que la commande n'est pas préparée, et envoyer à son client le lien du portail de position.
+- **Limite :** comme le reste, l'isolation entre vendeurs n'est appliquée que dans l'interface tant qu'il n'y a pas de backend. Pour de vrais vendeurs externes sur Internet, le backend (Supabase + règles d'accès) est indispensable ; l'inscription en libre-service reste à construire.
+
+## Tournées et motos
+- **Tournée :** dans « Centre de livraison », « 🔁 Créer une tournée » regroupe au moins 2 commandes prêtes sur un livreur. L'ordre de passage est proposé (plus proche voisin depuis sa dernière position, adresses sans GPS en dernier) et reste ajustable avec ↑ ↓ tant que l'arrêt n'a pas démarré. Le livreur voit « Tournée T-0001 · arrêt 2/4 » et ses missions dans cet ordre ; il garde la liberté d'adapter son trajet.
+- **Estimation :** distance à vol d'oiseau × 1,35, 18 km/h en moyenne, 8 min par arrêt. C'est une indication, pas un itinéraire routier ; elle ignore le trafic (un vrai calcul d'itinéraire demande un service cartographique externe).
+- **Entretien :** bouton « 🔧 Entretien » par moto (vidange, pneus, freinage, réparation, pièces…) avec date, kilométrage, coût, prochain entretien, et statut de la moto après intervention. Une moto en panne ou immobilisée reste bloquée pour les missions.
+- **Rentabilité par moto :** frais de livraison − commissions − dépenses de mission − entretien. Les coûts d'entretien sont cumulés depuis le début, comme les livraisons ; ce n'est pas un bénéfice comptable.
+
+## Documents, notifications, signature
+- **Documents :** depuis une commande — « Établir la facture », « Reçu de paiement », « ↩ Avoir », « 🖨 Bon de livraison ». Chaque document reçoit un numéro de séquence continue par année et par type (`FAC-2026-0001`, `REC-`, `AVO-`, `BL-`) et reste figé : il ne se modifie ni ne se supprime, une erreur se corrige par un avoir (limité au montant de la facture). Le menu « Documents » les liste et permet de les rouvrir ; impression ou PDF via le navigateur. Pour une commande de vendeur partenaire, la facture ne porte que les frais de livraison, établie au nom du vendeur ; les articles restent facturés par lui.
+- **Bon de livraison :** il atteste de la remise (livreur, date, destinataire, code validé, position GPS, signature) et précise qu'il ne tient pas lieu de facture.
+- **Avertissement :** ce sont des documents de gestion. Si l'entreprise est assujettie à la facturation normalisée électronique, la facture réglementaire doit être émise par le dispositif officiel ; la mention en pied de page, l'adresse, le NIF et le RCCM se règlent dans Paramètres.
+- **Notifications :** à la confirmation, au départ du livreur (avec l'heure estimée et le code à donner), à la livraison et en cas d'échec, un message est préparé et placé dans le menu « Notifications ». Le superviseur l'envoie par WhatsApp en un clic, le modifie ou l'ignore. « Envoyé » signifie que la conversation WhatsApp a été ouverte, pas que le client l'a reçue. Les modèles et les événements actifs se règlent dans Paramètres.
+- **Signature :** dans l'écran de confirmation du livreur, un cadre de signature au doigt est obligatoire dès un montant de commande réglable (100 000 F par défaut, 0 = jamais), facultatif en dessous. Elle apparaît sur le bon de livraison.
+
+## Étiquettes colis et QR codes
+- **Impression :** sur une commande confirmée, « 🏷 Étiquettes colis » demande le nombre de colis et génère une étiquette 100 × 150 mm par colis : numéro de commande, **QR code unique**, « 1/3 », zone de livraison en grand, quartier et repère, client, code court de 5 caractères sous le QR, expéditeur pour les vendeurs partenaires, mention URGENT. Le montant à encaisser et le téléphone du client ne s'impriment que si vous les activez dans Paramètres (le montant affiché dans l'application fait foi).
+- **Réimpression :** les mêmes QR codes sont conservés. Changer le nombre de colis invalide les étiquettes déjà collées (et c'est refusé dès qu'un colis a été scanné).
+- **Prise en charge :** quand la commande a des étiquettes, le livreur doit scanner chaque colis (caméra) avant de partir. Un colis d'une autre commande est refusé avec le numéro de la commande concernée ; une étiquette inventée ou périmée est refusée.
+- **Remise au client :** la confirmation de livraison exige de scanner de nouveau tous les colis remis.
+- **Secours :** si la caméra est refusée, absente ou si l'étiquette est abîmée, le livreur saisit le code de 5 caractères imprimé sous le QR ; l'application enregistre « saisi » plutôt que « scanné ».
+- **Personnel :** « 📷 Scanner une étiquette » (liste des commandes) ouvre la commande correspondante.
+- **Lecture :** BarcodeDetector du navigateur s'il existe, sinon jsQR (intégré au fichier, hors ligne). La caméra exige une page en **https** (ou localhost) ; depuis un simple fichier local ou une adresse http, elle peut être refusée : la saisie du code reste possible.
+- **Réglages :** le scan obligatoire se désactive dans Paramètres. Une alerte signale les commandes prêtes sans étiquettes.
+- **Composants intégrés :** qrcode-generator 1.4.4 (MIT) et jsQR 1.4.0 (Apache-2.0).
+
+## Déploiement (Vercel)
+Importer le dépôt dans Vercel : aucun réglage (Framework « Other », pas de build, dossier racine = racine). Le fichier `.vercelignore` exclut `supabase/` (sources du backend, non destinées à être publiques).
+Attention : la page de connexion affiche les PIN de démonstration et les données restent dans le navigateur de chaque visiteur. C'est une démo, pas une mise en production : avant tout usage réel, brancher Supabase et retirer l'encart de démonstration.
