@@ -1,7 +1,6 @@
 # ANGEL'S GROUP ERP — V1 Livraisons à moto
 
 Fichier unique : `index.html` (aucune dépendance, ouvrable par double-clic ; la carte OpenStreetMap demande Internet).
-Il est indépendant de `index.html` (AFRI-BAR).
 
 ## Démonstration
 PIN : admin `1234` · direction `0000` · superviseur `1111` · caissier `2222` · commercial `3333` · préparateur `4444` · livreurs `0001` (Issa) / `0002` (Kouamé) / `0003` (Sékou).
