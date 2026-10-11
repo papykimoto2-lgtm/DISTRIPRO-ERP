@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
 
   if (role === "livreur") {
     const { data, error } = await admin.from("livreurs").insert({
-      org_id: me.org_id, nom, tel: b.tel ?? null, zone: b.zone ?? null, moto_id: b.moto_id ?? null,
+      org_id: me.org_id, nom, tel: b.tel ?? null, zone: b.zone ?? null, moto_id: b.moto_id ?? null, remu: b.remu ?? null,
     }).select("id").single();
     if (error) return undo(error.message);
     livreur_id = data.id;

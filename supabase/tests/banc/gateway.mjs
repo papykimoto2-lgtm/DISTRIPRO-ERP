@@ -16,7 +16,7 @@ const verif = (t) => { try { const [h, p, s] = t.split("."); if (createHmac("sha
 const session = (u) => { const now = Math.floor(Date.now() / 1000), exp = now + 3600;
   return { access_token: jwt({ aud: "authenticated", role: "authenticated", sub: u.id, email: u.email, exp, iat: now }), token_type: "bearer", expires_in: 3600, expires_at: exp,
     refresh_token: jwt({ sub: u.id, kind: "refresh", exp: now + 86400 }), user: { id: u.id, aud: "authenticated", role: "authenticated", email: u.email, app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() } }; };
-const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type, prefer, x-client-info, accept-profile, content-profile, range, x-supabase-api-version", "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,DELETE,OPTIONS", "Access-Control-Expose-Headers": "content-range, content-type" };
+const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type, prefer, x-client-info, accept-profile, content-profile, range, range-unit, x-supabase-api-version", "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,DELETE,OPTIONS", "Access-Control-Expose-Headers": "content-range, content-type" };
 const send = (res, code, obj) => { res.writeHead(code, { ...cors, "Content-Type": "application/json" }); res.end(obj === undefined ? "" : JSON.stringify(obj)); };
 const body = (req) => new Promise((ok) => { const c = []; req.on("data", (d) => c.push(d)); req.on("end", () => ok(Buffer.concat(c))); });
 export const journal = [];   // requêtes vues, pour les tests
@@ -46,7 +46,7 @@ http.createServer(async (req, res) => {
       const email = b.identifiant.includes("@") ? b.identifiant.toLowerCase() : `${b.identifiant.toLowerCase().replace(/[^a-z0-9._-]/g, "")}@users.angels-erp.app`;
       const u = (await db.query("insert into auth.users(email, mdp) values ($1, $2) returning id", [email, b.mot_de_passe])).rows[0];
       let lid = null, vid = null;
-      if (b.role === "livreur") lid = (await db.query("insert into public.livreurs(org_id, nom, tel, zone, moto_id) values ($1,$2,$3,$4,$5) returning id", [m.org_id, b.nom, b.tel ?? null, b.zone ?? null, b.moto_id ?? null])).rows[0].id;
+      if (b.role === "livreur") lid = (await db.query("insert into public.livreurs(org_id, nom, tel, zone, moto_id, remu) values ($1,$2,$3,$4,$5,$6) returning id", [m.org_id, b.nom, b.tel ?? null, b.zone ?? null, b.moto_id ?? null, b.remu ? JSON.stringify(b.remu) : null])).rows[0].id;
       if (b.role === "vendeur") vid = (await db.query("insert into public.vendeurs(org_id, nom, tel, commission_pct) values ($1,$2,$3,$4) returning id", [m.org_id, b.nom, b.tel ?? null, b.commission_pct ?? 0])).rows[0].id;
       await db.query("insert into public.membres(user_id, org_id, role, nom, livreur_id, vendeur_id) values ($1,$2,$3,$4,$5,$6)", [u.id, m.org_id, b.role, b.nom, lid, vid]);
       return send(res, 200, { ok: true, user_id: u.id, email });
@@ -54,7 +54,7 @@ http.createServer(async (req, res) => {
     if (url.pathname.startsWith("/rest/v1/")) {
       const h = { ...req.headers }; delete h.host; delete h.connection; delete h["content-length"]; delete h.apikey;
       const r = await fetch(PGREST + url.pathname.slice(8) + url.search, { method: req.method, headers: h, body: ["GET", "HEAD"].includes(req.method) ? undefined : raw });
-      const out = Buffer.from(await r.arrayBuffer()), rh = {}; r.headers.forEach((v, k) => { if (!["content-encoding", "transfer-encoding", "connection"].includes(k)) rh[k] = v; });
+      const out = Buffer.from(await r.arrayBuffer()), rh = {}; r.headers.forEach((v, k) => { if (!["content-encoding", "transfer-encoding", "connection"].includes(k) && !k.startsWith("access-control-")) rh[k] = v; });
       res.writeHead(r.status, { ...rh, ...cors }); return res.end(out);
     }
     send(res, 404, { erreur: "Introuvable" });

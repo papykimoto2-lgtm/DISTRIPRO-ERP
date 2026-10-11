@@ -151,13 +151,13 @@ const activeLiv=cid=>livsOf(cid).find(isActive);
 const livreurOf=u=>S.livreurs.find(l=>l.user_id===u.id);
 const who=()=>ME?ME.nom:"Système";
 const can=(...roles)=>ME&&roles.includes(ME.role);
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast("Stockage local plein ou indisponible","err")}}
+function save(){if(CL.on)return;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast("Stockage local plein ou indisponible","err")}}
 function audit(action,detail){S.audit.push({ts:now(),user:who(),role:ME?ME.role:"système",action,detail:detail||""});if(S.audit.length>5000)S.audit.splice(0,S.audit.length-5000)}
 function toast(m,t){const d=document.createElement("div");d.className="t "+(t||"");d.textContent=m;$("#toast").appendChild(d);setTimeout(()=>d.remove(),t==="err"?5500:3000)}
 
 /* ---------- Calculs ---------- */
 function calcCmd(c){c.montant_produits=c.lignes.reduce((a,l)=>a+l.qte*l.pu,0);c.total=Math.max(0,c.montant_produits+(+c.frais||0)-(+c.remise||0));return c}
-const paye=c=>S.fonds.filter(f=>f.commande_id===c.id&&(f.type==="acompte"||f.type==="encaissement")).reduce((a,f)=>a+f.montant,0);
+const paye=c=>CL.on&&c._paye!=null?c._paye:S.fonds.filter(f=>f.commande_id===c.id&&(f.type==="acompte"||f.type==="encaissement")).reduce((a,f)=>a+f.montant,0);
 const soldeCmd=c=>Math.max(0,c.total-paye(c));
 const encaisseLiv=id=>S.fonds.filter(f=>f.livreur_id===id&&f.type==="encaissement").reduce((a,f)=>a+f.montant,0);
 const reverseLiv=id=>S.fonds.filter(f=>f.livreur_id===id&&f.type==="reversement").reduce((a,f)=>a+f.montant,0);
@@ -293,7 +293,7 @@ function modal(title,body,o){stopScan();o=o||{};ui.onSubmit=o.onSubmit;ui.mid=(u
  $("#modal").innerHTML=`<div class="ov"><div class="md ${o.wide?"wide":""}"><div class="mh"><b>${esc(title)}</b><button class="x" data-act="closeModal" type="button">✕</button></div><form id="mf" autocomplete="off"><div class="mb">${body}</div>${o.onSubmit?`<div class="mf"><button type="button" class="btn ghost" data-act="closeModal">Annuler</button><button class="btn ${o.cls||""}">${o.label||"Valider"}</button></div>`:""}</form></div></div>`;
  const f=$("#mf input:not([type=hidden]),#mf select");if(f&&o.focus!==false)f.focus()}
 const closeModal=()=>{stopScan();$("#modal").innerHTML="";ui.onSubmit=null};
-function ask(title,label,cb,opts){opts=opts||{};modal(title,`<label>${label}<textarea name="v" rows="2" required></textarea></label>`,{label:opts.label||"Confirmer",cls:opts.cls||"",onSubmit:d=>{if(!String(d.v).trim()){toast("Champ obligatoire","err");return false}cb(d.v.trim())}})}
+function ask(title,label,cb,opts){opts=opts||{};modal(title,`<label>${label}<textarea name="v" rows="2" required></textarea></label>`,{label:opts.label||"Confirmer",cls:opts.cls||"",onSubmit:d=>{if(!String(d.v).trim()){toast("Champ obligatoire","err");return false}return cb(d.v.trim())}})}
 const opts=(arr,sel)=>arr.map(a=>{const v=typeof a==="string"?a:a.v,t=typeof a==="string"?a:a.t;return`<option value="${esc(v)}" ${v===sel?"selected":""}>${esc(t)}</option>`}).join("");
 const tbl=(head,rows,empty)=>`<div class="tw"><table><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.length?rows.join(""):`<tr><td colspan="${head.length}" class="mu">${empty||"Aucune donnée"}</td></tr>`}</tbody></table></div>`;
 const kpi=(l,v,k)=>`<div class="kpi ${k||""}"><div class="v">${v}</div><div class="l">${l}</div></div>`;
@@ -303,7 +303,8 @@ const perSel=()=>`<select data-f="per" style="width:auto"><option value="0" ${ui
 const waLink=(tel,txt)=>{let t=String(tel||"").replace(/\D/g,"");if(t.length===10)t="225"+t;return`https://wa.me/${t}?text=${encodeURIComponent(txt)}`};
 
 /* ---------- Connexion ---------- */
-function loginHTML(){
+function loginHTML(){return CL.on?loginHTMLCloud():loginHTMLLocal()}
+function loginHTMLLocal(){
  const act=S.users.filter(u=>u.actif);
  return`<div class="login"><div class="card"><div style="font-size:22px;font-weight:800;color:var(--b2)">ANGEL'S GROUP</div><div class="mu" style="margin-bottom:14px">Gestion intégrée · Livraisons à moto</div>
  <form id="lf"><label>Utilisateur<select name="u">${act.map(u=>`<option value="${u.id}">${esc(u.nom)} — ${ROLES[u.role]}</option>`).join("")}</select></label>
@@ -313,7 +314,7 @@ function loginHTML(){
 
 /* ---------- Gabarit ---------- */
 function render(){
- if(!S)return;
+ if(!S&&!CL.on)return;
  if(!ME){$("#app").innerHTML=loginHTML();return}
  if(ME.role==="livreur"){$("#app").innerHTML=livreurHTML();syncGPS();initMaps();return}
  const nav=NAV.filter(n=>n.r.includes(ME.role));if(!nav.find(n=>n.v===view))view=nav[0].v;
@@ -408,7 +409,7 @@ function formCmd(){
  <div class="g2"><label>Canal<select name="canal">${opts(["Téléphone","WhatsApp","Vente en ligne","Commande directe","Autre"])}</select></label><label>Observations<input name="obs"></label></div>
  <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" name="confirmer" checked style="width:auto"> Confirmer immédiatement</label>
  <div class="card" style="margin:0;background:#f7f8fd"><div class="between"><span>Produits : <b id="t_prod">0 F</b></span><span>Total à payer : <b id="t_tot" style="font-size:18px">0 F</b></span></div><div class="between sm mu"><span>Solde à encaisser à la livraison</span><b id="t_solde">0 F</b></div></div>`,
- {wide:true,label:"Créer la commande",onSubmit:(d,f)=>{
+ {wide:true,label:"Créer la commande",onSubmit:(d,f)=>{if(CL.on)return CL.creerCommande(d,f);
   let cl,ad;
   if(d.client==="__new"){if(!d.n_nom.trim()||!d.n_tel.trim())return toast("Nom et téléphone du client requis","err"),false;
    cl={id:uid("cl"),nom:d.n_nom.trim(),tel:d.n_tel.trim(),tel2:"",adresses:[],note:""};}
@@ -484,7 +485,7 @@ function assignModal(c){
  <div class="sm mu">Le tri propose d'abord les livreurs disponibles, de la même zone et peu chargés. La décision reste la vôtre.</div>`,
  {label:"Valider",onSubmit:d=>{if(!d.lid)return toast("Choisissez un livreur","err"),false;
   const lv=liv(d.lid);if(lv.statut!=="disponible"&&!confirm(lv.nom+" est indisponible. Affecter quand même ?"))return false;
-  const l=affecter(c,d.lid,d.motif||"");if(!l)return false;save();toast("Affectée à "+lv.nom+" — code client "+l.code,"ok");render()}})}
+  if(CL.on)return CL.affecter(c,d,lv);const l=affecter(c,d.lid,d.motif||"");if(!l)return false;save();toast("Affectée à "+lv.nom+" — code client "+l.code,"ok");render()}})}
 
 /* ---------- Centre de livraison ---------- */
 VIEWS.livraisons=()=>{
@@ -516,7 +517,7 @@ const adrForm=a=>`<div class="g3"><label>Libellé<input name="a_lib" value="${es
 const adrFrom=d=>({libelle:d.a_lib||"Adresse",zone:d.a_zone,quartier:d.a_q,repere:d.a_rep,instructions:d.a_ins,gps:d.a_lat&&d.a_lng&&!isNaN(+d.a_lat)&&!isNaN(+d.a_lng)?{lat:+d.a_lat,lng:+d.a_lng}:null,gps_src:d.a_lat&&d.a_lng?"saisie par le personnel":""});
 function cliForm(c){const nw=!c;
  modal(nw?"Nouveau client":"Modifier le client",`<div class="g2"><label>Nom / raison sociale<input name="nom" required value="${esc(c?c.nom:"")}"></label><label>Téléphone<input name="tel" required value="${esc(c?c.tel:"")}"></label></div><label>Téléphone secondaire<input name="tel2" value="${esc(c?c.tel2:"")}"></label>${nw?'<div class="sec">Adresse principale</div>'+adrForm():""}`,
- {onSubmit:d=>{if(nw){if(!d.a_q.trim()&&!d.a_rep.trim())return toast("Quartier ou repère requis","err"),false;const a=Object.assign({id:uid("a"),defaut:true},adrFrom(d));S.clients.push({id:uid("cl"),nom:d.nom.trim(),tel:d.tel.trim(),tel2:d.tel2,adresses:[a],note:""});audit("Création client",d.nom)}
+ {onSubmit:d=>{if(CL.on)return CL.cliSave(c,d);if(nw){if(!d.a_q.trim()&&!d.a_rep.trim())return toast("Quartier ou repère requis","err"),false;const a=Object.assign({id:uid("a"),defaut:true},adrFrom(d));S.clients.push({id:uid("cl"),nom:d.nom.trim(),tel:d.tel.trim(),tel2:d.tel2,adresses:[a],note:""});audit("Création client",d.nom)}
   else{c.nom=d.nom.trim();c.tel=d.tel.trim();c.tel2=d.tel2;audit("Modification client",c.nom)}save();render()}})}
 function cliDetail(id){const c=cli(id),cs=S.commandes.filter(x=>x.client_id===id);
  modal(c.nom,`<div class="pill">📞 <a href="tel:${esc(c.tel)}">${esc(c.tel)}</a> ${c.tel2?" · "+esc(c.tel2):""}</div>
@@ -530,7 +531,7 @@ VIEWS.produits=()=>`<div class="between"><h1>Produits & stock</h1>${can("admin",
  ${tbl(["Code","Désignation","Prix","Stock","Seuil","Statut",""],S.produits.map(p=>`<tr><td>${esc(p.code)}</td><td>${esc(p.nom)}</td><td>${fcfa(p.prix)}</td><td><b style="color:${p.stock<=p.seuil?"var(--er)":"inherit"}">${p.stock}</b></td><td>${p.seuil}</td><td>${p.actif?badge("Actif","ok"):badge("Inactif","mu")}</td><td><button class="btn sm ghost" data-act="editProd" data-id="${p.id}">Modifier</button> <button class="btn sm ghost" data-act="adjProd" data-id="${p.id}">Ajuster stock</button></td></tr>`))}
  <h2>Derniers mouvements de stock</h2>${tbl(["Date","Produit","Type","Qté","Référence","Par"],S.stock_mvts.slice(-25).reverse().map(m=>`<tr><td>${fdt(m.ts)}</td><td>${esc(prod(m.produit_id)?prod(m.produit_id).nom:"?")}</td><td>${esc(m.type)}</td><td><b>${m.qte>0?"+":""}${m.qte}</b></td><td>${esc(m.ref||"")}</td><td>${esc(m.par)}</td></tr>`))}`;
 function prodForm(p){modal(p?"Modifier le produit":"Nouveau produit",`<div class="g2"><label>Code<input name="code" required value="${esc(p?p.code:"")}"></label><label>Désignation<input name="nom" required value="${esc(p?p.nom:"")}"></label></div><div class="g3"><label>Prix de vente<input type="number" name="prix" min="0" required value="${p?p.prix:""}"></label><label>${p?"Stock (via « Ajuster »)":"Stock initial"}<input type="number" name="stock" min="0" value="${p?p.stock:0}" ${p?"disabled":""}></label><label>Seuil d'alerte<input type="number" name="seuil" min="0" value="${p?p.seuil:10}"></label></div><label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" name="actif" style="width:auto" ${!p||p.actif?"checked":""}> Produit actif</label>`,
- {onSubmit:d=>{if(p){Object.assign(p,{code:d.code,nom:d.nom,prix:+d.prix,seuil:+d.seuil,actif:!!d.actif});audit("Modification produit",p.nom)}else{const n={id:uid("p"),code:d.code,nom:d.nom,prix:+d.prix,stock:0,seuil:+d.seuil,actif:!!d.actif};S.produits.push(n);if(+d.stock>0)stockMvt(n,+d.stock,"stock_initial","");audit("Création produit",n.nom)}save();render()}})}
+ {onSubmit:d=>{if(CL.on)return CL.prodSave(p,d);if(p){Object.assign(p,{code:d.code,nom:d.nom,prix:+d.prix,seuil:+d.seuil,actif:!!d.actif});audit("Modification produit",p.nom)}else{const n={id:uid("p"),code:d.code,nom:d.nom,prix:+d.prix,stock:0,seuil:+d.seuil,actif:!!d.actif};S.produits.push(n);if(+d.stock>0)stockMvt(n,+d.stock,"stock_initial","");audit("Création produit",n.nom)}save();render()}})}
 
 /* ---------- Livreurs & motos ---------- */
 VIEWS.livreurs=()=>`<div class="between"><h1>Livreurs & motos</h1><div class="flex"><button class="btn" data-act="newLiv">➕ Livreur</button><button class="btn ghost" data-act="newMoto">➕ Moto</button></div></div>
@@ -542,14 +543,14 @@ function livForm(l){const u=l&&usr(l.user_id),r=(l&&l.remu)||S.config.remu;
  modal(l?"Modifier le livreur":"Nouveau livreur",`<div class="g2"><label>Nom et prénoms<input name="nom" required value="${esc(l?l.nom:"")}"></label><label>Téléphone<input name="tel" required value="${esc(l?l.tel:"")}"></label></div>
  <div class="g2"><label>Zone habituelle<select name="zone">${opts(S.config.zones.map(z=>z.nom),l?l.zone:"")}</select></label><label>Moto<select name="moto"><option value="">— aucune —</option>${opts(S.motos.map(m=>({v:m.id,t:m.immat+" ("+m.statut+")"})),l?l.moto_id:"")}</select></label></div>
  <div class="sec">Rémunération</div><div class="g3"><label>Modèle<select name="rtype">${opts([{v:"fixe",t:"Fixe par course"},{v:"pct",t:"% des frais"},{v:"mixte",t:"Mixte"}],r.type)}</select></label><label>Montant fixe<input type="number" name="rfixe" min="0" value="${r.fixe}"></label><label>% des frais<input type="number" name="rpct" min="0" max="100" value="${r.pct}"></label></div>
- ${l?"":`<label>Code PIN de connexion (min. 4 chiffres)<input name="pin" inputmode="numeric" pattern="[0-9]{4,8}" required></label>`}
- ${l?`<label>Nouveau PIN (laisser vide pour conserver)<input name="pin" inputmode="numeric" pattern="[0-9]{4,8}"></label><label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" name="actif" style="width:auto" ${u&&u.actif?"checked":""}> Compte actif</label>`:""}`,
- {onSubmit:d=>{const remu={type:d.rtype,fixe:+d.rfixe||0,pct:+d.rpct||0};
+ ${l?"":`${CL.on?'<label>Identifiant de connexion (par défaut : téléphone)<input name="ident" autocapitalize="none"></label>':""}<label>Code PIN de connexion (min. ${PINMIN} chiffres)<input name="pin" inputmode="numeric" pattern="[0-9]{${PINMIN},8}" required></label>`}
+ ${l?`<label>Nouveau PIN (laisser vide pour conserver)<input name="pin" inputmode="numeric" pattern="[0-9]{${PINMIN},8}"></label><label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" name="actif" style="width:auto" ${u&&u.actif?"checked":""}> Compte actif</label>`:""}`,
+ {onSubmit:d=>{const remu={type:d.rtype,fixe:+d.rfixe||0,pct:+d.rpct||0};if(CL.on)return CL.livSave(l,d,remu);
   if(l){Object.assign(l,{nom:d.nom,tel:d.tel,zone:d.zone,moto_id:d.moto||null,remu});u.nom=d.nom;u.actif=!!d.actif;if(d.pin)u.pin_h=hashPin(u.id,d.pin);audit("Modification livreur",d.nom+(u.actif?"":" (compte désactivé)"))}
   else{const nu={id:uid("u"),nom:d.nom,role:"livreur",actif:true};nu.pin_h=hashPin(nu.id,d.pin);S.users.push(nu);S.livreurs.push({id:uid("lv"),user_id:nu.id,nom:d.nom,tel:d.tel,zone:d.zone,moto_id:d.moto||null,statut:"disponible",gps_consent:false,remu});audit("Création livreur",d.nom)}
   save();render()}})}
 function motoForm(m){modal(m?"Modifier la moto":"Nouvelle moto",`<div class="g2"><label>Immatriculation<input name="immat" required value="${esc(m?m.immat:"")}"></label><label>Marque / modèle<input name="modele" value="${esc(m?m.modele:"")}"></label></div><div class="g3"><label>Kilométrage<input type="number" name="km" min="0" value="${m?m.km:0}"></label><label>Prochain entretien (km)<input type="number" name="pk" min="0" value="${m?m.prochain_km:1000}"></label><label>Statut<select name="statut">${opts(["disponible","affectee","panne","immobilisee"],m?m.statut:"disponible")}</select></label></div>`,
- {onSubmit:d=>{const v={immat:d.immat,modele:d.modele,km:+d.km,prochain_km:+d.pk,statut:d.statut};if(m){Object.assign(m,v);audit("Modification moto",m.immat+" → "+m.statut)}else{S.motos.push(Object.assign({id:uid("m")},v));audit("Création moto",d.immat)}save();render()}})}
+ {onSubmit:d=>{const v={immat:d.immat,modele:d.modele,km:+d.km,prochain_km:+d.pk,statut:d.statut};if(CL.on)return CL.motoSave(m,v);if(m){Object.assign(m,v);audit("Modification moto",m.immat+" → "+m.statut)}else{S.motos.push(Object.assign({id:uid("m")},v));audit("Création moto",d.immat)}save();render()}})}
 
 /* ---------- Finance ---------- */
 VIEWS.finance=()=>{
@@ -583,14 +584,14 @@ VIEWS.incidents=()=>{
  <h2>Retours réceptionnés</h2>${tbl(["Date","Commande","Motif","État","Décision","Réceptionné par"],S.retours.slice().reverse().map(r=>`<tr><td>${fdt(r.ts)}</td><td>${cmd(r.commande_id).numero}</td><td>${esc(r.motif)}</td><td>${esc(r.etat)}</td><td>${esc(r.decision)}</td><td>${esc(r.par)}</td></tr>`),"Aucun")}
  <h2>Historique des échecs (${fails.length})</h2>${tbl(["Date","Commande","Livreur","Motif","Observation"],fails.slice().reverse().map(l=>`<tr><td>${fdt(l.fin_at)}</td><td>${cmd(l.commande_id).numero} (tentative ${l.tentative})</td><td>${esc(liv(l.livreur_id).nom)}</td><td>${esc(l.motif_echec)}</td><td class="sm">${esc(l.obs)}</td></tr>`),"Aucun échec")}`};
 function incForm(lid,cid){modal("Déclarer un incident",`<label>Catégorie<select name="cat">${opts(S.config.cats)}</select></label>${cid?"":`<label>Commande concernée (facultatif)<select name="cmd"><option value="">—</option>${S.commandes.slice(0,60).map(c=>`<option value="${c.id}">${c.numero} — ${esc(cli(c.client_id).nom)}</option>`).join("")}</select></label>`}<label>Description<textarea name="desc" rows="3" required></textarea></label>`,
- {onSubmit:d=>{S.seq.inc++;S.incidents.push({id:uid("i"),ref:"INC-"+String(S.seq.inc).padStart(4,"0"),ts:now(),cat:d.cat,commande_id:cid||d.cmd||null,par:who(),desc:d.desc,statut:"ouvert",decision:""});audit("Incident déclaré",d.cat);save();toast("Incident enregistré","ok");render()}})}
+ {onSubmit:d=>{if(CL.on)return CL.go(()=>CL.rpc("declarer_incident",{p_cat:d.cat,p_commande:cid||d.cmd||null,p_descr:d.desc}),"Incident enregistré");S.seq.inc++;S.incidents.push({id:uid("i"),ref:"INC-"+String(S.seq.inc).padStart(4,"0"),ts:now(),cat:d.cat,commande_id:cid||d.cmd||null,par:who(),desc:d.desc,statut:"ouvert",decision:""});audit("Incident déclaré",d.cat);save();toast("Incident enregistré","ok");render()}})}
 
 /* ---------- Utilisateurs / audit / paramètres ---------- */
 VIEWS.utilisateurs=()=>`<div class="between"><h1>Utilisateurs & droits</h1><button class="btn" data-act="newUser">➕ Utilisateur</button></div>${tbl(["Nom","Profil","Statut",""],S.users.map(u=>`<tr><td>${esc(u.nom)}</td><td>${ROLES[u.role]}</td><td>${u.actif?badge("Actif","ok"):badge("Désactivé","er")}</td><td>${u.id===ME.id?"":`<button class="btn sm ghost" data-act="togUser" data-id="${u.id}">${u.actif?"Désactiver":"Réactiver"}</button> `}<button class="btn sm ghost" data-act="pinUser" data-id="${u.id}">Réinitialiser PIN</button></td></tr>`))}
  <h2>Droits par profil</h2>${tbl(["Profil","Accès"],Object.keys(ROLES).map(r=>`<tr><td>${ROLES[r]}</td><td class="sm">${r==="livreur"?"Application livreur : uniquement ses propres missions":NAV.filter(n=>n.r.includes(r)).map(n=>n.l).join(", ")}</td></tr>`))}
  <p class="mu sm">La désactivation d'un compte est immédiate : la session en cours est refusée au prochain affichage.</p>`;
 VIEWS.audit=()=>`<h1>Journal d'audit</h1>${tbl(["Date","Utilisateur","Profil","Action","Détail"],S.audit.slice(-300).reverse().map(a=>`<tr><td>${fdt(a.ts)}</td><td>${esc(a.user)}</td><td>${esc(a.role)}</td><td>${esc(a.action)}</td><td class="sm">${esc(a.detail)}</td></tr>`))}<p class="mu sm">Le journal est en lecture seule dans l'application. En production, il devra être protégé côté serveur contre toute modification.</p>`;
-VIEWS.params=()=>{const c=S.config;return`<h1>Paramètres</h1>
+VIEWS.params0=()=>{const c=S.config;return`<h1>Paramètres</h1>
  <h2>Zones de livraison</h2>${tbl(["Zone","Frais","Délai indicatif",""],c.zones.map(z=>`<tr><td>${esc(z.nom)}</td><td>${fcfa(z.frais)}</td><td>${z.delai_min} min</td><td><button class="btn sm ghost" data-act="editZone" data-id="${z.id}">Modifier</button></td></tr>`))}<button class="btn ghost" data-act="newZone">➕ Zone</button>
  <h2>Listes paramétrables</h2><div class="g2"><div class="card"><b>Motifs d'échec</b><div class="sm mu">Un par ligne</div><textarea id="p_motifs" rows="9">${esc(c.motifs.join("\n"))}</textarea></div><div class="card"><b>Catégories d'incident</b><div class="sm mu">Un par ligne</div><textarea id="p_cats" rows="9">${esc(c.cats.join("\n"))}</textarea></div></div>
  <h2>Rémunération par défaut & GPS</h2><div class="card"><div class="g3"><label>Modèle<select id="p_rt">${opts([{v:"fixe",t:"Fixe par course"},{v:"pct",t:"% des frais"},{v:"mixte",t:"Mixte"}],c.remu.type)}</select></label><label>Montant fixe (F)<input id="p_rf" type="number" value="${c.remu.fixe}"></label><label>% des frais<input id="p_rp" type="number" value="${c.remu.pct}"></label></div>
@@ -604,7 +605,7 @@ VIEWS.params=()=>{const c=S.config;return`<h1>Paramètres</h1>
  <h2>Notifications aux clients</h2><div class="card"><div class="sm mu" style="margin-bottom:8px">Variables : {client} {numero} {livreur} {heure} {code} {solde} {motif} {org}. Les messages sont préparés automatiquement puis envoyés depuis le menu Notifications (WhatsApp).</div>${[["confirmee","Commande confirmée"],["en_cours","Départ du livreur"],["livree","Livraison effectuée"],["echouee","Livraison échouée"]].map(e=>`<label style="display:flex;gap:8px;align-items:center;font-size:14px;color:var(--tx);font-weight:600;margin-top:8px"><input type="checkbox" id="pn_${e[0]}" style="width:auto" ${c.notif[e[0]]?"checked":""}> ${e[1]}</label><textarea id="pt_${e[0]}" rows="2">${esc(c.tpl[e[0]])}</textarea>`).join("")}<button class="btn" style="margin-top:10px" data-act="saveParams">Enregistrer</button></div>
  <h2>Données</h2><div class="card"><div class="flex"><button class="btn ghost" data-act="exportData">⬇ Exporter (JSON)</button><label class="btn ghost" style="margin:0;display:inline-block;cursor:pointer">⬆ Importer<input type="file" accept=".json" id="p_imp" class="hide"></label><button class="btn er" data-act="resetData">Réinitialiser la démo</button></div><p class="mu sm">Les données sont stockées dans le navigateur de cet appareil. Pour partager les données entre le bureau et les téléphones des livreurs, la prochaine étape est le backend (Supabase / PostgreSQL) décrit au cahier des charges, §17.</p></div>`};
 function zoneForm(z){modal(z?"Modifier la zone":"Nouvelle zone",`<label>Nom<input name="nom" required value="${esc(z?z.nom:"")}"></label><div class="g2"><label>Frais de livraison (F)<input type="number" name="frais" min="0" required value="${z?z.frais:1500}"></label><label>Délai indicatif (min)<input type="number" name="delai" min="1" required value="${z?z.delai_min:45}"></label></div>`,
- {onSubmit:d=>{if(z){Object.assign(z,{nom:d.nom,frais:+d.frais,delai_min:+d.delai})}else S.config.zones.push({id:uid("z"),nom:d.nom,frais:+d.frais,delai_min:+d.delai});audit("Zone de livraison",d.nom);save();render()}})}
+ {onSubmit:d=>{if(CL.on)return CL.zoneSave(z,d);if(z){Object.assign(z,{nom:d.nom,frais:+d.frais,delai_min:+d.delai})}else S.config.zones.push({id:uid("z"),nom:d.nom,frais:+d.frais,delai_min:+d.delai});audit("Zone de livraison",d.nom);save();render()}})}
 
 /* ============================================================
    APPLICATION LIVREUR (mobile)
@@ -618,9 +619,10 @@ function pushPos(p,force){
  const lv=ME&&livreurOf(ME);if(!lv)return;const t=Date.now();if(!force&&t-lastSent<S.config.gps_interval*1000)return;lastSent=t;
  const l=S.livraisons.find(x=>x.livreur_id===lv.id&&x.statut==="en_cours");
  const pt={lat:+p.coords.latitude.toFixed(6),lng:+p.coords.longitude.toFixed(6),acc:Math.round(p.coords.accuracy||0),ts:now(),livraison_id:l?l.id:null};
+if(CL.on){S.pos[lv.id]=pt;CL.pos[lv.id]=pt;return CL.rpc("enregistrer_position",{p_lat:pt.lat,p_lng:pt.lng,p_acc:pt.acc}).catch(()=>{})}
  S.pos[lv.id]=pt;S.gps_hist.push(Object.assign({livreur_id:lv.id},pt));if(S.gps_hist.length>3000)S.gps_hist.splice(0,500);save()}
 function sendPosNow(){if(!navigator.geolocation)return toast("Géolocalisation non disponible sur cet appareil","err");
- navigator.geolocation.getCurrentPosition(p=>{pushPos(p,true);toast("Position envoyée","ok");render()},e=>toast("Position impossible : "+e.message,"err"),{enableHighAccuracy:true,timeout:15000})}
+ navigator.geolocation.getCurrentPosition(p=>{if(CL.on){const lv=livreurOf(ME),en=S.livraisons.some(x=>x.livreur_id===lv.id&&x.statut==="en_cours");if(!en)return toast("Le suivi GPS n'est actif que pendant une course en cours","err");pushPos(p,true);toast("Position envoyée","ok");render();return}pushPos(p,true);toast("Position envoyée","ok");render()},e=>toast("Position impossible : "+e.message,"err"),{enableHighAccuracy:true,timeout:15000})}
 function livreurHTML(){
  const lv=livreurOf(ME);if(!lv)return`<div class="lv"><div class="card">Compte livreur non rattaché. <a data-act="logout" href="#">Déconnexion</a></div></div>`;
  const mine=S.livraisons.filter(l=>l.livreur_id===lv.id),todo=mine.filter(isActive).sort((a,b)=>(a.tournee_id?0:1)-(b.tournee_id?0:1)||(a.ordre||99)-(b.ordre||99)||new Date(a.affectee_at)-new Date(b.affectee_at)),today=new Date().toDateString(),done=mine.filter(l=>["livree","echouee"].includes(l.statut)&&new Date(l.fin_at).toDateString()===today);
@@ -648,76 +650,77 @@ function missionCard(l){
  <div class="row"><a class="btn ghost" style="text-align:center;text-decoration:none" href="tel:${esc(cl.tel)}">📞 Appeler</a><a class="btn ghost" style="text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=two-wheeler">🧭 Itinéraire</a></div>${btn}</div>`}
 function gpsConsent(next){const lv=livreurOf(ME);if(lv.gps_consent)return next();
  modal("Partage de votre position",`<p>Pendant vos courses en cours, votre position GPS est transmise au superviseur de <b>ANGEL'S GROUP</b> afin de suivre les livraisons et d'aider en cas de problème.</p><ul><li>Aucun suivi en dehors d'une course active.</li><li>L'historique est conservé ${S.config.gps_retention_jours} jours, accessible aux seules personnes autorisées.</li></ul><p class="mu sm">Ne manipulez pas votre téléphone en conduisant.</p>`,
- {label:"J'ai compris, j'accepte",onSubmit:()=>{lv.gps_consent=true;audit("Consentement GPS",lv.nom);save();next()}})}
+ {label:"J'ai compris, j'accepte",onSubmit:()=>{if(CL.on)return CL.rpc("livreur_consentement").then(()=>{lv.gps_consent=true;next();return true}).catch(e=>{toast(fixErr(e),"err");return false});lv.gps_consent=true;audit("Consentement GPS",lv.nom);save();next()}})}
 
 /* ============================================================
    ACTIONS (délégation d'événements)
    ============================================================ */
-const done=(msg)=>{save();if(msg)toast(msg,"ok");render()};
+const done=(msg)=>{if(CL.on)return refresh().then(()=>{if(msg)toast(msg,"ok");render()}).catch(e=>toast(fixErr(e),"err"));save();if(msg)toast(msg,"ok");render()};
 const ACT={
  nav:id=>{view=id;render()},
  tab:id=>{const[k,v]=id.split("|");ui[k]=v;render()},
- logout:()=>{if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null}sessionStorage.removeItem("angels_me");ME=null;render()},
+ logout:()=>{if(CL.on){if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null}return CL.logout()}if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null}sessionStorage.removeItem("angels_me");ME=null;render()},
  closeModal,
  newCmd:formCmd,addLigne,delLigne:(_,t)=>{if(document.querySelectorAll(".lrow").length>1){t.closest(".lrow").remove();recalc()}},
  cmdDetail:id=>cmdDetail(id),
- cmdConfirm:id=>{if(setStatut(cmd(id),"confirmee","Confirmation")){audit("Confirmation commande",cmd(id).numero);done("Commande confirmée");cmdDetail(id)}},
- cmdPrep:id=>{if(setStatut(cmd(id),"preparation","Début de préparation")){done();cmdDetail(id)}},
- cmdPrete:id=>{if(marquerPrete(cmd(id))){done("Commande prête");cmdDetail(id)}},
- cmdAnnul:id=>ask("Annuler la commande","Motif de l'annulation (obligatoire)",m=>{if(annuler(cmd(id),m))done("Commande annulée")},{label:"Annuler la commande",cls:"er"}),
+ cmdConfirm:id=>{if(CL.on)return CL.go(()=>CL.rpc("commande_action",{p_cid:id,p_action:"confirmer"}),"Commande confirmée",()=>cmdDetail(id));if(setStatut(cmd(id),"confirmee","Confirmation")){audit("Confirmation commande",cmd(id).numero);done("Commande confirmée");cmdDetail(id)}},
+ cmdPrep:id=>{if(CL.on)return CL.go(()=>CL.rpc("commande_action",{p_cid:id,p_action:"preparer"}),null,()=>cmdDetail(id));if(setStatut(cmd(id),"preparation","Début de préparation")){done();cmdDetail(id)}},
+ cmdPrete:id=>{if(CL.on)return CL.go(()=>CL.rpc("commande_action",{p_cid:id,p_action:"prete"}),"Commande prête",()=>cmdDetail(id));if(marquerPrete(cmd(id))){done("Commande prête");cmdDetail(id)}},
+ cmdAnnul:id=>ask("Annuler la commande","Motif de l'annulation (obligatoire)",m=>{if(CL.on)return CL.go(()=>CL.rpc("commande_action",{p_cid:id,p_action:"annuler",p_note:m}),"Commande annulée");if(annuler(cmd(id),m))done("Commande annulée")},{label:"Annuler la commande",cls:"er"}),
  assign:id=>assignModal(cmd(id)),
- reprog:id=>{if(setStatut(cmd(id),"prete","Nouvelle tentative programmée")){audit("Nouvelle tentative",cmd(id).numero);done("Prête pour une nouvelle tentative — à affecter");cmdDetail(id)}},
- orgRetour:id=>{if(setStatut(cmd(id),"retour_cours","Retour du colis organisé")){audit("Retour organisé",cmd(id).numero);done("Retour en cours");cmdDetail(id)}},
+ reprog:id=>{if(CL.on)return CL.go(()=>CL.rpc("commande_action",{p_cid:id,p_action:"reprogrammer"}),"Prête pour une nouvelle tentative — à affecter",()=>cmdDetail(id));if(setStatut(cmd(id),"prete","Nouvelle tentative programmée")){audit("Nouvelle tentative",cmd(id).numero);done("Prête pour une nouvelle tentative — à affecter");cmdDetail(id)}},
+ orgRetour:id=>{if(CL.on)return CL.go(()=>CL.rpc("commande_action",{p_cid:id,p_action:"organiser_retour"}),"Retour en cours",()=>cmdDetail(id));if(setStatut(cmd(id),"retour_cours","Retour du colis organisé")){audit("Retour organisé",cmd(id).numero);done("Retour en cours");cmdDetail(id)}},
  recepRetour:id=>{const c=cmd(id);
   modal("Réceptionner le retour — "+c.numero,`<div class="sec">Quantités retournées</div>${c.lignes.map((l,i)=>`<label>${esc(lname(l))} (envoyé : ${l.qte})<input type="number" name="q${i}" min="0" max="${l.qte}" value="${l.qte}"></label>`).join("")}<label>État du colis<select name="etat">${opts(["Intact","Endommagé","Partiel"])}</select></label><label>Décision<select name="dec">${opts([{v:"stock",t:"Remise en stock"},{v:"quarantaine",t:"Mise en quarantaine"},{v:"autre",t:"Autre traitement"}])}</select></label><label>Motif du retour<input name="motif" value="${esc((livsOf(c.id).filter(l=>l.motif_echec).slice(-1)[0]||{}).motif_echec||"")}" required></label>`,
-  {label:"Confirmer la réception",onSubmit:d=>{if(!setStatut(c,"retour_recu","Réceptionné"))return false;
+  {label:"Confirmer la réception",onSubmit:d=>{if(CL.on)return CL.go(()=>CL.rpc("reception_retour",{p_cid:c.id,p_qtes:Object.fromEntries(c.lignes.map((l,i)=>[l.id,Math.max(0,+d["q"+i]||0)])),p_etat:d.etat,p_decision:d.dec,p_motif:d.motif}),"Retour enregistré");if(!setStatut(c,"retour_recu","Réceptionné"))return false;
    if(d.dec==="stock"&&c.stock_sorti){c.lignes.forEach((l,i)=>{const q=Math.min(l.qte,Math.max(0,+d["q"+i]||0));if(q>0&&l.produit_id)stockMvt(prod(l.produit_id),q,"retour_stock",c.numero)});c.stock_sorti=false}
    S.retours.push({id:uid("r"),commande_id:c.id,ts:now(),motif:d.motif,etat:d.etat,decision:d.dec==="stock"?"Remise en stock":d.dec==="quarantaine"?"Quarantaine":"Autre",par:who(),qtes:c.lignes.map((l,i)=>+d["q"+i]||0)});
    audit("Retour réceptionné",c.numero+" — "+d.dec);done("Retour enregistré")}})},
  forceStatut:id=>{const c=cmd(id);modal("Correction exceptionnelle — "+c.numero,`<div class="al warn">Réservé à l'administrateur. L'opération est tracée dans le journal d'audit. Le stock et les fonds ne sont pas recalculés automatiquement.</div><label>Nouveau statut<select name="s">${opts(Object.entries(ST).map(e=>({v:e[0],t:e[1]})),c.statut)}</select></label><label>Justification<textarea name="m" required rows="2"></textarea></label>`,
-  {label:"Appliquer",cls:"er",onSubmit:d=>{const old=c.statut;c.hist.push({ts:now(),de:old,a:d.s,par:who(),note:"CORRECTION EXCEPTIONNELLE : "+d.m});c.statut=d.s;audit("Correction de statut",`${c.numero} : ${ST[old]} → ${ST[d.s]} — ${d.m}`);done("Statut corrigé")}})},
- printBL:id=>{const c=cmd(id);const d=docsOf(id,"bl")[0]||emettreDoc("bl",c);save();docOpen(d)},
- docFac:id=>{const c=cmd(id);let d=docsOf(id,"facture").find(x=>avoirsDe(x.id)<x.total);if(!d)d=emettreDoc("facture",c);save();docOpen(d)},
- docRecu:id=>{const c=cmd(id);let d=docsOf(id,"recu").slice(-1)[0];if(!d||d.total_paye!==paye(c))d=emettreDoc("recu",c);if(!d)return toast("Aucun paiement enregistré","err");save();docOpen(d)},
+  {label:"Appliquer",cls:"er",onSubmit:d=>{if(CL.on)return CL.go(()=>CL.rpc("corriger_statut",{p_cid:c.id,p_to:d.s,p_motif:d.m}),"Statut corrigé");const old=c.statut;c.hist.push({ts:now(),de:old,a:d.s,par:who(),note:"CORRECTION EXCEPTIONNELLE : "+d.m});c.statut=d.s;audit("Correction de statut",`${c.numero} : ${ST[old]} → ${ST[d.s]} — ${d.m}`);done("Statut corrigé")}})},
+ printBL:id=>{if(CL.on)return CL.doc(id,"bl");const c=cmd(id);const d=docsOf(id,"bl")[0]||emettreDoc("bl",c);save();docOpen(d)},
+ docFac:id=>{if(CL.on)return CL.doc(id,"facture");const c=cmd(id);let d=docsOf(id,"facture").find(x=>avoirsDe(x.id)<x.total);if(!d)d=emettreDoc("facture",c);save();docOpen(d)},
+ docRecu:id=>{if(CL.on)return CL.doc(id,"recu");const c=cmd(id);let d=docsOf(id,"recu").slice(-1)[0];if(!d||d.total_paye!==paye(c))d=emettreDoc("recu",c);if(!d)return toast("Aucun paiement enregistré","err");save();docOpen(d)},
  docAvoir:id=>avoirModal(byId(S.docs,id)),
  docOpen:id=>docOpen(byId(S.docs,id)),
  printFrame:()=>{const f=$("#docf");if(f){f.contentWindow.focus();f.contentWindow.print()}},
- notifSend:id=>{const n=byId(S.notifs,id);window.open(waLink(n.tel,n.message),"_blank","noopener");n.statut="envoye";n.envoye_at=now();n.par=who();audit("Notification envoyée (WhatsApp)",n.event+" — "+n.nom);save();render()},
- notifSms:id=>{const n=byId(S.notifs,id);window.open("sms:"+String(n.tel).replace(/[^\d+]/g,"")+"?body="+encodeURIComponent(n.message),"_self");n.statut="envoye";n.canal="SMS";n.envoye_at=now();n.par=who();audit("Notification envoyée (SMS)",n.event+" — "+n.nom);save();render()},
- notifIgnore:id=>{const n=byId(S.notifs,id);n.statut="ignore";n.par=who();save();render()},
- notifEdit:id=>{const n=byId(S.notifs,id);modal("Modifier le message",`<label>Message pour ${esc(n.nom)}<textarea name="m" rows="5" required>${esc(n.message)}</textarea></label>`,{onSubmit:d=>{n.message=d.m;save();render()}})},
+ notifSend:id=>{if(CL.on){const n=byId(S.notifs,id);window.open(waLink(n.tel,n.message),"_blank","noopener");return CL.go(()=>CL.rpc("notification_marquer_manuel",{p_id:id}))}const n=byId(S.notifs,id);window.open(waLink(n.tel,n.message),"_blank","noopener");n.statut="envoye";n.envoye_at=now();n.par=who();audit("Notification envoyée (WhatsApp)",n.event+" — "+n.nom);save();render()},
+ notifSms:id=>{if(CL.on){const n=byId(S.notifs,id);window.open("sms:"+String(n.tel).replace(/[^\d+]/g,"")+"?body="+encodeURIComponent(n.message),"_self");return CL.go(()=>CL.rpc("notification_marquer_manuel",{p_id:id}))}const n=byId(S.notifs,id);window.open("sms:"+String(n.tel).replace(/[^\d+]/g,"")+"?body="+encodeURIComponent(n.message),"_self");n.statut="envoye";n.canal="SMS";n.envoye_at=now();n.par=who();audit("Notification envoyée (SMS)",n.event+" — "+n.nom);save();render()},
+ notifRetry:id=>CL.go(()=>CL.rpc("notification_renvoyer",{p_id:id}),"Message remis en file d'envoi"),
+ notifIgnore:id=>{if(CL.on)return CL.go(()=>CL.rpc("notification_ignorer",{p_id:id}));const n=byId(S.notifs,id);n.statut="ignore";n.par=who();save();render()},
+ notifEdit:id=>{const n=byId(S.notifs,id);modal("Modifier le message",`<label>Message pour ${esc(n.nom)}<textarea name="m" rows="5" required>${esc(n.message)}</textarea></label>`,{onSubmit:d=>{if(CL.on)return CL.go(()=>CL.rpc("notification_modifier",{p_id:n.id,p_message:d.m}),"Message modifié");n.message=d.m;save();render()}})},
  mapLiv:id=>{ui.mapLiv=id;render()},
- ecartOk:id=>ask("Accepter l'écart","Décision / justification",m=>{const l=byId(S.livraisons,id);l.ecart_statut="valide";l.ecart_decision=m;l.ecart_par=who();audit("Écart validé",`${cmd(l.commande_id).numero} ${fcfa(l.ecart)} — ${m}`);done("Écart accepté")}),
- ecartKo:id=>ask("Rejeter l'écart","Motif du rejet (le livreur reste redevable)",m=>{const l=byId(S.livraisons,id);l.ecart_statut="rejete";l.ecart_decision=m;l.ecart_par=who();audit("Écart rejeté",`${cmd(l.commande_id).numero} ${fcfa(l.ecart)} — ${m}`);done("Écart rejeté")},{cls:"er"}),
+ ecartOk:id=>ask("Accepter l'écart","Décision / justification",m=>{if(CL.on)return CL.go(()=>CL.rpc("valider_ecart",{p_lid:id,p_accepte:true,p_decision:m}),"Écart accepté");const l=byId(S.livraisons,id);l.ecart_statut="valide";l.ecart_decision=m;l.ecart_par=who();audit("Écart validé",`${cmd(l.commande_id).numero} ${fcfa(l.ecart)} — ${m}`);done("Écart accepté")}),
+ ecartKo:id=>ask("Rejeter l'écart","Motif du rejet (le livreur reste redevable)",m=>{if(CL.on)return CL.go(()=>CL.rpc("valider_ecart",{p_lid:id,p_accepte:false,p_decision:m}),"Écart rejeté");const l=byId(S.livraisons,id);l.ecart_statut="rejete";l.ecart_decision=m;l.ecart_par=who();audit("Écart rejeté",`${cmd(l.commande_id).numero} ${fcfa(l.ecart)} — ${m}`);done("Écart rejeté")},{cls:"er"}),
  newCli:()=>cliForm(),cliEdit:id=>cliForm(cli(id)),cliDetail:id=>cliDetail(id),
- adrAdd:id=>{const c=cli(id);modal("Nouvelle adresse — "+c.nom,adrForm(),{onSubmit:d=>{c.adresses.push(Object.assign({id:uid("a"),defaut:false},adrFrom(d)));audit("Ajout adresse",c.nom);done();cliDetail(id)}})},
- adrDefaut:id=>{const[c,a]=id.split("|");cli(c).adresses.forEach(x=>x.defaut=x.id===a);done();cliDetail(c)},
+ adrAdd:id=>{const c=cli(id);modal("Nouvelle adresse — "+c.nom,adrForm(),{onSubmit:d=>{if(CL.on)return CL.adrAdd(c,d,id);c.adresses.push(Object.assign({id:uid("a"),defaut:false},adrFrom(d)));audit("Ajout adresse",c.nom);done();cliDetail(id)}})},
+ adrDefaut:id=>{if(CL.on){const[c,a]=id.split("|");return CL.go(async()=>{await CL.chk(CL.sb.from("adresses").update({defaut:false}).eq("client_id",c));await CL.chk(CL.sb.from("adresses").update({defaut:true}).eq("id",a))},null,()=>cliDetail(c))}const[c,a]=id.split("|");cli(c).adresses.forEach(x=>x.defaut=x.id===a);done();cliDetail(c)},
  newProd:()=>prodForm(),editProd:id=>prodForm(prod(id)),
- adjProd:id=>{const p=prod(id);modal("Ajuster le stock — "+p.nom,`<div class="pill">Stock actuel : <b>${p.stock}</b></div><label>Nouveau stock réel (inventaire)<input type="number" name="n" min="0" required value="${p.stock}"></label><label>Justification<input name="m" required></label>`,{onSubmit:d=>{const diff=+d.n-p.stock;if(!diff)return;stockMvt(p,diff,"ajustement",d.m);audit("Ajustement de stock",`${p.nom} ${diff>0?"+":""}${diff} — ${d.m}`);done("Stock ajusté")}})},
- newLiv:()=>livForm(),editLiv:id=>livForm(liv(id)),togLiv:id=>{const l=liv(id);l.statut=l.statut==="disponible"?"indisponible":"disponible";audit("Disponibilité livreur",l.nom+" → "+l.statut);done()},
+ adjProd:id=>{const p=prod(id);modal("Ajuster le stock — "+p.nom,`<div class="pill">Stock actuel : <b>${p.stock}</b></div><label>Nouveau stock réel (inventaire)<input type="number" name="n" min="0" required value="${p.stock}"></label><label>Justification<input name="m" required></label>`,{onSubmit:d=>{if(CL.on)return CL.go(()=>CL.rpc("ajuster_stock",{p_produit:p.id,p_nouveau:+d.n,p_motif:d.m}),"Stock ajusté");const diff=+d.n-p.stock;if(!diff)return;stockMvt(p,diff,"ajustement",d.m);audit("Ajustement de stock",`${p.nom} ${diff>0?"+":""}${diff} — ${d.m}`);done("Stock ajusté")}})},
+ newLiv:()=>livForm(),editLiv:id=>livForm(liv(id)),togLiv:id=>{if(CL.on)return CL.go(()=>CL.upd("livreurs",id,{statut:liv(id).statut==="disponible"?"indisponible":"disponible"}));const l=liv(id);l.statut=l.statut==="disponible"?"indisponible":"disponible";audit("Disponibilité livreur",l.nom+" → "+l.statut);done()},
  newMoto:()=>motoForm(),editMoto:id=>motoForm(moto(id)),
  reverser:id=>{const l=liv(id),s=soldeLiv(id);modal("Reversement — "+l.nom,`<div class="pill">Montant dû par le livreur : <b>${fcfa(s)}</b></div><label>Montant réellement reçu (compté)<input type="number" name="m" min="1" max="${s}" required value="${s}"></label><label>Mode<select name="mode">${opts(S.config.modes)}</select></label><label>Note<input name="note"></label>`,
-  {label:"Valider le reversement",cls:"ok",onSubmit:d=>{const m=+d.m;if(m<=0||m>s)return toast("Montant invalide","err"),false;S.fonds.push({id:uid("f"),type:"reversement",livreur_id:id,montant:m,mode:d.mode,note:d.note,ts:now(),par:who()});audit("Reversement validé",`${l.nom} — ${fcfa(m)} (reste ${fcfa(s-m)})`);done("Reversement enregistré")}})},
- payer:id=>{const l=liv(id),r=commAcquise(id)-commPayee(id);modal("Paiement — "+l.nom,`<div class="pill">Reste à payer : <b>${fcfa(r)}</b></div><label>Type<select name="t"><option value="commission">Commission</option><option value="avance">Avance</option></select></label><label>Montant<input type="number" name="m" min="1" required value="${Math.max(0,r)}"></label>`,{onSubmit:d=>{S.paie.push({id:uid("pa"),livreur_id:id,montant:+d.m,type:d.t,ts:now(),par:who()});audit("Paiement livreur",`${l.nom} — ${d.t} ${fcfa(+d.m)}`);done("Paiement enregistré")}})},
- newDep:()=>modal("Dépense de mission",`<label>Livreur<select name="l">${opts(S.livreurs.map(l=>({v:l.id,t:l.nom})))}</select></label><label>Commande liée (facultatif)<select name="c"><option value="">—</option>${S.commandes.slice(0,60).map(c=>`<option value="${c.id}">${c.numero}</option>`).join("")}</select></label><label>Nature<select name="n">${opts(["Stationnement","Péage","Carburant (sur justificatif)","Autre dépense autorisée"])}</select></label><label>Montant<input type="number" name="m" min="1" required></label>`,{onSubmit:d=>{S.depenses.push({id:uid("d"),livreur_id:d.l,commande_id:d.c||null,nature:d.n,montant:+d.m,ts:now(),par:who()});audit("Dépense de mission",`${d.n} ${fcfa(+d.m)}`);done()}}),
+  {label:"Valider le reversement",cls:"ok",onSubmit:d=>{const m=+d.m;if(m<=0||m>s)return toast("Montant invalide","err"),false;if(CL.on)return CL.go(()=>CL.rpc("reversement",{p_lid:id,p_montant:m,p_mode:d.mode,p_note:d.note||""}),"Reversement enregistré");S.fonds.push({id:uid("f"),type:"reversement",livreur_id:id,montant:m,mode:d.mode,note:d.note,ts:now(),par:who()});audit("Reversement validé",`${l.nom} — ${fcfa(m)} (reste ${fcfa(s-m)})`);done("Reversement enregistré")}})},
+ payer:id=>{const l=liv(id),r=commAcquise(id)-commPayee(id);modal("Paiement — "+l.nom,`<div class="pill">Reste à payer : <b>${fcfa(r)}</b></div><label>Type<select name="t"><option value="commission">Commission</option><option value="avance">Avance</option></select></label><label>Montant<input type="number" name="m" min="1" required value="${Math.max(0,r)}"></label>`,{onSubmit:d=>{if(CL.on)return CL.go(()=>CL.ins("paiements_livreurs",{org_id:CL.org,livreur_id:id,type:d.t,montant:+d.m}),"Paiement enregistré");S.paie.push({id:uid("pa"),livreur_id:id,montant:+d.m,type:d.t,ts:now(),par:who()});audit("Paiement livreur",`${l.nom} — ${d.t} ${fcfa(+d.m)}`);done("Paiement enregistré")}})},
+ newDep:()=>modal("Dépense de mission",`<label>Livreur<select name="l">${opts(S.livreurs.map(l=>({v:l.id,t:l.nom})))}</select></label><label>Commande liée (facultatif)<select name="c"><option value="">—</option>${S.commandes.slice(0,60).map(c=>`<option value="${c.id}">${c.numero}</option>`).join("")}</select></label><label>Nature<select name="n">${opts(["Stationnement","Péage","Carburant (sur justificatif)","Autre dépense autorisée"])}</select></label><label>Montant<input type="number" name="m" min="1" required></label>`,{onSubmit:d=>{if(CL.on)return CL.go(()=>CL.ins("depenses",{org_id:CL.org,livreur_id:d.l,commande_id:d.c||null,nature:d.n,montant:+d.m}),"Dépense enregistrée");S.depenses.push({id:uid("d"),livreur_id:d.l,commande_id:d.c||null,nature:d.n,montant:+d.m,ts:now(),par:who()});audit("Dépense de mission",`${d.n} ${fcfa(+d.m)}`);done()}}),
  newInc:()=>incForm(),
- incTrait:id=>{const i=byId(S.incidents,id);modal("Traiter "+i.ref,`<div class="pill">${esc(i.cat)} — ${esc(i.desc)}</div><label>Statut<select name="s">${opts(["en traitement","résolu"])}</select></label><label>Décision prise<textarea name="d" rows="2" required></textarea></label>`,{onSubmit:d=>{i.statut=d.s;i.decision=d.d;i.responsable=who();audit("Incident traité",i.ref+" → "+d.s);done()}})},
- newUser:()=>modal("Nouvel utilisateur",`<label>Nom<input name="nom" required></label><label>Profil<select name="r">${opts(Object.keys(ROLES).filter(r=>r!=="livreur").map(r=>({v:r,t:ROLES[r]})))}</select></label><label>PIN (4 à 8 chiffres)<input name="pin" pattern="[0-9]{4,8}" inputmode="numeric" required></label><div class="sm mu">Les livreurs se créent depuis « Livreurs & motos ».</div>`,{onSubmit:d=>{const u={id:uid("u"),nom:d.nom,role:d.r,actif:true};u.pin_h=hashPin(u.id,d.pin);S.users.push(u);audit("Création utilisateur",d.nom+" ("+d.r+")");done()}}),
- togUser:id=>{const u=usr(id);u.actif=!u.actif;audit(u.actif?"Compte réactivé":"Compte désactivé",u.nom);done()},
- pinUser:id=>{const u=usr(id);modal("Nouveau PIN — "+u.nom,`<label>PIN (4 à 8 chiffres)<input name="pin" pattern="[0-9]{4,8}" inputmode="numeric" required></label>`,{onSubmit:d=>{u.pin_h=hashPin(u.id,d.pin);audit("PIN réinitialisé",u.nom);done("PIN modifié")}})},
+ incTrait:id=>{const i=byId(S.incidents,id);modal("Traiter "+i.ref,`<div class="pill">${esc(i.cat)} — ${esc(i.desc)}</div><label>Statut<select name="s">${opts(["en traitement","résolu"])}</select></label><label>Décision prise<textarea name="d" rows="2" required></textarea></label>`,{onSubmit:d=>{if(CL.on)return CL.go(()=>CL.upd("incidents",i.id,{statut:d.s,decision:d.d,responsable:CL.uid}),"Incident mis à jour");i.statut=d.s;i.decision=d.d;i.responsable=who();audit("Incident traité",i.ref+" → "+d.s);done()}})},
+ newUser:()=>modal("Nouvel utilisateur",`<label>Nom<input name="nom" required></label>${CL.on?'<label>Identifiant de connexion<input name="ident" required autocapitalize="none"></label>':""}<label>Profil<select name="r">${opts(Object.keys(ROLES).filter(r=>r!=="livreur").map(r=>({v:r,t:ROLES[r]})))}</select></label><label>PIN (${PINMIN} à 8 chiffres)<input name="pin" pattern="[0-9]{${PINMIN},8}" inputmode="numeric" required></label><div class="sm mu">Les livreurs se créent depuis « Livreurs & motos ».</div>`,{onSubmit:d=>{if(CL.on)return CL.go(()=>CL.fn("creer-utilisateur",{nom:d.nom,role:d.r,identifiant:d.ident,mot_de_passe:d.pin}),"Utilisateur créé");const u={id:uid("u"),nom:d.nom,role:d.r,actif:true};u.pin_h=hashPin(u.id,d.pin);S.users.push(u);audit("Création utilisateur",d.nom+" ("+d.r+")");done()}}),
+ togUser:id=>{if(CL.on)return CL.go(()=>CL.updBy("membres","user_id",id,{actif:!usr(id).actif}),"Compte mis à jour");const u=usr(id);u.actif=!u.actif;audit(u.actif?"Compte réactivé":"Compte désactivé",u.nom);done()},
+ pinUser:id=>{const u=usr(id);modal("Nouveau PIN — "+u.nom,`<label>PIN (${PINMIN} à 8 chiffres)<input name="pin" pattern="[0-9]{${PINMIN},8}" inputmode="numeric" required></label>`,{onSubmit:d=>{if(CL.on)return CL.go(()=>CL.fn("creer-utilisateur",{action:"reset",user_id:u.id,mot_de_passe:d.pin}),"Mot de passe modifié");u.pin_h=hashPin(u.id,d.pin);audit("PIN réinitialisé",u.nom);done("PIN modifié")}})},
  newZone:()=>zoneForm(),editZone:id=>zoneForm(S.config.zones.find(z=>z.id===id)),
- saveParams:()=>{const c=S.config,L=id=>$(id).value.split("\n").map(s=>s.trim()).filter(Boolean);c.motifs=L("#p_motifs");c.cats=L("#p_cats");c.remu={type:$("#p_rt").value,fixe:+$("#p_rf").value||0,pct:+$("#p_rp").value||0};c.gps_stale_ok=+$("#p_g1").value||2;c.gps_stale_warn=+$("#p_g2").value||10;c.gps_interval=+$("#p_g3").value||20;c.gps_retention_jours=+$("#p_g4").value||30;c.ste={adresse:$("#p_ad").value,tel:$("#p_stel").value,nif:$("#p_nif").value,rccm:$("#p_rccm").value};c.mention_legale=$("#p_ml").value;c.etiq_scan=$("#p_es").checked;c.etiq_montant=$("#p_em").checked;c.etiq_tel=$("#p_et").checked;c.signature_seuil=Math.max(0,+$("#p_sig").value||0);["confirmee","en_cours","livree","echouee"].forEach(k=>{c.notif[k]=$("#pn_"+k).checked;c.tpl[k]=$("#pt_"+k).value.trim()||TPL_DEF[k]});audit("Paramètres modifiés","");done("Paramètres enregistrés")},
+ saveParams:()=>{const c=S.config,L=id=>$(id).value.split("\n").map(s=>s.trim()).filter(Boolean);c.motifs=L("#p_motifs");c.cats=L("#p_cats");c.remu={type:$("#p_rt").value,fixe:+$("#p_rf").value||0,pct:+$("#p_rp").value||0};c.gps_stale_ok=+$("#p_g1").value||2;c.gps_stale_warn=+$("#p_g2").value||10;c.gps_interval=+$("#p_g3").value||20;c.gps_retention_jours=+$("#p_g4").value||30;c.ste={adresse:$("#p_ad").value,tel:$("#p_stel").value,nif:$("#p_nif").value,rccm:$("#p_rccm").value};c.mention_legale=$("#p_ml").value;c.etiq_scan=$("#p_es").checked;c.etiq_montant=$("#p_em").checked;c.etiq_tel=$("#p_et").checked;c.signature_seuil=Math.max(0,+$("#p_sig").value||0);["confirmee","en_cours","livree","echouee"].forEach(k=>{c.notif[k]=$("#pn_"+k).checked;c.tpl[k]=$("#pt_"+k).value.trim()||TPL_DEF[k]});if(CL.on)return CL.saveConfig();audit("Paramètres modifiés","");done("Paramètres enregistrés")},
  exportData:()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:"application/json"}));a.download="angels_erp_"+new Date().toISOString().slice(0,10)+".json";a.click()},
  resetData:()=>{if(confirm("Effacer toutes les données et recharger la démonstration ?")){localStorage.removeItem(KEY);ME=null;sessionStorage.removeItem("angels_me");load();render()}},
  /* livreur */
- lAcc:id=>{if(accepter(byId(S.livraisons,id)))done("Mission acceptée")},
- lRef:id=>ask("Mission impossible","Motif (obligatoire)",m=>{if(refuser(byId(S.livraisons,id),m))done("Le superviseur a été informé")},{cls:"er"}),
+ lAcc:id=>{if(CL.on)return CL.liv(id,"accepter",{},"Mission acceptée");if(accepter(byId(S.livraisons,id)))done("Mission acceptée")},
+ lRef:id=>ask("Mission impossible","Motif (obligatoire)",m=>{if(CL.on)return CL.liv(id,"refuser",{motif:m},"Le superviseur a été informé");if(refuser(byId(S.livraisons,id),m))done("Le superviseur a été informé")},{cls:"er"}),
  lPrise:id=>{const l=byId(S.livraisons,id),c=cmd(l.commande_id);
   if(colisReq(c)){
    modal("Prise en charge — "+c.numero,`<div class="pill">Scannez l'étiquette de chacun des <b>${c.colis.length}</b> colis avant de partir.</div>${scanPanel(c)}<label>État apparent<select name="e">${opts(["Bon état","Emballage abîmé"])}</select></label>`,
-   {label:"Confirmer la prise en charge",onSubmit:d=>{if(!d.colis_ok)return toast("Il reste des colis à scanner","err"),false;if(priseEnCharge(l,c.colis.length)){l.etat_colis=d.e;try{l.colis_scans=JSON.parse(d.colis_ok)}catch(e){}done("Prise en charge enregistrée")}}});bindScan(c);return}
-  modal("Prise en charge",`<div class="pill">Commande ${c.numero}</div><label>Nombre de colis reçus<input type="number" name="n" min="1" value="1" required></label><label>État apparent<select name="e">${opts(["Bon état","Emballage abîmé"])}</select></label>`,{label:"Confirmer",onSubmit:d=>{if(priseEnCharge(l,+d.n)){l.etat_colis=d.e;done("Prise en charge enregistrée")}}})},
- lGo:id=>{const l=byId(S.livraisons,id);gpsConsent(()=>{if(demarrer(l)){done("Course démarrée — conduisez prudemment");syncGPS();navigator.geolocation&&navigator.geolocation.getCurrentPosition(p=>{pushPos(p,true);render()},()=>{},{timeout:10000})}})},
+   {label:"Confirmer la prise en charge",onSubmit:d=>{if(!d.colis_ok)return toast("Il reste des colis à scanner","err"),false;if(CL.on)return CL.liv(l.id,"prise_en_charge",{etat:d.e,scans:JSON.parse(d.colis_ok).map(x=>x.txt)},"Prise en charge enregistrée");if(priseEnCharge(l,c.colis.length)){l.etat_colis=d.e;try{l.colis_scans=JSON.parse(d.colis_ok)}catch(e){}done("Prise en charge enregistrée")}}});bindScan(c);return}
+  modal("Prise en charge",`<div class="pill">Commande ${c.numero}</div><label>Nombre de colis reçus<input type="number" name="n" min="1" value="1" required></label><label>État apparent<select name="e">${opts(["Bon état","Emballage abîmé"])}</select></label>`,{label:"Confirmer",onSubmit:d=>{if(CL.on)return CL.liv(l.id,"prise_en_charge",{nb_colis:+d.n,etat:d.e},"Prise en charge enregistrée");if(priseEnCharge(l,+d.n)){l.etat_colis=d.e;done("Prise en charge enregistrée")}}})},
+ lGo:id=>{const l=byId(S.livraisons,id);gpsConsent(()=>{if(CL.on)return CL.liv(l.id,"demarrer",{},"Course démarrée — conduisez prudemment").then(ok=>{if(ok){syncGPS();navigator.geolocation&&navigator.geolocation.getCurrentPosition(p=>{pushPos(p,true)},()=>{},{timeout:10000})}});if(demarrer(l)){done("Course démarrée — conduisez prudemment");syncGPS();navigator.geolocation&&navigator.geolocation.getCurrentPosition(p=>{pushPos(p,true);render()},()=>{},{timeout:10000})}})},
  lConf:id=>{const l=byId(S.livraisons,id),c=cmd(l.commande_id),req=sigReq(c);
   modal("Confirmer la livraison — "+c.numero,`<div class="pill">Montant attendu : <span class="amt">${fcfa(l.montant_attendu)}</span></div><label>Code de confirmation (donné par le client)<input name="code" inputmode="numeric" maxlength="4" required style="font-size:22px;letter-spacing:6px;text-align:center"></label><label>Nom de la personne ayant reçu<input name="recu_par" required value="${esc(cli(c.client_id).nom)}"></label>
   ${l.montant_attendu>0?`<div class="g2"><label>Montant encaissé (F)<input type="number" name="montant" min="0" required value="${l.montant_attendu}"></label><label>Mode<select name="mode">${opts(S.config.modes)}</select></label></div><label>Explication de l'écart (si montant ≠ attendu)<input name="ecart_note"></label>`:'<input type="hidden" name="montant" value="0"><input type="hidden" name="mode" value="—">'}
@@ -725,35 +728,38 @@ const ACT={
   ${req?`<div class="sec">Signature du destinataire <span class="mu sm">(obligatoire dès ${fcfa(S.config.signature_seuil)})</span></div>`:`<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="sig_on" style="width:auto"> Recueillir la signature (facultatif)</label>`}
   <div id="sig_box" class="${req?"":"hide"}"><canvas id="sig" width="440" height="160" style="width:100%;height:160px;border:1px dashed var(--mu);border-radius:8px;background:#fff;touch-action:none"></canvas><div class="flex"><button type="button" class="btn sm ghost" id="sig_clr">Effacer</button><span class="sm mu">Signez avec le doigt</span></div><input type="hidden" name="signature" id="sig_val"></div>
   <label>Commentaire (facultatif)<input name="obs"></label>`,
-  {label:"Valider la livraison",cls:"ok",onSubmit:d=>{if(!confirmer(l,d))return false;done("Livraison confirmée ✔")}});initSig();if(colisReq(c))bindScan(c)},
- lFail:id=>{const l=byId(S.livraisons,id);modal("Livraison impossible",`<label>Motif<select name="m">${opts(S.config.motifs)}</select></label><label>Observation<textarea name="o" rows="2"></textarea></label>`,{label:"Enregistrer l'échec",cls:"er",onSubmit:d=>{if(echec(l,d.m,d.o))done("Échec enregistré — le superviseur est informé")}})},
+  {label:"Valider la livraison",cls:"ok",onSubmit:d=>{if(CL.on)return CL.confirmer(l,c,d);if(!confirmer(l,d))return false;done("Livraison confirmée ✔")}});initSig();if(colisReq(c))bindScan(c)},
+ lFail:id=>{const l=byId(S.livraisons,id);modal("Livraison impossible",`<label>Motif<select name="m">${opts(S.config.motifs)}</select></label><label>Observation<textarea name="o" rows="2"></textarea></label>`,{label:"Enregistrer l'échec",cls:"er",onSubmit:d=>{if(CL.on)return CL.liv(l.id,"echec",{motif:d.m,obs:d.o},"Échec enregistré — le superviseur est informé");if(echec(l,d.m,d.o))done("Échec enregistré — le superviseur est informé")}})},
  myInc:()=>{const lv=livreurOf(ME),a=S.livraisons.find(l=>l.livreur_id===lv.id&&isActive(l));incForm(lv.id,a?a.commande_id:null)},
  sendPos:sendPosNow,
  etiq:id=>etiqModal(cmd(id)),scanCmd:scanCmdModal,
  newTour:tourneeModal,tourDetail:id=>tourneeDetail(id),
- tourMove:id=>{const[tid,lid,dir]=id.split("|"),t=byId(S.tournees,tid),st=stopsOf(t),i=st.findIndex(l=>l.id===lid),j=i+(+dir);if(i<0||j<0||j>=st.length)return;
+ tourMove:id=>{if(CL.on){const[tid,lid,dir]=id.split("|");return CL.go(()=>CL.rpc("deplacer_arret",{p_livraison:lid,p_dir:+dir}),null,()=>tourneeDetail(tid))}const[tid,lid,dir]=id.split("|"),t=byId(S.tournees,tid),st=stopsOf(t),i=st.findIndex(l=>l.id===lid),j=i+(+dir);if(i<0||j<0||j>=st.length)return;
   if(!["affectee","acceptee"].includes(st[i].statut)||!["affectee","acceptee"].includes(st[j].statut))return toast("Arrêt déjà démarré : ordre figé","err");
   const a=st[i].ordre;st[i].ordre=st[j].ordre;st[j].ordre=a;audit("Ordre de tournée modifié",t.numero);save();render();tourneeDetail(tid)},
  entMoto:id=>entretienModal(moto(id)),histMoto:id=>histMoto(moto(id)),
  newVend:()=>vendForm(),editVend:id=>vendForm(vendOf(id)),newVCmd:vCmdForm,vImport:vImportModal,
  csvModel:()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["ref;client;tel;zone;quartier;repere;article;qte;prix\nA001;Mme Kouassi;0707123456;Cocody;Angré;Près de la pharmacie;Robe wax;2;12000\nA001;Mme Kouassi;0707123456;Cocody;Angré;Près de la pharmacie;Sandales;1;8000\nA002;M. Bamba;0505987654;Yopougon;Sicogi;Derrière l'école;Sac à main;1;15000\n"],{type:"text/csv"}));a.download="modele_commandes.csv";a.click()},
- vReg:id=>{const v=vendOf(id),d=vendDue(v);modal("Règlement — "+v.nom,`<div class="pill">Reste à régler : <b>${fcfa(d.restant)}</b></div><label>Montant réglé<input type="number" name="m" min="1" max="${d.restant}" required value="${d.restant}"></label><label>Mode<select name="mode">${opts(S.config.modes)}</select></label><label>Note / référence<input name="note"></label>`,{label:"Enregistrer",cls:"ok",onSubmit:x=>{const m=+x.m;if(m<=0||m>d.restant)return toast("Montant invalide","err"),false;S.reglements.push({id:uid("rg"),vendeur_id:id,montant:m,mode:x.mode,note:x.note,ts:now(),par:who()});audit("Règlement vendeur",`${v.nom} — ${fcfa(m)}`);done("Règlement enregistré")}})},
+ vReg:id=>{const v=vendOf(id),d=vendDue(v);modal("Règlement — "+v.nom,`<div class="pill">Reste à régler : <b>${fcfa(d.restant)}</b></div><label>Montant réglé<input type="number" name="m" min="1" max="${d.restant}" required value="${d.restant}"></label><label>Mode<select name="mode">${opts(S.config.modes)}</select></label><label>Note / référence<input name="note"></label>`,{label:"Enregistrer",cls:"ok",onSubmit:x=>{const m=+x.m;if(m<=0||m>d.restant)return toast("Montant invalide","err"),false;if(CL.on)return CL.go(()=>CL.rpc("regler_vendeur",{p_vid:id,p_montant:m,p_mode:x.mode,p_note:x.note||""}),"Règlement enregistré");S.reglements.push({id:uid("rg"),vendeur_id:id,montant:m,mode:x.mode,note:x.note,ts:now(),par:who()});audit("Règlement vendeur",`${v.nom} — ${fcfa(m)}`);done("Règlement enregistré")}})},
  lMap:id=>{ui.mapOpen=ui.mapOpen||{};ui.mapOpen[id]=!ui.mapOpen[id];render()},
  lAskGeo:id=>{const c=cmd(byId(S.livraisons,id).commande_id);geoLinkModal(c.client_id,c.adr.id,c.numero)},
  geoLink:id=>{const[c,a]=id.split("|");geoLinkModal(c,a)},geoPick:id=>{const[c,a]=id.split("|");geoPickModal(c,a)},geoPaste:id=>{const[c,a]=id.split("|");geoPasteModal(c,a)},
  copyLink:()=>{const v=$("#gl").value;(navigator.clipboard?navigator.clipboard.writeText(v):Promise.reject()).then(()=>toast("Lien copié","ok"),()=>{$("#gl").select();toast("Sélectionné : copiez-le (Ctrl+C)")})},
- myStatus:()=>{const lv=livreurOf(ME);lv.statut=lv.statut==="disponible"?"indisponible":"disponible";audit("Disponibilité livreur",lv.nom+" → "+lv.statut);done()}
+ myStatus:()=>{const lv=livreurOf(ME);if(CL.on)return CL.go(()=>CL.rpc("livreur_set_statut",{p_statut:lv.statut==="disponible"?"indisponible":"disponible"}));lv.statut=lv.statut==="disponible"?"indisponible":"disponible";audit("Disponibilité livreur",lv.nom+" → "+lv.statut);done()}
 };
-document.addEventListener("click",e=>{const t=e.target.closest("[data-act]");if(!t)return;e.preventDefault();const f=ACT[t.dataset.act];if(f)f(t.dataset.id,t)});
+document.addEventListener("click",e=>{const t=e.target.closest("[data-act]");if(!t)return;e.preventDefault();const f=ACT[t.dataset.act];if(f){const r=f(t.dataset.id,t);if(r&&r.catch)r.catch(err=>toast(fixErr(err),"err"))}});
 document.addEventListener("submit",e=>{
- if(e.target.id==="mf"){e.preventDefault();if(ui.onSubmit){const d=Object.fromEntries(new FormData(e.target));const mid=ui.mid,r=ui.onSubmit(d,e.target);if(r!==false&&ui.mid===mid)closeModal()}}
- if(e.target.id==="lf"){e.preventDefault();const d=Object.fromEntries(new FormData(e.target)),u=usr(d.u);
+ if(e.target.id==="mf"){e.preventDefault();if(ui.onSubmit){const d=Object.fromEntries(new FormData(e.target));const mid=ui.mid,r=ui.onSubmit(d,e.target);
+   if(r&&typeof r.then==="function"){const btn=e.target.querySelector(".mf .btn:not(.ghost)"),lab=btn&&btn.textContent;if(btn){btn.disabled=true;btn.textContent="Envoi…"}
+    r.then(x=>{if(x!==false&&ui.mid===mid)closeModal();else if(btn){btn.disabled=false;btn.textContent=lab}}).catch(err=>{toast(fixErr(err),"err");if(btn){btn.disabled=false;btn.textContent=lab}})}
+   else if(r!==false&&ui.mid===mid)closeModal()}}
+ if(e.target.id==="lf"){e.preventDefault();if(CL.on)return CL.login(e.target);const d=Object.fromEntries(new FormData(e.target)),u=usr(d.u);
   if(u&&u.actif&&u.pin_h===hashPin(u.id,d.pin)){ME=u;sessionStorage.setItem("angels_me",u.id);view="dashboard";audit("Connexion",u.nom);save();render()}else toast("PIN incorrect","err")}});
 document.addEventListener("change",e=>{const k=e.target.dataset&&e.target.dataset.f;if(k){ui[k]=e.target.value;render()}
  if(e.target.id==="p_imp"&&e.target.files[0]){const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.v!==1||!d.commandes)throw 0;S=d;save();ME=null;sessionStorage.removeItem("angels_me");toast("Données importées","ok");render()}catch(x){toast("Fichier invalide","err")}};r.readAsText(e.target.files[0])}});
 window.addEventListener("storage",e=>{if(e.key!==KEY||!e.newValue||$("#modal").innerHTML)return;try{S=JSON.parse(e.newValue)}catch(x){return}
  if(ME){const u=usr(ME.id);if(!u||!u.actif){ME=null;sessionStorage.removeItem("angels_me");toast("Votre compte a été désactivé","err")}else ME=u}render()});
-setInterval(()=>{if(ME&&!(ME.role==="livreur"&&Object.values(ui.mapOpen||{}).some(Boolean))&&!$("#modal").innerHTML&&!document.activeElement.matches("input,select,textarea"))render()},60000);
+let _tk=0;setInterval(()=>{if(!CL.on&&(_tk++)%2)return;if(ME&&!(ME.role==="livreur"&&Object.values(ui.mapOpen||{}).some(Boolean))&&!$("#modal").innerHTML&&!document.activeElement.matches("input,select,textarea")){if(CL.on)refresh().then(render).catch(()=>{});else render()}},30000);
 
 /* ============================================================
    DOCUMENTS COMMERCIAUX, NOTIFICATIONS CLIENT, SIGNATURE
@@ -785,7 +791,7 @@ VIEWS.notifs=()=>{
  const list=(t==="att"?att:his).slice().reverse();
  return`<h1>Notifications aux clients</h1>${tabs("nt",[["att","À envoyer ("+att.length+")"],["his","Historique"]])}
  <div class="al sm">Les messages sont préparés automatiquement à chaque étape (confirmation, départ du livreur, livraison, échec). L'envoi se fait par WhatsApp en un clic ; le statut « envoyé » indique que vous avez ouvert la conversation, pas que le client l'a lue. L'envoi automatique (sans clic) est préparé côté serveur (dossier supabase/) : il s'active quand le backend est branché et qu'un compte WhatsApp / SMS est configuré. Le bouton SMS ouvre l'application SMS du téléphone.</div>
- ${tbl(["Date","Commande","Client","Événement","Message",""],list.map(n=>`<tr><td>${fdt(n.ts)}</td><td>${(cmd(n.commande_id)||{}).numero||"—"}</td><td>${esc(n.nom)}<br><span class="sm mu">${esc(n.tel)}</span></td><td>${badge(EV_L[n.event]||n.event,"mu")}</td><td class="sm" style="max-width:340px">${esc(n.message)}</td><td>${n.statut==="a_envoyer"?`<button class="btn sm ok" data-act="notifSend" data-id="${n.id}">Envoyer (WhatsApp)</button> <button class="btn sm ghost" data-act="notifSms" data-id="${n.id}">SMS</button> <button class="btn sm ghost" data-act="notifEdit" data-id="${n.id}">Modifier</button> <button class="btn sm ghost" data-act="notifIgnore" data-id="${n.id}">Ignorer</button>`:n.statut==="envoye"?badge((n.canal==="SMS"?"Ouvert dans SMS le ":"Ouvert dans WhatsApp le ")+fdt(n.envoye_at),"ok"):badge("Ignoré","mu")}</td></tr>`),t==="att"?"Aucun message en attente":"Aucun historique")}`};
+ ${tbl(["Date","Commande","Client","Événement","Message",""],list.map(n=>`<tr><td>${fdt(n.ts)}</td><td>${(cmd(n.commande_id)||{}).numero||"—"}</td><td>${esc(n.nom)}<br><span class="sm mu">${esc(n.tel)}</span></td><td>${badge(EV_L[n.event]||n.event,"mu")}</td><td class="sm" style="max-width:340px">${esc(n.message)}</td><td>${n.statut==="echec"?badge("Échec","er")+`<div class="sm">${esc(n.erreur||"")}</div><button class="btn sm" data-act="notifRetry" data-id="${n.id}">Relancer</button> <button class="btn sm ghost" data-act="notifIgnore" data-id="${n.id}">Ignorer</button>`:n.statut==="envoi_en_cours"?badge("Envoi en cours…","wa"):n.statut==="livre"?badge("Livré","ok"):n.statut==="lu"?badge("Lu ✔","ok"):n.statut==="a_envoyer"?`<button class="btn sm ok" data-act="notifSend" data-id="${n.id}">Envoyer (WhatsApp)</button> <button class="btn sm ghost" data-act="notifSms" data-id="${n.id}">SMS</button> <button class="btn sm ghost" data-act="notifEdit" data-id="${n.id}">Modifier</button> <button class="btn sm ghost" data-act="notifIgnore" data-id="${n.id}">Ignorer</button>`:n.statut==="envoye"?badge((n.canal==="SMS"?"Ouvert dans SMS le ":"Ouvert dans WhatsApp le ")+fdt(n.envoye_at),"ok"):badge("Ignoré","mu")}</td></tr>`),t==="att"?"Aucun message en attente":"Aucun historique")}`};
 
 /* ---- documents ---- */
 const DOC_L={facture:"Facture",recu:"Reçu de paiement",avoir:"Avoir",bl:"Bon de livraison"},DOC_P={facture:"FAC",recu:"REC",avoir:"AVO",bl:"BL"};
@@ -824,7 +830,7 @@ function docOpen(d){
 function avoirModal(f){
  const reste=f.total-avoirsDe(f.id);
  modal("Avoir sur la facture "+f.numero,`<div class="pill">Facture : ${fcfa(f.total)} · avoirs déjà émis : ${fcfa(avoirsDe(f.id))} · <b>maximum : ${fcfa(reste)}</b></div><label>Montant de l'avoir (F)<input type="number" name="m" min="1" required value="${reste}"></label><label>Motif (obligatoire)<input name="mo" required></label><div class="sm mu">Un avoir est un document : il ne rembourse pas automatiquement le client. Le remboursement éventuel doit être traité séparément.</div>`,
- {label:"Émettre l'avoir",onSubmit:d=>{const m=+d.m;if(!(m>0)||m>reste)return toast("Montant invalide (maximum "+fcfa(reste)+")","err"),false;const a=emettreDoc("avoir",cmd(f.commande_id),{fac:f,montant:m,motif:d.mo.trim()});save();docOpen(a)}})}
+ {label:"Émettre l'avoir",onSubmit:d=>{const m=+d.m;if(!(m>0)||m>reste)return toast("Montant invalide (maximum "+fcfa(reste)+")","err"),false;if(CL.on)return CL.doc(f.commande_id,"avoir",{facture:f.id,montant:m,motif:d.mo.trim()});const a=emettreDoc("avoir",cmd(f.commande_id),{fac:f,montant:m,motif:d.mo.trim()});save();docOpen(a)}})}
 VIEWS.documents=()=>{
  const ty=ui.dt||"",q=(ui.dq||"").toLowerCase();
  const rows=S.docs.filter(d=>(!ty||d.type===ty)&&(!q||(d.numero+d.cmd_numero+d.client.nom).toLowerCase().includes(q))).slice().reverse().slice(0,300);
@@ -889,8 +895,9 @@ function etiqModal(c){
  modal("Étiquettes colis — "+c.numero,`<label>Nombre de colis<input type="number" name="nb" min="1" max="20" required value="${deja?c.colis.length:1}"></label>
  <div class="sm mu">${deja?"Les étiquettes existent déjà : la réimpression conserve les mêmes QR codes. Changer le nombre invalide les étiquettes déjà collées.":"Chaque colis reçoit un QR code unique rattaché à cette commande."} Format 100 × 150 mm (étiqueteuse thermique ou impression A4 découpée).</div>`,
  {label:"Générer / imprimer",onSubmit:d=>{if(deja&&+d.nb!==c.colis.length&&!confirm("Changer le nombre de colis invalide les étiquettes déjà imprimées. Continuer ?"))return false;
-  if(!etiqueter(c,d.nb))return false;save();
-  modal("Étiquettes — "+c.numero,`<iframe id="docf" style="width:100%;height:560px;border:1px solid var(--bd);border-radius:8px;background:#eee" srcdoc="${esc(labelsHTML(c))}"></iframe><div class="flex noprint"><button type="button" class="btn" data-act="printFrame">🖨 Imprimer les étiquettes</button><span class="sm mu">${c.colis.length} étiquette(s)</span></div>`,{wide:true,focus:false})}})}
+  if(CL.on)return CL.etiqueter(c,d.nb);if(!etiqueter(c,d.nb))return false;save();
+  labelsModal(c)}})}
+function labelsModal(c){modal("Étiquettes — "+c.numero,`<iframe id="docf" style="width:100%;height:560px;border:1px solid var(--bd);border-radius:8px;background:#eee" srcdoc="${esc(labelsHTML(c))}"></iframe><div class="flex noprint"><button type="button" class="btn" data-act="printFrame">🖨 Imprimer les étiquettes</button><span class="sm mu">${c.colis.length} étiquette(s)</span></div>`,{wide:true,focus:false})}
 
 /* ---- scan caméra (BarcodeDetector si disponible, sinon jsQR embarqué) ---- */
 function stopScan(){if(typeof ui==="undefined")return;if(ui.stream){ui.stream.getTracks().forEach(t=>t.stop());ui.stream=null}if(ui.raf){cancelAnimationFrame(ui.raf);ui.raf=0}}
@@ -917,9 +924,9 @@ function scanPanel(c){
  <input type="hidden" name="colis_ok" id="colis_ok"><div class="sm mu">Le code saisi à la main est enregistré comme tel.</div>`}
 function bindScan(c){
  const log={};
- const take=(txt)=>{const r=checkColis(txt,c);if(!r.ok){toast(r.msg,"err");return}
+ const take=async(txt)=>{let r;if(CL.on){try{r=await CL.rpc("verifier_colis",{p_commande:c.id,p_texte:txt})}catch(e){toast(fixErr(e),"err");return}}else r=checkColis(txt,c);if(!r.ok){toast(r.msg,"err");return}
   if(log[r.n]){toast("Colis "+r.n+" déjà scanné");return}
-  log[r.n]={n:r.n,ts:now(),mode:r.mode};const row=$("#sc_"+r.n);row.innerHTML="✅ Colis "+r.n+"/"+c.colis.length+" <span class='sm mu'>("+(r.mode==="scan"?"scanné":"saisi")+")</span>";row.style.background="var(--okbg)";
+  log[r.n]={n:r.n,ts:now(),mode:r.mode,txt};const row=$("#sc_"+r.n);row.innerHTML="✅ Colis "+r.n+"/"+c.colis.length+" <span class='sm mu'>("+(r.mode==="scan"?"scanné":"saisi")+")</span>";row.style.background="var(--okbg)";
   if(Object.keys(log).length===c.colis.length){$("#colis_ok").value=JSON.stringify(Object.values(log));stopScan();$("#scan_box").innerHTML='<div class="al" style="background:var(--okbg);margin:0">Tous les colis sont validés ✔</div>';toast("Tous les colis sont validés","ok")}else toast("Colis "+r.n+" validé ✔","ok")};
  $("#scan_cam").onclick=()=>startScan($("#scan_box"),take);
  const man=()=>{const v=$("#scan_man").value.trim();if(v){take(v);$("#scan_man").value=""}};
@@ -964,7 +971,7 @@ function tourneeModal(){
  <div class="sm mu">L'ordre de passage est proposé automatiquement (plus proche voisin) ; vous pourrez l'ajuster ensuite. Le livreur adapte son trajet selon la circulation.</div>`,
  {label:"Créer et affecter",onSubmit:d=>{const ids=Object.keys(d).filter(k=>k.startsWith("c_")).map(k=>k.slice(2));const lv=liv(d.lid);
   if(lv.statut!=="disponible"&&!confirm(lv.nom+" est indisponible. Affecter quand même ?"))return false;
-  const t=creerTournee(d.lid,ids);if(!t)return false;save();toast("Tournée "+t.numero+" créée ("+ids.length+" arrêts)","ok");render()}})}
+  if(CL.on)return CL.tournee(d.lid,ids,lv);const t=creerTournee(d.lid,ids);if(!t)return false;save();toast("Tournée "+t.numero+" créée ("+ids.length+" arrêts)","ok");render()}})}
 function tourneeDetail(id){
  const t=byId(S.tournees,id),st=stopsOf(t),e=estimTournee(t),lv=liv(t.livreur_id)||{nom:"?"};
  modal("Tournée "+t.numero+" — "+lv.nom,`<div class="pill">${st.filter(l=>l.statut==="livree").length}/${st.length} livrée(s)${e?` · estimation ≈ <b>${e.km.toFixed(1)} km</b>, <b>${fmtDur(e.min)}</b>${e.sans?` <span class="mu">(${e.sans} arrêt(s) sans GPS non comptés)</span>`:""}`:" · estimation indisponible (adresses sans GPS)"}<div class="sm mu">Estimation indicative à vol d'oiseau (×1,35), sans trafic.</div></div>
@@ -977,6 +984,7 @@ function entretienModal(m){
  <label>Statut de la moto après l'intervention<select name="st">${opts([{v:"disponible",t:"Disponible"},{v:"immobilisee",t:"Immobilisée (réparation en cours)"},{v:"panne",t:"En panne"}],m.statut==="affectee"?"disponible":m.statut==="disponible"?"disponible":m.statut)}</select></label>
  <label>Détail / pièces / garage<input name="n"></label>`,
  {onSubmit:d=>{const km=+d.km;if(km<m.km&&!confirm("Le kilométrage saisi ("+km+") est inférieur à celui enregistré ("+m.km+"). Continuer ?"))return false;
+  if(CL.on)return CL.go(()=>CL.rpc("enregistrer_entretien",{p_moto:m.id,p_date:d.d,p_type:d.t,p_km:km,p_cout:+d.c||0,p_prochain_dans:+d.p||0,p_statut:d.st,p_note:d.n||""}),"Intervention enregistrée");
   S.entretiens.push({id:uid("e"),moto_id:m.id,ts:new Date(d.d+"T12:00:00").toISOString(),type:d.t,km,cout:+d.c||0,note:d.n,par:who()});
   m.km=Math.max(m.km,km);if(+d.p>0)m.prochain_km=km+(+d.p);m.statut=d.st;
   audit("Entretien moto",`${m.immat} — ${d.t} — ${fcfa(+d.c||0)} — statut ${d.st}`);save();toast("Intervention enregistrée","ok");render()}})}
@@ -988,6 +996,7 @@ function histMoto(m){
    VENDEURS PARTENAIRES (vendeurs en ligne / fournisseurs)
    ============================================================ */
 function vendDue(v){
+ if(CL.on&&CL.vd[v.id]){const x=CL.vd[v.id];return{acquis:x.acquis,regle:x.regle,restant:x.restant,attente:x.attente,elig:x.elig.map(e=>cmd(e.commande_id)).filter(Boolean),net:c=>(x.elig.find(e=>e.commande_id===c.id)||{}).net||0}}
  const mine=S.commandes.filter(c=>c.vendeur_id===v.id);
  const net=c=>Math.round((c.montant_produits-c.remise)*(1-(+v.commission_pct||0)/100));
  const elig=mine.filter(c=>c.statut==="livree"&&!c.vendeur_encaisse&&soldeCmd(c)===0);
@@ -1016,14 +1025,14 @@ VIEWS.mesReg=()=>{
  const v=vend();if(!v)return'<div class="card">Compte vendeur non rattaché.</div>';const d=vendDue(v);
  return`<h1>Mes règlements</h1><div class="grid">${kpi("Net acquis (livré et encaissé)",fcfa(d.acquis))}${kpi("Déjà réglé",fcfa(d.regle),"o")}${kpi("Reste à recevoir",fcfa(d.restant),d.restant?"w":"")}${kpi("En cours de livraison (à venir)",fcfa(d.attente))}</div>
  <p class="mu sm">Net = prix de vos articles − commission de ${v.commission_pct||0} %. Les frais de livraison reviennent à ANGEL'S GROUP. Un règlement est dû dès que la commande est livrée et entièrement payée par le client.</p>
- <h2>Commandes à régler / réglées</h2>${tbl(["Commande","Livrée le","Articles","Net pour vous"],d.elig.map(c=>`<tr><td>${c.numero}</td><td>${fdt((livsOf(c.id).filter(l=>l.statut==="livree").slice(-1)[0]||{}).fin_at)}</td><td class="sm">${c.lignes.map(l=>esc(l.qte+"× "+lname(l))).join(", ")}</td><td><b>${fcfa(d.net(c))}</b></td></tr>`),"Aucune commande livrée")}
+ <h2>Commandes à régler / réglées</h2>${tbl(["Commande","Livrée le","Articles","Net pour vous"],d.elig.map(c=>`<tr><td>${c.numero}</td><td>${fdt((livsOf(c.id).filter(l=>l.statut==="livree").slice(-1)[0]||{}).fin_at||livreeLe(c))}</td><td class="sm">${c.lignes.map(l=>esc(l.qte+"× "+lname(l))).join(", ")}</td><td><b>${fcfa(d.net(c))}</b></td></tr>`),"Aucune commande livrée")}
  <h2>Règlements reçus</h2>${tbl(["Date","Montant","Mode","Note"],S.reglements.filter(r=>r.vendeur_id===v.id).slice().reverse().map(r=>`<tr><td>${fdt(r.ts)}</td><td><b>${fcfa(r.montant)}</b></td><td>${esc(r.mode)}</td><td class="sm">${esc(r.note||"")}</td></tr>`),"Aucun règlement")}`};
 VIEWS.vendeurs=()=>`<div class="between"><h1>Vendeurs partenaires</h1>${can("admin","commercial")?'<button class="btn" data-act="newVend">➕ Vendeur partenaire</button>':""}</div>
  <p class="mu">Vendeurs en ligne et fournisseurs qui déposent eux-mêmes leurs commandes à livrer. Chacun ne voit que ses propres commandes.</p>
- ${tbl(["Vendeur","Téléphone","Commission","Commandes","À confirmer","Reste à régler","Compte",""],S.vendeurs.map(v=>{const u=usr(v.user_id),d=vendDue(v),m=S.commandes.filter(c=>c.vendeur_id===v.id);return`<tr><td><b>${esc(v.nom)}</b></td><td>${esc(v.tel)}</td><td>${v.commission_pct||0} %</td><td>${m.length}</td><td>${m.filter(c=>c.statut==="attente").length||"—"}</td><td>${fcfa(d.restant)}</td><td>${u&&u.actif?badge("Actif","ok"):badge("Désactivé","er")}</td><td>${can("admin","commercial")?`<button class="btn sm ghost" data-act="editVend" data-id="${v.id}">Modifier</button>`:""}</td></tr>`}),"Aucun vendeur partenaire. Créez-en un pour qu'il puisse déposer ses commandes.")}`;
+ ${tbl(["Vendeur","Téléphone","Commission","Commandes","À confirmer","Reste à régler","Compte",""],S.vendeurs.map(v=>{const u=usr(v.user_id),d=vendDue(v),m=S.commandes.filter(c=>c.vendeur_id===v.id);return`<tr><td><b>${esc(v.nom)}</b></td><td>${esc(v.tel)}</td><td>${v.commission_pct||0} %</td><td>${m.length}</td><td>${m.filter(c=>c.statut==="attente").length||"—"}</td><td>${fcfa(d.restant)}</td><td>${u?(u.actif?badge("Actif","ok"):badge("Désactivé","er")):badge("—","mu")}</td><td>${can("admin","commercial")?`<button class="btn sm ghost" data-act="editVend" data-id="${v.id}">Modifier</button>`:""}</td></tr>`}),"Aucun vendeur partenaire. Créez-en un pour qu'il puisse déposer ses commandes.")}`;
 function vendForm(v){const u=v&&usr(v.user_id);
- modal(v?"Modifier le vendeur":"Nouveau vendeur partenaire",`<div class="g2"><label>Nom / boutique<input name="nom" required value="${esc(v?v.nom:"")}"></label><label>Téléphone<input name="tel" required value="${esc(v?v.tel:"")}"></label></div><div class="g2"><label>Commission sur ses articles (%)<input type="number" name="com" min="0" max="100" step="0.5" value="${v?v.commission_pct||0:0}"></label><label>${v?"Nouveau PIN (vide = inchangé)":"PIN de connexion (4 à 8 chiffres)"}<input name="pin" inputmode="numeric" pattern="[0-9]{4,8}" ${v?"":"required"}></label></div>${v?`<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" name="actif" style="width:auto" ${u&&u.actif?"checked":""}> Compte actif</label>`:""}`,
- {onSubmit:d=>{if(v){v.nom=d.nom;v.tel=d.tel;v.commission_pct=+d.com||0;u.nom=d.nom;u.actif=!!d.actif;if(d.pin)u.pin_h=hashPin(u.id,d.pin);audit("Modification vendeur",d.nom)}
+ modal(v?"Modifier le vendeur":"Nouveau vendeur partenaire",`<div class="g2"><label>Nom / boutique<input name="nom" required value="${esc(v?v.nom:"")}"></label><label>Téléphone<input name="tel" required value="${esc(v?v.tel:"")}"></label></div>${!v&&CL.on?'<label>Identifiant de connexion (par défaut : téléphone)<input name="ident" autocapitalize="none"></label>':""}<div class="g2"><label>Commission sur ses articles (%)<input type="number" name="com" min="0" max="100" step="0.5" value="${v?v.commission_pct||0:0}"></label><label>${v?"Nouveau PIN (vide = inchangé)":"PIN de connexion (${PINMIN} à 8 chiffres)"}<input name="pin" inputmode="numeric" pattern="[0-9]{${PINMIN},8}" ${v?"":"required"}></label></div>${v?`<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" name="actif" style="width:auto" ${u&&u.actif?"checked":""}> Compte actif</label>`:""}`,
+ {onSubmit:d=>{if(CL.on)return CL.vendSave(v,d);if(v){v.nom=d.nom;v.tel=d.tel;v.commission_pct=+d.com||0;u.nom=d.nom;u.actif=!!d.actif;if(d.pin)u.pin_h=hashPin(u.id,d.pin);audit("Modification vendeur",d.nom)}
   else{const nu={id:uid("u"),nom:d.nom,role:"vendeur",actif:true};nu.pin_h=hashPin(nu.id,d.pin);S.users.push(nu);S.vendeurs.push({id:uid("v"),user_id:nu.id,nom:d.nom,tel:d.tel,commission_pct:+d.com||0});audit("Création vendeur partenaire",d.nom)}save();render()}})}
 function vCmdForm(){
  const v=vend();const row=()=>`<div class="vrow flex" style="margin-bottom:6px"><input class="vd" placeholder="Article" style="flex:2"><input class="vq" type="number" min="1" value="1" style="width:70px"><input class="vp" type="number" min="0" placeholder="Prix unitaire" style="width:110px"><button type="button" class="btn sm er vdel">✕</button></div>`;
@@ -1037,7 +1046,7 @@ function vCmdForm(){
   const lignes=[...f.querySelectorAll(".vrow")].map(r=>({desig:r.querySelector(".vd").value.trim(),qte:+r.querySelector(".vq").value,pu:+r.querySelector(".vp").value})).filter(l=>l.desig);
   if(!lignes.length||lignes.some(l=>!(l.qte>0)||!(l.pu>=0)||isNaN(l.pu)))return toast("Ajoutez au moins un article avec quantité et prix","err"),false;
   if(!d.quartier.trim()&&!d.repere.trim())return toast("Indiquez le quartier ou un point de repère","err"),false;
-  const c=creerCmdVendeur(v,Object.assign({},d,{lignes}));save();toast("Commande "+c.numero+" déposée. ANGEL'S GROUP va la confirmer.","ok");render()}});
+  if(CL.on)return CL.vendDepot(d,lignes);const c=creerCmdVendeur(v,Object.assign({},d,{lignes}));save();toast("Commande "+c.numero+" déposée. ANGEL'S GROUP va la confirmer.","ok");render()}});
  const calc=()=>{const rows=[...document.querySelectorAll(".vrow")],pr=rows.reduce((a,r)=>a+(+r.querySelector(".vq").value||0)*(+r.querySelector(".vp").value||0),0),fr=(zone($("#v_zone").value)||{}).frais||0,paye=$("#v_pay").value==="paye";
   $("#v_p").textContent=fcfa(pr);$("#v_f").textContent=fcfa(fr);$("#v_t").textContent=fcfa(pr+fr);$("#v_s").textContent=fcfa(paye?fr:pr+fr);$("#v_n").textContent=paye?"— (déjà payé)":fcfa(pr*(1-(+v.commission_pct||0)/100))};
  const bind=r=>r.querySelector(".vdel").onclick=()=>{if(document.querySelectorAll(".vrow").length>1){r.remove();calc()}};
@@ -1072,7 +1081,7 @@ function vImportModal(){
  {label:"Importer",wide:true,focus:false,onSubmit:d=>{const r=parseCSV(d.csv);
   if(r.err.length)return toast(r.err.slice(0,3).join(" · ")+(r.err.length>3?" … (+"+(r.err.length-3)+" autres)":"")+" — aucune commande créée","err"),false;
   if(!r.orders.length)return toast("Aucune commande à importer","err"),false;
-  const v=vend();r.orders.forEach(o=>creerCmdVendeur(v,o));audit("Import CSV vendeur",v.nom+" — "+r.orders.length+" commande(s)");save();toast(r.orders.length+" commande(s) déposée(s)","ok");render()}});
+  if(CL.on)return CL.vendImport(r.orders);const v=vend();r.orders.forEach(o=>creerCmdVendeur(v,o));audit("Import CSV vendeur",v.nom+" — "+r.orders.length+" commande(s)");save();toast(r.orders.length+" commande(s) déposée(s)","ok");render()}});
  $("#v_file").onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{$("#v_csv").value=rd.result};rd.readAsText(f)}}
 
 /* ============================================================
@@ -1113,8 +1122,8 @@ function applyGeo(cid,aid,lat,lng,src,acc,note){
 function parseGeo(t){t=String(t||"");let m=t.match(/GEO:([\w-]+)\|([\w-]+)\|(-?\d+\.?\d*)\|(-?\d+\.?\d*)/);if(m)return{cid:m[1],aid:m[2],lat:+m[3],lng:+m[4]};
  m=t.match(/mlat=(-?\d+\.?\d*)&(?:amp;)?mlon=(-?\d+\.?\d*)/)||t.match(/[@?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/)||t.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/)||t.match(/#map=\d+\/(-?\d+\.?\d*)\/(-?\d+\.?\d*)/)||t.match(/(-?\d{1,2}\.\d+)\s*[,; ]\s*(-?\d{1,3}\.\d+)/);
  if(!m)return null;const lat=+m[1],lng=+m[2];return Math.abs(lat)<=90&&Math.abs(lng)<=180?{lat,lng}:null}
-function geoLinkModal(cid,aid,ref){
- const c=cli(cid),a=c.adresses.find(x=>x.id===aid),link=portalLink(c,a,ref),
+function geoLinkModal0(cid,aid,ref){
+ const c=cli(cid),a=c.adresses.find(x=>x.id===aid),link=ui.cloudLink||portalLink(c,a,ref),
   msg=`Bonjour ${c.nom}, ${S.config.org}. Pour que notre livreur trouve facilement votre adresse, merci d'indiquer sa position exacte ici : ${link}`;
  modal("Portail client — "+c.nom,`<p>Envoyez ce lien au client. Il place un repère sur la carte (ou utilise sa position actuelle) et vous renvoie sa position.</p>
  <label>Lien personnel<input readonly id="gl" value="${esc(link)}" onclick="this.select()"></label>
@@ -1124,7 +1133,7 @@ function geoLinkModal(cid,aid,ref){
 function geoPickModal(cid,aid){
  const cl=cli(cid),a=cl.adresses.find(x=>x.id===aid);let pos=a.gps?{lat:a.gps.lat,lng:a.gps.lng}:null,h=null;
  modal("Position de livraison — "+cl.nom,`<div class="pill sm">${esc([a.libelle,a.zone,a.quartier,a.repere].filter(Boolean).join(" · "))}</div><div id="pm" style="height:320px;border-radius:10px;overflow:hidden;background:#e8ebf5"></div><div class="flex"><button type="button" class="btn sm ghost" id="pm_gps">📍 Ma position actuelle</button><span class="sm mu" id="pm_c">${pos?pos.lat+", "+pos.lng:"Touchez la carte pour placer le repère"}</span></div>`,
- {wide:true,focus:false,label:"Enregistrer la position",onSubmit:()=>{if(!pos)return toast("Placez le repère sur la carte","err"),false;applyGeo(cid,aid,pos.lat,pos.lng,"saisie par le personnel");save();toast("Position enregistrée","ok");render()}});
+ {wide:true,focus:false,label:"Enregistrer la position",onSubmit:()=>{if(!pos)return toast("Placez le repère sur la carte","err"),false;if(CL.on)return CL.go(()=>CL.rpc("appliquer_position_adresse",{p_adresse:aid,p_lat:pos.lat,p_lng:pos.lng}),"Position enregistrée");applyGeo(cid,aid,pos.lat,pos.lng,"saisie par le personnel");save();toast("Position enregistrée","ok");render()}});
  const set=(lat,lng)=>{pos={lat:+lat.toFixed(6),lng:+lng.toFixed(6)};$("#pm_c").textContent=pos.lat+", "+pos.lng};
  mapInto($("#pm"),{dest:pos,onPick:ll=>set(ll.lat,ll.lng)}).then(x=>h=x);
  $("#pm_gps").onclick=()=>navigator.geolocation?navigator.geolocation.getCurrentPosition(p=>{set(p.coords.latitude,p.coords.longitude);if(h){h.put([pos.lat,pos.lng]);h.map.setView([pos.lat,pos.lng],17)}},e=>toast("Position impossible : "+e.message,"err"),{enableHighAccuracy:true,timeout:15000}):toast("Géolocalisation indisponible","err")}
@@ -1133,7 +1142,7 @@ function geoPasteModal(cid,aid){
  {label:"Enregistrer",onSubmit:d=>{const g=parseGeo(d.t);if(!g)return toast("Aucune position reconnue dans ce texte","err"),false;
   if(g.cid&&(g.cid!==cid||g.aid!==aid)){if(!cli(g.cid)||!confirm("Ce message concerne une autre adresse : "+cli(g.cid).nom+". L'appliquer à cette adresse-là ?"))return false;cid=g.cid;aid=g.aid}
   const note=(String(d.t).match(/Précision\s*:\s*(.+)/)||[])[1];
-  if(!applyGeo(cid,aid,g.lat,g.lng,g.cid?"client":"saisie par le personnel",0,note))return toast("Adresse introuvable","err"),false;save();toast("Position enregistrée","ok");render()}})}
+  if(CL.on)return CL.go(()=>CL.rpc("appliquer_position_adresse",{p_adresse:aid,p_lat:g.lat,p_lng:g.lng,p_note:note||null}),"Position enregistrée");if(!applyGeo(cid,aid,g.lat,g.lng,g.cid?"client":"saisie par le personnel",0,note))return toast("Adresse introuvable","err"),false;save();toast("Position enregistrée","ok");render()}})}
 
 /* ---------- Page publique du portail client ---------- */
 function renderPortal(p){
@@ -1152,17 +1161,176 @@ function renderPortal(p){
  $("#pt_gps").onclick=()=>{if(!navigator.geolocation)return toast("Géolocalisation indisponible sur ce téléphone","err");
   navigator.geolocation.getCurrentPosition(g=>{pos={lat:g.coords.latitude,lng:g.coords.longitude};acc=g.coords.accuracy;ok.disabled=false;if(h){h.put([pos.lat,pos.lng]);h.map.setView([pos.lat,pos.lng],18)}toast("Position trouvée. Ajustez le repère si besoin.","ok")},e=>toast("Position impossible : autorisez la localisation ou touchez la carte ("+e.message+")","err"),{enableHighAccuracy:true,timeout:20000})};
  ok.onclick=()=>{if(!pos)return;const lat=+pos.lat.toFixed(6),lng=+pos.lng.toFixed(6),note=$("#pt_note").value.trim();
+  if(p.cloudToken){ok.disabled=true;CL.rpc("portail_poser",{p_token:p.cloudToken,p_lat:lat,p_lng:lng,p_acc:Math.round(acc||0),p_note:note||null}).then(r=>{$("#pt_res").innerHTML=r?'<div class="al" style="background:var(--okbg);margin-top:12px"><b>Merci ✔</b> Votre position a été transmise à '+esc(p.org)+'.</div>':'<div class="al err">Lien expiré ou invalide : demandez-en un nouveau.</div>';ok.textContent=r?"Position confirmée ✔":"Confirmer cette position";ok.disabled=!!r}).catch(e=>{ok.disabled=false;toast(fixErr(e),"err")});return}
   let saved=false;if(S&&cli(p.cid)){saved=applyGeo(p.cid,p.aid,lat,lng,"client",acc,note);if(saved)save()}
   const msg=`Position de livraison — ${p.n}${p.r?" ("+p.r+")":""} : ${osmLink(lat,lng)}\nGEO:${p.cid}|${p.aid}|${lat}|${lng}${note?"\nPrécision : "+note:""}`;
   let w=String(p.w||"").replace(/\D/g,"");if(w.length===10)w="225"+w;
   $("#pt_res").innerHTML=`<div class="al" style="background:var(--okbg);margin-top:12px"><b>Merci ✔</b> Votre position est prête.<br>${saved?"Elle a été enregistrée.":"Envoyez-la-nous pour que votre livreur la reçoive :"}</div>${w?`<a class="btn" style="display:block;text-align:center;text-decoration:none;margin-top:8px" target="_blank" rel="noopener" href="https://wa.me/${w}?text=${encodeURIComponent(msg)}">Envoyer à ${esc(p.org)} par WhatsApp</a>`:""}<button class="btn ghost" id="pt_cp" style="width:100%;margin-top:8px">Copier le message</button>`;
   $("#pt_cp").onclick=()=>{(navigator.clipboard?navigator.clipboard.writeText(msg):Promise.reject()).then(()=>toast("Message copié","ok"),()=>prompt("Copiez ce message :",msg))};ok.textContent="Position confirmée ✔"}}
 
+/* ============================================================
+   MODE CONNECTÉ (Supabase)
+   Actif quand l'adresse du projet et la clé « publishable » (publique) sont renseignées ci-dessous
+   (ou injectées via window.ANGELS_CLOUD). Sinon : mode démonstration (données dans le navigateur).
+   Toutes les écritures passent par les fonctions serveur (RPC) : les règles métier et les droits
+   sont appliqués par la base, jamais par cet écran.
+   ============================================================ */
+const CLOUD_DEFAULT={url:"",key:""};   // ← ex. {url:"https://xxxx.supabase.co",key:"sb_publishable_..."}
+const CLOUD_CFG=Object.assign({},CLOUD_DEFAULT,window.ANGELS_CLOUD||{});
+const SB_LIB="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
+const SB_SRI="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o";
+let PINMIN=4;
+const CL={on:!!(CLOUD_CFG.url&&CLOUD_CFG.key),sb:null,uid:null,org:null,pos:{},vd:{}};
+if(CL.on)PINMIN=6;
+const fixErr=e=>{const m=(e&&e.message)||String(e||"Erreur");return/JWT expired|invalid JWT|PGRST301/i.test(m)?"Session expirée : reconnectez-vous":m};
+const toEmail=id=>{id=String(id||"").trim();return id.includes("@")?id.toLowerCase():id.toLowerCase().replace(/[^a-z0-9._-]/g,"")+"@users.angels-erp.app"};
+const livreeLe=c=>{for(const k in CL.vd){const e=(CL.vd[k].elig||[]).find(x=>x.commande_id===c.id);if(e)return e.livree_le}};
+function loadSb(){return new Promise((ok,ko)=>{if(window.supabase)return ok();const sc=document.createElement("script");sc.src=SB_LIB;sc.integrity=SB_SRI;sc.crossOrigin="anonymous";sc.onload=ok;sc.onerror=()=>ko(new Error("Bibliothèque Supabase indisponible (connexion Internet requise)"));document.head.appendChild(sc)})}
+function loginHTMLCloud(){
+ return`<div class="login"><div class="card"><div style="font-size:22px;font-weight:800;color:var(--b2)">${esc((S&&S.config&&S.config.org)||"ANGEL'S GROUP")}</div><div class="mu" style="margin-bottom:14px">Gestion intégrée · Livraisons à moto</div>
+ <form id="lf"><label>Identifiant<input name="ident" required autocomplete="username" autocapitalize="none"></label>
+ <label style="margin-top:10px">Code secret<input name="pwd" type="password" required autocomplete="current-password"></label>
+ <button class="btn" style="width:100%;margin-top:14px">Se connecter</button></form>
+ <div class="sm mu" style="margin-top:12px">Identifiant et code secret vous sont remis par l'administrateur.</div></div></div>`}
+const emptyS=()=>({v:1,seq:{cmd:0,inc:0,doc:{}},config:{org:"ANGEL'S GROUP",zones:[]},users:[],clients:[],produits:[],livreurs:[],motos:[],vendeurs:[],commandes:[],livraisons:[],fonds:[],paie:[],depenses:[],incidents:[],retours:[],stock_mvts:[],pos:{},gps_hist:[],audit:[],reglements:[],tournees:[],entretiens:[],docs:[],notifs:[]});
+async function fetchAll(t,col){const out=[];for(let from=0;;from+=1000){const{data,error}=await CL.sb.from(t).select("*").order(col||"id").range(from,from+999);if(error)throw new Error(t+" : "+fixErr(error));out.push(...data);if(data.length<1000)break}return out}
+async function fetchLast(t,n){const{data,error}=await CL.sb.from(t).select("*").order("ts",{ascending:false}).limit(n);if(error)throw new Error(t+" : "+fixErr(error));return data.reverse()}
+const grp=(rows,k)=>{const m={};rows.forEach(r=>(m[r[k]]=m[r[k]]||[]).push(r));return m};
+async function hydrate(){
+ const T=["organisations","zones","produits","clients","adresses","livreurs","motos","vendeurs","commandes","commande_lignes","commande_historique","livraisons","livraison_codes","fonds","paiements_livreurs","depenses","reglements_vendeurs","incidents","retours","notifications","tournees","entretiens","documents","colis"];
+ const [mem,...rest]=await Promise.all([fetchAll("membres","user_id"),...T.map(t=>fetchAll(t,t==="livraison_codes"?"livraison_id":"id")),fetchLast("audit_log",300),fetchLast("stock_mouvements",200),CL.sb.rpc("soldes_commandes"),CL.sb.rpc("vendeur_dues"),CL.sb.rpc("vendeur_eligibles"),CL.sb.rpc("dernieres_positions")]);
+ const R=Object.fromEntries(T.map((t,i)=>[t,rest[i]])),audit=rest[T.length],stk=rest[T.length+1];
+ const rpcRows=x=>x.error?[]:(x.data||[]);
+ const soldes=rpcRows(rest[T.length+2]),dues=rpcRows(rest[T.length+3]),elig=rpcRows(rest[T.length+4]),posRows=rpcRows(rest[T.length+5]);
+ const me=mem.find(m=>m.user_id===CL.uid);
+ if(!me||!me.actif||!R.organisations[0])throw new Error("Compte sans profil actif : contactez l'administrateur");
+ const o=R.organisations[0],N=Object.assign({},emptyS());
+ CL.org=o.id;
+ N.config=Object.assign({},o.config||{},{org:o.nom,whatsapp:o.whatsapp,zones:R.zones.map(z=>({id:z.id,nom:z.nom,frais:z.frais,delai_min:z.delai_min}))});
+ N.users=mem.map(m=>({id:m.user_id,nom:m.nom,role:m.role,actif:m.actif,livreur_id:m.livreur_id,vendeur_id:m.vendeur_id}));
+ const uidOfL={},uidOfV={};mem.forEach(m=>{if(m.livreur_id)uidOfL[m.livreur_id]=m.user_id;if(m.vendeur_id)uidOfV[m.vendeur_id]=m.user_id});
+ N.produits=R.produits;N.motos=R.motos;
+ N.livreurs=R.livreurs.map(l=>Object.assign({},l,{user_id:uidOfL[l.id]}));
+ N.vendeurs=R.vendeurs.map(v=>Object.assign({},v,{commission_pct:+v.commission_pct,user_id:uidOfV[v.id]}));
+ const adrBy=grp(R.adresses,"client_id");
+ N.clients=R.clients.map(c=>Object.assign({},c,{adresses:(adrBy[c.id]||[]).map(a=>Object.assign({},a,{gps:a.lat==null?null:{lat:+a.lat,lng:+a.lng}}))}));
+ {const known=new Set(N.clients.map(c=>c.id));R.commandes.forEach(c=>{if(c.client_id&&!known.has(c.client_id)){known.add(c.client_id);N.clients.push({id:c.client_id,nom:"Client",tel:"",tel2:"",note:"",adresses:[],masque:true})}})}   // profils sans accès à la fiche client (préparateur, caissier…)
+ const lig=grp(R.commande_lignes,"commande_id"),his=grp(R.commande_historique,"commande_id"),col=grp(R.colis,"commande_id"),pay={};soldes.forEach(x=>pay[x.commande_id]=+x.paye);
+ N.commandes=R.commandes.map(c=>Object.assign({},c,{
+  lignes:(lig[c.id]||[]).map(l=>({id:l.id,produit_id:l.produit_id,desig:l.desig,qte:l.qte,pu:l.pu})),
+  hist:(his[c.id]||[]).sort((a,b)=>a.id-b.id).map(h=>({ts:h.ts,de:h.de,a:h.a,par:h.par_nom,note:h.note})),
+  colis:(col[c.id]||[]).length?(col[c.id]).sort((a,b)=>a.n-b.n).map(k=>({n:k.n,tok:k.tok})):(c.nb_colis>0?Array.from({length:c.nb_colis},(_,i)=>({n:i+1})):undefined),
+  _paye:pay[c.id]!=null?pay[c.id]:0}));
+ {const kl=new Set(N.livreurs.map(l=>l.id)),km=new Set(N.motos.map(m=>m.id));R.livraisons.forEach(l=>{if(l.livreur_id&&!kl.has(l.livreur_id)){kl.add(l.livreur_id);N.livreurs.push({id:l.livreur_id,nom:"Livreur",tel:"",zone:"",statut:"disponible",masque:true})}
+  if(l.moto_id&&!km.has(l.moto_id)){km.add(l.moto_id);N.motos.push({id:l.moto_id,immat:"—",modele:"",km:0,statut:"disponible",masque:true})}})}
+ const codes={};R.livraison_codes.forEach(x=>codes[x.livraison_id]=x.code);
+ N.livraisons=R.livraisons.map(l=>Object.assign({},l,{code:codes[l.id],gps_confirm:l.gps_confirm_lat==null?null:{lat:+l.gps_confirm_lat,lng:+l.gps_confirm_lng},hist:[]}));
+ N.fonds=R.fonds.map(f=>Object.assign({},f,{par:f.par_nom}));
+ N.paie=R.paiements_livreurs;N.depenses=R.depenses;N.reglements=R.reglements_vendeurs.map(r=>Object.assign({},r,{par:r.par_nom}));
+ N.incidents=R.incidents.map(i=>Object.assign({},i,{desc:i.descr,par:i.par_nom}));
+ N.retours=R.retours.map(r=>Object.assign({},r,{par:r.par_nom}));
+ N.stock_mvts=stk.map(m=>Object.assign({},m,{par:m.par_nom}));
+ N.audit=audit.map(a=>({ts:a.ts,user:a.user_nom,role:a.role,action:a.action,detail:a.detail}));
+ N.notifs=R.notifications;N.tournees=R.tournees;
+ N.entretiens=R.entretiens.map(e=>Object.assign({},e,{par:e.par_nom}));
+ N.docs=R.documents.map(d=>Object.assign({},d,d.contenu,{par:d.par_nom}));
+ N.pos={};posRows.forEach(p=>N.pos[p.livreur_id]={lat:+p.lat,lng:+p.lng,acc:p.acc,ts:p.ts,livraison_id:p.livraison_id});
+ Object.assign(N.pos,CL.pos);
+ CL.vd={};dues.forEach(d=>CL.vd[d.vendeur_id]={acquis:+d.acquis,regle:+d.regle,restant:+d.restant,attente:+d.attente,elig:[]});
+ elig.forEach(e=>{(CL.vd[e.vendeur_id]=CL.vd[e.vendeur_id]||{acquis:0,regle:0,restant:0,attente:0,elig:[]}).elig.push({commande_id:e.commande_id,net:+e.net,livree_le:e.livree_le})});
+ S=N;ensureConfig();
+ ME={id:me.user_id,nom:me.nom,role:me.role,actif:me.actif};
+}
+let refreshing=null;
+function refresh(){if(!CL.on)return Promise.resolve();if(refreshing)return refreshing;refreshing=hydrate().finally(()=>{refreshing=null});return refreshing}
+Object.assign(CL,{
+ async init(){await loadSb();CL.sb=window.supabase.createClient(CLOUD_CFG.url,CLOUD_CFG.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}})},
+ async rpc(fn,args){const{data,error}=await CL.sb.rpc(fn,args||{});if(error)throw new Error(fixErr(error));return data},
+ async chk(p){const{data,error}=await p;if(error)throw new Error(fixErr(error));return data},
+ async ins(t,row){const{data,error}=await CL.sb.from(t).insert(row).select().single();if(error)throw new Error(fixErr(error));return data},
+ async upd(t,id,patch){return CL.updBy(t,"id",id,patch)},
+ async updBy(t,col,val,patch){const{data,error}=await CL.sb.from(t).update(patch).eq(col,val).select();if(error)throw new Error(fixErr(error));if(!data||!data.length)throw new Error("Modification refusée ou élément introuvable");return data},
+ async fn(name,body){const{data,error}=await CL.sb.functions.invoke(name,{body});if(error){let m=error.message;try{const j=await error.context.json();m=j.erreur||m}catch(e){}throw new Error(m)}if(data&&data.erreur)throw new Error(data.erreur);return data},
+ async go(fn,msg,after){try{await fn();await refresh();const m=typeof msg==="function"?msg():msg;if(m)toast(m,"ok");render();if(after)after();return true}catch(e){toast(fixErr(e),"err");return false}},
+ async login(form){const d=Object.fromEntries(new FormData(form));
+  try{const{data,error}=await CL.sb.auth.signInWithPassword({email:toEmail(d.ident),password:d.pwd});if(error)throw new Error("Identifiant ou code incorrect");CL.uid=data.user.id;await refresh();view="dashboard";render()}
+  catch(e){try{await CL.sb.auth.signOut()}catch(x){}ME=null;CL.uid=null;toast(fixErr(e),"err")}},
+ async logout(){try{await CL.sb.auth.signOut()}catch(e){}ME=null;CL.uid=null;CL.pos={};S=emptyS();render()},
+ /* ---- commandes ---- */
+ creerCommande(d,f){return CL.go(async()=>{
+  const lignes=[...f.querySelectorAll(".lrow")].map(r=>({produit_id:r.querySelector(".l_prod").value,qte:+r.querySelector(".l_qte").value,pu:+r.querySelector(".l_pu").value})).filter(l=>l.produit_id&&l.qte>0);
+  if(!lignes.length)throw new Error("Ajoutez au moins un produit");
+  let clId,adId;
+  if(d.client==="__new"){if(!d.n_nom.trim()||!d.n_tel.trim())throw new Error("Nom et téléphone du client requis");clId=(await CL.ins("clients",{org_id:CL.org,nom:d.n_nom.trim(),tel:d.n_tel.trim()})).id}
+  else{clId=d.client;if(!clId)throw new Error("Choisissez un client")}
+  if(d.client==="__new"||d.adresse==="__new"){if(!d.a_q.trim()&&!d.a_rep.trim())throw new Error("Renseignez le quartier ou un point de repère");adId=(await CL.ins("adresses",{org_id:CL.org,client_id:clId,libelle:"Livraison",zone:d.a_zone,quartier:d.a_q.trim(),repere:d.a_rep.trim(),instructions:d.a_ins.trim(),defaut:d.client==="__new"})).id}
+  else adId=d.adresse;
+  await CL.rpc("creer_commande",{p:{client_id:clId,adresse_id:adId,frais:+d.frais||0,remise:+d.remise||0,paiement:d.paiement,acompte:+d.acompte||0,mode:d.mode,priorite:d.priorite,canal:d.canal,obs:d.obs,confirmer:!!d.confirmer,lignes}})
+ },"Commande créée")},
+ affecter(c,d,lv){return CL.go(async()=>{CL.last=await CL.rpc("affecter_livraison",{p_cid:c.id,p_lid:d.lid,p_motif:d.motif||"",p_force:lv.statut!=="disponible"})},()=>"Affectée à "+lv.nom+" — code client "+CL.last.code)},
+ tournee(lid,ids,lv){const ordre=ordreTournee(ids.map(cmd).filter(Boolean),S.pos[lid]).map(c=>c.id);
+  return CL.go(async()=>{CL.last=await CL.rpc("creer_tournee",{p_livreur:lid,p_commandes:ordre,p_force:lv.statut!=="disponible"})},()=>"Tournée "+CL.last.numero+" créée ("+ids.length+" arrêts)")},
+ etiqueter(c,nb){return CL.go(()=>CL.rpc("etiqueter_commande",{p_commande:c.id,p_nb:+nb})).then(ok=>{if(ok){const c2=cmd(c.id);if(c2&&c2.colis&&c2.colis[0]&&c2.colis[0].tok)labelsModal(c2)}return ok})},
+ async doc(cid,type,p){try{const r=await CL.rpc("emettre_document",{p_commande:cid,p_type:type,p:p||{}});await refresh();const d=S.docs.find(x=>x.id===r.id)||Object.assign({},r,{par:r.par_nom});render();docOpen(d);return true}catch(e){toast(fixErr(e),"err");return false}},
+ /* ---- livreur ---- */
+ liv(lid,action,p,msg){return CL.go(async()=>{const r=await CL.rpc("livraison_action",{p_lid:lid,p_action:action,p:p||{}});if(r&&r.ok===false)throw new Error(r.erreur||"Refusé")},msg)},
+ async confirmer(l,c,d){
+  try{const p={code:d.code,montant:d.montant===""||d.montant==null?null:+d.montant,mode:d.mode,recu_par:d.recu_par,ecart_note:d.ecart_note||"",obs:d.obs||"",signature:d.signature||null};
+   if(colisReq(c)){if(!d.colis_ok)throw new Error("Scannez les colis remis au client (ou saisissez leur code)");p.scans=JSON.parse(d.colis_ok).map(x=>x.txt)}
+   const r=await CL.rpc("livraison_action",{p_lid:l.id,p_action:"confirmer",p});
+   await refresh();
+   if(r&&r.ok===false){render();toast(r.erreur+(r.essais_restants!=null?" ("+r.essais_restants+" essai(s) restant(s))":""),"err");return false}
+   toast("Livraison confirmée ✔","ok");render();return true
+  }catch(e){toast(fixErr(e),"err");return false}},
+ /* ---- référentiels ---- */
+ cliSave(c,d){return CL.go(async()=>{
+  if(!c){if(!d.a_q.trim()&&!d.a_rep.trim())throw new Error("Quartier ou repère requis");
+   const cl=await CL.ins("clients",{org_id:CL.org,nom:d.nom.trim(),tel:d.tel.trim(),tel2:d.tel2||null}),a=adrFrom(d);
+   await CL.ins("adresses",{org_id:CL.org,client_id:cl.id,libelle:a.libelle,zone:a.zone,quartier:a.quartier,repere:a.repere,instructions:a.instructions,lat:a.gps?a.gps.lat:null,lng:a.gps?a.gps.lng:null,gps_src:a.gps?"saisie par le personnel":null,gps_ts:a.gps?now():null,defaut:true})}
+  else await CL.upd("clients",c.id,{nom:d.nom.trim(),tel:d.tel.trim(),tel2:d.tel2||null})
+ },"Client enregistré")},
+ adrAdd(c,d,id){return CL.go(async()=>{const a=adrFrom(d);await CL.ins("adresses",{org_id:CL.org,client_id:c.id,libelle:a.libelle,zone:a.zone,quartier:a.quartier,repere:a.repere,instructions:a.instructions,lat:a.gps?a.gps.lat:null,lng:a.gps?a.gps.lng:null,gps_src:a.gps?"saisie par le personnel":null,gps_ts:a.gps?now():null,defaut:false})},"Adresse ajoutée",()=>cliDetail(id))},
+ prodSave(p,d){return CL.go(async()=>{const row={code:d.code,nom:d.nom,prix:+d.prix,seuil:+d.seuil,actif:!!d.actif};
+  if(p)await CL.upd("produits",p.id,row);else{const n=await CL.ins("produits",Object.assign({org_id:CL.org},row));if(+d.stock>0)await CL.rpc("ajuster_stock",{p_produit:n.id,p_nouveau:+d.stock,p_motif:"Stock initial"})}},"Produit enregistré")},
+ livSave(l,d,remu){return CL.go(async()=>{
+  if(l){await CL.upd("livreurs",l.id,{nom:d.nom,tel:d.tel,zone:d.zone,moto_id:d.moto||null,remu});
+   if(l.user_id){await CL.updBy("membres","user_id",l.user_id,{nom:d.nom,actif:!!d.actif});if(d.pin)await CL.fn("creer-utilisateur",{action:"reset",user_id:l.user_id,mot_de_passe:d.pin})}}
+  else await CL.fn("creer-utilisateur",{nom:d.nom,role:"livreur",identifiant:(d.ident||d.tel||"").trim(),mot_de_passe:d.pin,tel:d.tel,zone:d.zone,moto_id:d.moto||null,remu})
+ },"Livreur enregistré")},
+ motoSave(m,v){return CL.go(async()=>{if(m)await CL.upd("motos",m.id,v);else await CL.ins("motos",Object.assign({org_id:CL.org},v))},"Moto enregistrée")},
+ zoneSave(z,d){return CL.go(async()=>{const row={nom:d.nom,frais:+d.frais,delai_min:+d.delai};if(z)await CL.upd("zones",z.id,row);else await CL.ins("zones",Object.assign({org_id:CL.org},row))},"Zone enregistrée")},
+ saveConfig(){return CL.go(async()=>{const cfg=Object.assign({},S.config);delete cfg.zones;delete cfg.org;delete cfg.whatsapp;await CL.upd("organisations",CL.org,{config:cfg})},"Paramètres enregistrés")},
+ /* ---- vendeurs ---- */
+ vendSave(v,d){return CL.go(async()=>{
+  if(v){await CL.upd("vendeurs",v.id,{nom:d.nom,tel:d.tel,commission_pct:+d.com||0});
+   if(v.user_id){await CL.updBy("membres","user_id",v.user_id,{nom:d.nom,actif:!!d.actif});if(d.pin)await CL.fn("creer-utilisateur",{action:"reset",user_id:v.user_id,mot_de_passe:d.pin})}}
+  else await CL.fn("creer-utilisateur",{nom:d.nom,role:"vendeur",identifiant:(d.ident||d.tel||"").trim(),mot_de_passe:d.pin,tel:d.tel,commission_pct:+d.com||0})
+ },"Vendeur enregistré")},
+ vendDepot(d,lignes){return CL.go(async()=>{CL.last=await CL.rpc("vendeur_deposer_commande",{p:{client:{nom:d.nom,tel:d.tel},adresse:{zone:d.zone,quartier:d.quartier,repere:d.repere,instructions:d.ins},lignes:lignes.map(l=>({desig:l.desig,qte:l.qte,pu:l.pu})),pay:d.pay,obs:d.obs}})},()=>"Commande "+CL.last.numero+" déposée. ANGEL'S GROUP va la confirmer.")},
+ vendImport(orders){let n=0;return CL.go(async()=>{for(const o of orders){await CL.rpc("vendeur_deposer_commande",{p:{client:{nom:o.nom,tel:o.tel},adresse:{zone:o.zone,quartier:o.quartier,repere:o.repere,instructions:o.ins},lignes:o.lignes.map(l=>({desig:l.desig,qte:l.qte,pu:l.pu})),pay:o.pay,obs:o.obs}});n++}},()=>n+" commande(s) déposée(s)").then(ok=>{if(!ok&&n)toast(n+" commande(s) déjà déposée(s) avant l'erreur : ne les importez pas deux fois","err");return ok})}
+});
+/* Le tableau de paramètres n'offre ni export ni réinitialisation en mode connecté (les données sont sur le serveur). */
+VIEWS.params=()=>{let h=VIEWS.params0();if(CL.on){const i=h.indexOf("<h2>Données</h2>");if(i>=0)h=h.slice(0,i)}return h};
+function geoLinkModal(cid,aid,ref){
+ if(!CL.on)return geoLinkModal0(cid,aid,ref);
+ return CL.rpc("creer_lien_portail",{p_adresse:aid,p_ref:ref||null}).then(t=>{ui.cloudLink=location.href.split("#")[0].split("?")[0]+"#portail="+t;try{geoLinkModal0(cid,aid,ref)}finally{ui.cloudLink=null}}).catch(e=>toast(fixErr(e),"err"))}
+async function bootCloud(){
+ S=emptyS();
+ try{await CL.init();const{data}=await CL.sb.auth.getSession();if(data.session){CL.uid=data.session.user.id;try{await refresh()}catch(e){toast(fixErr(e),"err");await CL.sb.auth.signOut();ME=null}}}
+ catch(e){$("#app").innerHTML='<div class="login"><div class="card"><b>Connexion au serveur impossible</b><div class="mu sm" style="margin-top:8px">'+esc(fixErr(e))+'</div></div></div>';return}
+ render()}
+async function bootPortalCloud(token){
+ try{await CL.init();const p=await CL.rpc("portail_get",{p_token:token});if(!p)throw new Error("Lien expiré ou invalide : demandez-en un nouveau.");p.cloudToken=token;S=null;renderPortal(p)}
+ catch(e){$("#app").innerHTML='<div class="login"><div class="card">'+esc(fixErr(e))+'</div></div>'}}
+
 /* ---------- Démarrage ---------- */
-if(location.hash.startsWith("#portail=")){
+const _ptok=(location.hash.match(/^#portail=(.+)$/)||[])[1];
+if(_ptok&&CL.on&&/^[a-f0-9]{64}$/.test(_ptok)){bootPortalCloud(_ptok)}
+else if(location.hash.startsWith("#portail=")){
  try{const p=unb64(location.hash.slice(9));let d=null;try{d=JSON.parse(localStorage.getItem(KEY))}catch(e){}S=d&&d.v===1?d:null;renderPortal(p)}
  catch(e){$("#app").innerHTML='<div class="login"><div class="card">Lien invalide ou expiré. Demandez-en un nouveau.</div></div>'}
-}else{
+}else if(CL.on){bootCloud()}
+else{
  load();
  {const id=sessionStorage.getItem("angels_me");const u=id&&usr(id);if(u&&u.actif)ME=u}
  render();
