@@ -45,8 +45,20 @@ psql -d test -f supabase/tests/test_securite.sql      # affiche PASS / FAIL pour
 ```
 Ils couvrent : isolation entre sociétés, vendeurs et livreurs ; statuts et stock non modifiables en direct ; double validation ; écarts ; reversements ; règlements vendeurs ; portail public ; journaux inviolables ; purge GPS.
 
-## Écart entre l'application et le schéma (à combler avant le branchement)
-L'application a reçu après le schéma : les **tournées** (`tournee_id`, `ordre` sur les livraisons), l'**entretien des motos** (table `entretiens`), les **documents numérotés** (table `documents` + compteurs, émission par RPC, jamais modifiables), les **colis étiquetés** (table `colis` : commande, n°, jeton ; scans de prise en charge et de remise) , les **notifications clients** (couvertes par la migration `…_notifications.sql`), la **signature** de livraison (colonne dans `livraisons`, ou fichier dans Supabase Storage) et les paramètres de société (`organisations.config`). Ces éléments sont à ajouter dans une seconde migration, avec les mêmes principes (RLS, RPC, ajout seul pour les documents).
+## Brancher l'application HTML (fait)
+`index.html` embarque un **mode connecté** : tant que l'adresse et la clé ne sont pas renseignées, l'application reste en mode démonstration (données dans le navigateur).
 
-## Étape suivante : brancher l'application HTML
-`index.html` utilise encore le stockage du navigateur. Il faut remplacer sa couche de données par `supabase-js` (lecture via tables, écriture via les RPC ci-dessus, connexion par identifiant + mot de passe/PIN) pour que bureau, livreurs et vendeurs partagent les mêmes données.
+1. Projet Supabase créé, les 3 migrations (`supabase/migrations/`) appliquées, premier administrateur créé et `amorcer_organisation` exécutée (voir « Mise en route »).
+2. Déployer les trois fonctions : `creer-utilisateur`, `envoyer-notifications`, `messagerie-webhook` (secrets : voir `MESSAGERIE.md`).
+3. Dans `index.html`, renseigner la constante (clé **publishable** uniquement, jamais la clé `service_role`) :
+   ```js
+   const CLOUD_DEFAULT={url:"https://<projet>.supabase.co",key:"sb_publishable_..."};
+   ```
+   (ou, sans modifier le fichier, définir `window.ANGELS_CLOUD={url,key}` avant le script).
+4. Servir la page en **https** (Vercel) : GPS, caméra (QR) et sessions l'exigent. La bibliothèque `supabase-js` est chargée depuis jsDelivr avec empreinte SRI.
+5. Les identifiants saisis à l'écran (ex. `awa`) deviennent `awa@users.angels-erp.app` côté Supabase Auth ; le code secret fait au moins 6 caractères en mode connecté. L'administrateur crée les comptes dans l'écran *Utilisateurs / Livreurs / Vendeurs* (fonction `creer-utilisateur`).
+
+Certains profils ne lisent pas toutes les tables (ex. un préparateur ne lit pas les fiches clients, un commercial ne lit pas les livreurs) : l'écran affiche alors « Client » / « Livreur » à la place du nom.
+
+### Banc d'essai de bout en bout
+`tests/banc/` contient une passerelle (`gateway.mjs`, fausse authentification + fonction de création de compte) à placer devant un vrai PostgREST et la base de test chargée avec `seed_e2e.sql` ; `tests/banc/e2e_*.js` pilotent l'application dans Chromium (Playwright) pour chaque profil : cycle complet d'une commande (création, préparation, étiquettes, affectation, scans, code de livraison, signature, reversement), toutes les pages de chaque profil, dépôt/import vendeur, isolation entre vendeurs, paramètres, documents, entretien, création de compte, portail client.

@@ -1,0 +1,1 @@
+{ "name": "banc-essai-supabase", "private": true, "type": "module", "dependencies": { "pg": "^8.11.0" } }

@@ -31,10 +31,22 @@ Deno.serve(async (req) => {
   let b: Record<string, any>;
   try { b = await req.json(); } catch { return json({ erreur: "Corps JSON invalide" }, 400); }
   const { nom, role, identifiant, mot_de_passe } = b;
+  const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+  // Réinitialisation du mot de passe / PIN d'un compte de la MÊME société.
+  if (b.action === "reset") {
+    if (typeof mot_de_passe !== "string" || mot_de_passe.length < 6) return json({ erreur: "Mot de passe / PIN : 6 caractères minimum" }, 400);
+    const { data: cible } = await admin.from("membres").select("org_id").eq("user_id", b.user_id).single();
+    if (!cible || cible.org_id !== me.org_id) return json({ erreur: "Utilisateur introuvable" }, 404);
+    const { error } = await admin.auth.admin.updateUserById(b.user_id, { password: mot_de_passe });
+    if (error) return json({ erreur: error.message }, 400);
+    await admin.from("audit_log").insert({ org_id: me.org_id, user_id: u.user.id, user_nom: "Administrateur", role: "admin", action: "Mot de passe réinitialisé", detail: String(b.user_id) });
+    return json({ ok: true });
+  }
+
   if (!nom || !ROLES.includes(role) || !identifiant) return json({ erreur: "nom, role et identifiant requis" }, 400);
   if (typeof mot_de_passe !== "string" || mot_de_passe.length < 6) return json({ erreur: "Mot de passe / PIN : 6 caractères minimum" }, 400);
 
-  const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: created, error: e1 } = await admin.auth.admin.createUser({
     email: toEmail(String(identifiant)), password: mot_de_passe, email_confirm: true,
   });
@@ -46,7 +58,7 @@ Deno.serve(async (req) => {
 
   if (role === "livreur") {
     const { data, error } = await admin.from("livreurs").insert({
-      org_id: me.org_id, nom, tel: b.tel ?? null, zone: b.zone ?? null, moto_id: b.moto_id ?? null,
+      org_id: me.org_id, nom, tel: b.tel ?? null, zone: b.zone ?? null, moto_id: b.moto_id ?? null, remu: b.remu ?? null,
     }).select("id").single();
     if (error) return undo(error.message);
     livreur_id = data.id;
