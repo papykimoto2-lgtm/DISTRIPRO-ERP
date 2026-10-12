@@ -1,0 +1,23 @@
+const { chromium } = require('/opt/node-tools/node_modules/playwright');
+let ok=0,ko=0;const chk=(n,c,x)=>{c?ok++:ko++;console.log((c?'✔':'✘')+' '+n+(c?'':'  → '+(typeof x==='string'?x:JSON.stringify(x))))};
+(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});
+const pg=await (await b.newContext({viewport:{width:1280,height:950}})).newPage();const er=[];pg.on('pageerror',e=>er.push(e.message));pg.on('dialog',d=>d.accept());
+await pg.goto('file:///home/user/DISTRIPRO-ERP/index.html');await pg.waitForTimeout(300);
+await pg.evaluate(()=>{ME=null;render()});await pg.click('.pcard >> nth=0');await pg.waitForTimeout(200);
+// deux commandes vendeur confirmées + une collecte collectée (3 colis / 1 colis)
+const ids=await pg.evaluate(()=>{const v=S.vendeurs[0];const mk=(n,t)=>{const c=creerCmdVendeur(v,{nom:n,tel:t,zone:"Cocody",quartier:"Angré",repere:"",ins:"",lignes:[{desig:"Robe "+n,qte:1,pu:10000}],pay:"livraison",obs:""});setStatut(c,"confirmee");return c.id};
+ const a=mk("A","0707000011"),b=mk("B","0707000022");const col=colPlanLocal({vendeur_id:v.id,commandes:[a,b],livreur:S.livreurs[0].id,creneau:now(),note:"",adresse:null});
+ const lv=S.livreurs[0];ME=S.users.find(u=>u.id===lv.user_id);colLocal(col.id,"accepter");colLocal(col.id,"partir");colLocal(col.id,"collecter",{code:col.code,colis:{[a]:3,[b]:1}});ME=S.users.find(u=>u.role==='preparateur');save();view="commandes";render();return{col:col.id,a,b}});
+await pg.waitForTimeout(300);
+await pg.click('button:has-text("Réceptionner") >> nth=0');await pg.waitForSelector('input[name^=r_]');
+await pg.fill(`input[name=r_${ids.a}]`,'2');await pg.fill(`input[name=r_${ids.b}]`,'2');await pg.waitForTimeout(150);
+const t=await pg.innerText('#modal');chk('aperçu des écarts dans le formulaire',/-1 → incident/.test(t)&&/\+1 → incident/.test(t),t.slice(0,400));
+await pg.click('#mf .mf .btn:not(.ghost)');await pg.waitForTimeout(400);
+const r=await pg.evaluate(ids=>({inc:S.incidents.filter(i=>[ids.a,ids.b].includes(i.commande_id)).map(i=>({cat:i.cat,st:i.statut,d:i.desc.slice(0,80)})),sa:cmd(ids.a).statut,sb:cmd(ids.b).statut}),ids);
+chk('2 incidents ouverts (manquant, surplus)',r.inc.length===2&&r.inc.some(i=>i.cat==='Colis manquant')&&r.inc.some(i=>i.cat==='Écart de colis'),r.inc);
+chk('commande avec manquant reste « confirmée », surplus → préparation',r.sa==='confirmee'&&r.sb==='preparation',r);
+chk('message à l\'écran : incidents ouverts',/2 incident\(s\) ouvert\(s\)/.test(await pg.innerText('body')));
+await pg.evaluate(()=>{ME=S.users.find(u=>u.role==='admin');view="incidents";render()});await pg.waitForTimeout(200);
+chk('visibles dans « Incidents & retours »',/Colis manquant/.test(await pg.innerText('body'))&&/Écart de colis/.test(await pg.innerText('body')));
+const ja=await pg.evaluate(()=>S.audit.filter(a=>a.action==="Incident ouvert automatiquement").length);chk('journalisés',ja===2,ja);
+console.log('erreurs JS',er);console.log(ok+' ok / '+ko+' échecs');await b.close()})();
