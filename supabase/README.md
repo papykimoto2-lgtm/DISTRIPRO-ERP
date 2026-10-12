@@ -49,7 +49,8 @@ Ils couvrent : isolation entre sociétés, vendeurs et livreurs ; statuts et sto
 `index.html` embarque un **mode connecté** : tant que l'adresse et la clé ne sont pas renseignées, l'application reste en mode démonstration (données dans le navigateur).
 
 1. Projet Supabase créé, les 3 migrations (`supabase/migrations/`) appliquées, premier administrateur créé et `amorcer_organisation` exécutée (voir « Mise en route »).
-2. Déployer les trois fonctions : `creer-utilisateur`, `envoyer-notifications`, `messagerie-webhook` (secrets : voir `MESSAGERIE.md`).
+2. Appliquer aussi `20261013000000_dossiers_livreurs.sql` (dossiers d'identité des livreurs).
+2b. Déployer les trois fonctions : `creer-utilisateur`, `envoyer-notifications`, `messagerie-webhook` (secrets : voir `MESSAGERIE.md`).
 3. Dans `index.html`, renseigner la constante (clé **publishable** uniquement, jamais la clé `service_role`) :
    ```js
    const CLOUD_DEFAULT={url:"https://<projet>.supabase.co",key:"sb_publishable_..."};
@@ -62,3 +63,6 @@ Certains profils ne lisent pas toutes les tables (ex. un préparateur ne lit pas
 
 ### Banc d'essai de bout en bout
 `tests/banc/` contient une passerelle (`gateway.mjs`, fausse authentification + fonction de création de compte) à placer devant un vrai PostgREST et la base de test chargée avec `seed_e2e.sql` ; `tests/banc/e2e_*.js` pilotent l'application dans Chromium (Playwright) pour chaque profil : cycle complet d'une commande (création, préparation, étiquettes, affectation, scans, code de livraison, signature, reversement), toutes les pages de chaque profil, dépôt/import vendeur, isolation entre vendeurs, paramètres, documents, entretien, création de compte, portail client.
+
+### Dossiers d'identité des livreurs
+Migration `20261013000000_dossiers_livreurs.sql` : état civil, pièce d'identité, permis, contacts, accord du livreur (`livreur_dossiers`) et 4 images par livreur — photo, pièce recto/verso, permis (`livreur_fichiers`, JPEG/PNG en data-URL, 400 Ko max, miniature de 20 Ko pour les listes). Lecture et écriture : administrateur et superviseur seulement ; le livreur lit son propre dossier ; le journal trace l'action sans jamais contenir l'image. `app.dossier_complet()` et `public.dossiers_a_surveiller()` (échéances à 30 jours). Option `dossier_obligatoire` (Paramètres) : le serveur refuse alors toute affectation à un livreur au dossier incomplet ou expiré. Tests : `tests/test_dossiers.sql`, `tests/banc/e2e_dossiers*.js`.

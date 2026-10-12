@@ -82,6 +82,9 @@ label input,label select,label textarea{margin-top:3px;color:var(--tx);font-weig
 .tour .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:8px}
 .tour .st{all:unset;box-sizing:border-box;cursor:pointer;background:#fff;border:1px solid var(--bd);border-radius:10px;padding:10px;font-size:13px}
 .tour .st:hover{border-color:var(--b)}.tour .st b{display:block;color:var(--b2)}.tour .st small{color:var(--mu)}
+.av{width:34px;height:34px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;background:var(--bd)}
+.slot{border:1px dashed var(--bd);border-radius:10px;padding:8px;text-align:center;background:#fff}.slot img{max-width:100%;max-height:130px;border-radius:6px;display:block;margin:6px auto}
+.slot .ph{height:70px;display:flex;align-items:center;justify-content:center;color:var(--mu);font-size:12px}.slot b{font-size:12px}
 .kpi{transition:.15s}.kpi:hover{box-shadow:0 4px 14px rgba(15,37,112,.12);transform:translateY(-1px)}
 @media(max-width:760px){.login.hero{grid-template-columns:1fr}.hero-l{padding:28px 22px;min-height:0}.hero-l h1{font-size:23px}.hero-r{padding:22px 16px}.pcards{grid-template-columns:1fr}}
 
@@ -219,6 +222,7 @@ function annuler(c,motif){
 function affecter(c,lid,motif){
  const lv=liv(lid),old=activeLiv(c.id);
  if(!lv){toast("Livreur introuvable","err");return false}
+ if(S.config.dossier_obligatoire&&!dossierEtat(lv).ok){toast("Dossier de "+lv.nom+" incomplet ou expiré : affectation impossible","err");return false}
  if(c.statut!=="prete"&&!(old&&["affectee","en_cours"].includes(c.statut))){toast("Cette commande ne peut pas être affectée dans son état actuel","err");return false}
  const mo=lv.moto_id&&moto(lv.moto_id);
  if(mo&&mo.statut!=="disponible"&&mo.statut!=="affectee"){toast(`Moto ${mo.immat} ${mo.statut} : affectation impossible sans validation`,"err");return false}
@@ -275,6 +279,11 @@ function seed(){
  const m1=mkM("1234 AB 01","Haojue 125",14200,"disponible"),m2=mkM("5678 CD 01","Yamaha Crypton",22800,"disponible"),m3=mkM("9012 EF 01","TVS Apache",30100,"panne");
  const mkL=(nom,tel,zn,mo,pin)=>{const u=mkU(nom,"livreur",pin);const l={id:uid("lv"),user_id:u.id,nom,tel,zone:zn,moto_id:mo?mo.id:null,statut:"disponible",gps_consent:false,remu:null};S.livreurs.push(l);return l};
  const L1=mkL("Issa Traoré","0707000001","Cocody",m1,"0001"),L2=mkL("Kouamé Yves","0707000002","Marcory",m2,"0002"),L3=mkL("Sékou Camara","0707000003","Yopougon",m3,"0003");
+ {const sp=(t,bg,fg)=>"data:image/svg+xml;utf8,"+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="420" height="270"><rect width="420" height="270" rx="16" fill="${bg}"/><text x="210" y="125" font-family="sans-serif" font-size="26" font-weight="700" fill="${fg}" text-anchor="middle">${t}</text><text x="210" y="165" font-family="sans-serif" font-size="15" fill="${fg}" text-anchor="middle">SPÉCIMEN — exemple de démonstration</text></svg>`),
+  av=()=>"data:image/svg+xml;utf8,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#1a3aa8"/><circle cx="100" cy="78" r="38" fill="#cfd8f7"/><path d="M30 190c8-45 40-62 70-62s62 17 70 62z" fill="#cfd8f7"/></svg>'),
+  exp=new Date(Date.now()+400*864e5).toISOString().slice(0,10);
+  L1.dossier={piece_type:"cni",piece_numero:"SPECIMEN-0001",piece_expire:exp,permis_numero:"SPECIMEN-P-01",permis_categorie:"A",permis_expire:exp,adresse:"Cocody, Abidjan",contact_urgence_nom:"Famille Traoré",contact_urgence_tel:"0100000001",garant_nom:"",garant_tel:"",date_naissance:"1996-04-12",consent_le:now(),maj_le:now()};
+  L1.fichiers={photo:{full:av(),mini:av()},piece_recto:{full:sp("CARTE D'IDENTITÉ — RECTO","#e8f0ff","#0f2570")},piece_verso:{full:sp("CARTE D'IDENTITÉ — VERSO","#e8f0ff","#0f2570")},permis:{full:sp("PERMIS DE CONDUIRE","#fff1d6","#7a4a00")}}}
  [["P-RIZ","Riz 25 kg",14500,40],["P-HUI","Huile végétale 5 L",6500,60],["P-SUC","Sucre 5 kg",3500,80],["P-SAV","Savon (carton)",8000,25],["P-EAU","Eau minérale (pack)",1800,120]].forEach(p=>S.produits.push({id:uid("p"),code:p[0],nom:p[1],prix:p[2],stock:p[3],seuil:10,actif:true}));
  const addr=(lib,zn,q,rep,gps,ins)=>({id:uid("a"),libelle:lib,zone:zn,quartier:q,repere:rep,gps,instructions:ins||""});
  const mkC=(nom,tel,adrs)=>{adrs[0].defaut=true;const c={id:uid("cl"),nom,tel,tel2:"",adresses:adrs,note:""};S.clients.push(c);return c};
@@ -364,6 +373,7 @@ function alertes(){
   if(l.statut==="affectee"&&(t-new Date(l.affectee_at))/60000>10)a.push({k:"warn",m:`Mission non acceptée depuis plus de 10 min : ${c.numero} (${lv.nom})`});
   if(l.statut==="en_cours"){const f=fraicheur(S.pos[l.livreur_id]);if(f.k!=="ok")a.push({k:"",m:`GPS ${f.k==="mu"?"absent":"non récent"} pour ${lv.nom} (${c.numero}). Cela ne prouve pas une faute : réseau, batterie ou téléphone possibles.`})}});
  const ne=S.commandes.filter(c=>c.statut==="prete"&&!c.colis).length;if(ne&&S.config.etiq_scan)a.push({k:"",m:`${ne} commande(s) prête(s) sans étiquettes colis : imprimez-les avant la remise au livreur`});
+ if(ME&&["admin","superviseur"].includes(ME.role))S.livreurs.forEach(l=>{const e=dossierEtat(l);if(!e.ok)a.push({k:S.config.dossier_obligatoire?"err":"warn",m:`Dossier de ${l.nom} incomplet : ${e.manques.slice(0,3).join(", ")}${e.manques.length>3?"…":""}${S.config.dossier_obligatoire?" — affectation bloquée":""}`});else if(e.bientot.length)a.push({k:"warn",m:`${l.nom} : échéance proche pour ${e.bientot.join(" et ")} (moins de 30 jours)`})});
  const nn=S.notifs.filter(n=>n.statut==="a_envoyer").length;if(nn)a.push({k:"",m:`${nn} message(s) client à envoyer (menu Notifications)`});
  const ec=S.livraisons.filter(l=>l.ecart_statut==="a_valider").length;if(ec)a.push({k:"err",m:`${ec} écart(s) d'encaissement à valider`});
  const nv=S.commandes.filter(c=>c.vendeur_id&&c.statut==="attente").length;if(nv)a.push({k:"warn",m:`${nv} commande(s) de vendeurs partenaires à confirmer`});
@@ -575,10 +585,51 @@ function prodForm(p){modal(p?"Modifier le produit":"Nouveau produit",`<div class
 
 /* ---------- Livreurs & motos ---------- */
 VIEWS.livreurs=()=>`<div class="between"><h1>Livreurs & motos</h1><div class="flex"><button class="btn" data-act="newLiv">➕ Livreur</button><button class="btn ghost" data-act="newMoto">➕ Moto</button></div></div>
- ${tbl(["Livreur","Téléphone","Zone","Moto","Statut","Rémunération","Missions",""],S.livreurs.map(l=>{const r=l.remu||S.config.remu,u=usr(l.user_id),mo=l.moto_id&&moto(l.moto_id);
-  return`<tr><td><b>${esc(l.nom)}</b><br>${u&&u.actif?"":badge("compte désactivé","er")}</td><td>${esc(l.tel)}</td><td>${esc(l.zone)}</td><td>${mo?esc(mo.immat):"—"}</td><td>${l.statut==="disponible"?badge("Disponible","ok"):badge("Indisponible","er")}</td><td class="sm">${r.type==="fixe"?fcfa(r.fixe)+"/course":r.type==="pct"?r.pct+" % des frais":fcfa(r.fixe)+" + "+r.pct+" %"}${l.remu?"":' <span class="mu">(défaut)</span>'}</td><td>${S.livraisons.filter(x=>x.livreur_id===l.id&&x.statut==="livree").length} livrées</td><td><button class="btn sm ghost" data-act="editLiv" data-id="${l.id}">Modifier</button> <button class="btn sm ghost" data-act="togLiv" data-id="${l.id}">${l.statut==="disponible"?"Marquer indisponible":"Marquer disponible"}</button></td></tr>`}))}
+ ${tbl(["Livreur","Téléphone","Zone","Moto","Statut","Dossier","Rémunération","Missions",""],S.livreurs.map(l=>{const r=l.remu||S.config.remu,u=usr(l.user_id),mo=l.moto_id&&moto(l.moto_id);
+  return`<tr><td>${avatarL(l)}<b>${esc(l.nom)}</b><br>${u&&u.actif?"":badge("compte désactivé","er")}</td><td>${esc(l.tel)}</td><td>${esc(l.zone)}</td><td>${mo?esc(mo.immat):"—"}</td><td>${l.statut==="disponible"?badge("Disponible","ok"):badge("Indisponible","er")}</td><td>${dossierBadge(l)}<br><button class="btn sm ghost" data-act="dossier" data-id="${l.id}">📁 Dossier</button></td><td class="sm">${r.type==="fixe"?fcfa(r.fixe)+"/course":r.type==="pct"?r.pct+" % des frais":fcfa(r.fixe)+" + "+r.pct+" %"}${l.remu?"":' <span class="mu">(défaut)</span>'}</td><td>${S.livraisons.filter(x=>x.livreur_id===l.id&&x.statut==="livree").length} livrées</td><td><button class="btn sm ghost" data-act="editLiv" data-id="${l.id}">Modifier</button> <button class="btn sm ghost" data-act="togLiv" data-id="${l.id}">${l.statut==="disponible"?"Marquer indisponible":"Marquer disponible"}</button></td></tr>`}))}
  <h2>Motos</h2>${tbl(["Immatriculation","Modèle","Km","Prochain entretien","Statut","Affectée à","Coût d'entretien",""],S.motos.map(m=>{const l=S.livreurs.find(x=>x.moto_id===m.id),ce=S.entretiens.filter(e=>e.moto_id===m.id).reduce((a,e)=>a+e.cout,0);return`<tr><td><b>${esc(m.immat)}</b></td><td>${esc(m.modele)}</td><td>${m.km}</td><td>${m.prochain_km} km ${m.km>=m.prochain_km?badge("dû","er"):""}</td><td>${badge(m.statut,m.statut==="disponible"?"ok":"er")}</td><td>${l?esc(l.nom):"—"}</td><td>${fcfa(ce)}</td><td><button class="btn sm" data-act="entMoto" data-id="${m.id}">🔧 Entretien</button> <button class="btn sm ghost" data-act="histMoto" data-id="${m.id}">Historique</button> <button class="btn sm ghost" data-act="editMoto" data-id="${m.id}">Modifier</button></td></tr>`}))}
  <p class="mu sm">Une moto en panne ou immobilisée ne peut pas recevoir de nouvelle mission. Remettez-la au statut « disponible » après réparation.</p>`;
+/* ---------- Dossier d'identité des livreurs ---------- */
+const PIECES={cni:"Carte nationale d'identité",passeport:"Passeport",attestation:"Attestation d'identité",carte_consulaire:"Carte consulaire"};
+const FKINDS=[["photo","Photo d'identité du livreur"],["piece_recto","Pièce d'identité — recto"],["piece_verso","Pièce d'identité — verso"],["permis","Permis de conduire"]];
+function dossierEtat(l){
+ const d=l.dossier||{},f=l.fichiers||{},m=[],t0=new Date().toISOString().slice(0,10),t30=new Date(Date.now()+30*864e5).toISOString().slice(0,10);
+ if(!d.piece_type||!(d.piece_numero||"").trim())m.push("pièce d'identité non renseignée");else if(!d.piece_expire||d.piece_expire<=t0)m.push("pièce d'identité expirée");
+ if(!(d.permis_numero||"").trim())m.push("permis non renseigné");else if(!d.permis_expire||d.permis_expire<=t0)m.push("permis expiré");
+ FKINDS.forEach(([k,t])=>{if(!f[k])m.push("« "+t+" » manquant")});
+ if(!(d.contact_urgence_tel||"").trim())m.push("contact d'urgence");
+ if(!d.consent_le)m.push("accord du livreur");
+ const bientot=[d.piece_expire&&d.piece_expire>t0&&d.piece_expire<=t30?"la pièce d'identité":"",d.permis_expire&&d.permis_expire>t0&&d.permis_expire<=t30?"le permis":""].filter(Boolean);
+ return{ok:!m.length,manques:m,bientot}}
+const avatarL=l=>{const f=l.fichiers&&l.fichiers.photo;return f&&(f.mini||f.full)?`<img class="av" alt="" src="${f.mini||f.full}">`:`<span class="av" style="display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:var(--mu)">${esc((l.nom||"?").trim().slice(0,1).toUpperCase())}</span>`};
+function dossierBadge(l){const e=dossierEtat(l);return e.ok?(e.bientot.length?badge("Échéance proche","wa"):badge("Dossier complet","ok")):badge("À compléter ("+e.manques.length+")","er")}
+function imgResize(file,max,q,lim){return new Promise((ok,ko)=>{const r=new FileReader();r.onerror=()=>ko(new Error("Lecture du fichier impossible"));r.onload=()=>{const im=new Image();im.onerror=()=>ko(new Error("Ce fichier n'est pas une image lisible"));
+ im.onload=()=>{const k=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);
+  let out=c.toDataURL("image/jpeg",q),qq=q;while(out.length>lim&&qq>.3){qq-=.1;out=c.toDataURL("image/jpeg",qq)}out.length>lim?ko(new Error("Image trop lourde")):ok(out)};im.src=r.result};r.readAsDataURL(file)})}
+function slotHTML(k,t,img){return`<div class="slot" data-slot="${k}"><b>${t}</b><div class="ph ${img?"hide":""}">Aucune image</div><img alt="" class="${img?"":"hide"}" src="${img||""}"><div class="flex" style="justify-content:center;gap:6px"><label class="btn sm ghost" style="margin:0;cursor:pointer">📷 ${img?"Remplacer":"Ajouter"}<input type="file" accept="image/*" ${k==="photo"?'capture="user"':'capture="environment"'} data-img="${k}" style="display:none"></label><button type="button" class="btn sm ghost ${img?"":"hide"}" data-act="dosDel" data-id="${k}">Retirer</button></div></div>`}
+function slotSet(k,img){const el=document.querySelector(`[data-slot="${k}"]`);if(!el)return;el.outerHTML=slotHTML(k,FKINDS.find(x=>x[0]===k)[1],img)}
+async function dossierForm(l){
+ const d=l.dossier||{};ui.dos={};
+ const prev=FKINDS.map(([k])=>[k,l.fichiers&&l.fichiers[k]]);
+ prev.forEach(([k,f])=>{if(f)ui.dos[k]={full:f.full||null,mini:f.mini||null,keep:true}});
+ const e=dossierEtat(l);
+ modal("Dossier d'identité — "+l.nom,`<div class="al ${e.ok?"":"warn"} sm">${e.ok?"✔ Dossier complet.":"À compléter : "+e.manques.map(esc).join(" · ")}${e.bientot.length?"<br>⏰ Échéance dans moins de 30 jours : "+e.bientot.join(", ")+".":""}</div>
+ <div class="sm mu" style="margin:6px 0">🔒 Données personnelles sensibles : visibles uniquement par l'administrateur et le superviseur, chaque modification est journalisée. Ne les partagez pas par messagerie.</div>
+ <div class="sec">Photos et pièces</div><div class="g2">${FKINDS.map(([k,t])=>slotHTML(k,t,prev.find(x=>x[0]===k)[1]&&(prev.find(x=>x[0]===k)[1].full||prev.find(x=>x[0]===k)[1].mini))).join("")}</div>
+ <div class="sec">Pièce d'identité</div><div class="g3"><label>Type<select name="piece_type"><option value="">—</option>${opts(Object.entries(PIECES).map(([v,t])=>({v,t})),d.piece_type||"")}</select></label><label>Numéro<input name="piece_numero" value="${esc(d.piece_numero||"")}"></label><label>Date d'expiration<input type="date" name="piece_expire" value="${d.piece_expire||""}"></label></div>
+ <div class="sec">Permis de conduire (moto)</div><div class="g3"><label>Numéro<input name="permis_numero" value="${esc(d.permis_numero||"")}"></label><label>Catégorie<input name="permis_categorie" placeholder="A, A1…" value="${esc(d.permis_categorie||"")}"></label><label>Date d'expiration<input type="date" name="permis_expire" value="${d.permis_expire||""}"></label></div>
+ <div class="sec">État civil et contacts</div><div class="g2"><label>Date de naissance<input type="date" name="date_naissance" value="${d.date_naissance||""}"></label><label>Adresse du domicile<input name="adresse" value="${esc(d.adresse||"")}"></label></div>
+ <div class="g2"><label>Personne à prévenir (nom)<input name="contact_urgence_nom" value="${esc(d.contact_urgence_nom||"")}"></label><label>Téléphone<input name="contact_urgence_tel" value="${esc(d.contact_urgence_tel||"")}"></label></div>
+ <div class="g2"><label>Garant (nom)<input name="garant_nom" value="${esc(d.garant_nom||"")}"></label><label>Téléphone du garant<input name="garant_tel" value="${esc(d.garant_tel||"")}"></label></div>
+ <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin-top:10px"><input type="checkbox" name="consent" style="width:auto;margin-top:3px" ${d.consent_le?"checked":""}> Le livreur a été informé et accepte que ses documents soient conservés par ANGEL'S GROUP pour la gestion des livraisons${d.consent_le?` <span class="mu">(accord du ${fdt(d.consent_le)})</span>`:""}.</label>`,
+ {wide:true,label:"Enregistrer le dossier",onSubmit:x=>{
+  const dd={date_naissance:x.date_naissance||null,adresse:x.adresse||null,contact_urgence_nom:x.contact_urgence_nom||null,contact_urgence_tel:x.contact_urgence_tel||null,garant_nom:x.garant_nom||null,garant_tel:x.garant_tel||null,piece_type:x.piece_type||null,piece_numero:x.piece_numero||null,piece_expire:x.piece_expire||null,permis_numero:x.permis_numero||null,permis_categorie:x.permis_categorie||null,permis_expire:x.permis_expire||null,consent_le:x.consent?(d.consent_le||new Date().toISOString()):null};
+  if(CL.on)return CL.dossierSave(l,dd,ui.dos);
+  l.dossier=dd;l.fichiers={};Object.entries(ui.dos).forEach(([k,f])=>{if(f)l.fichiers[k]={full:f.full,mini:f.mini}});l.dossier.maj_le=now();
+  audit("Dossier livreur modifié",l.nom);save();render();toast("Dossier enregistré","ok")}});
+ if(CL.on&&l.fichiers&&Object.keys(l.fichiers).length){CL.dossierLoad(l).then(()=>{FKINDS.forEach(([k])=>{const f=l.fichiers[k];if(f&&f.full&&ui.dos[k]&&ui.dos[k].keep){ui.dos[k].full=f.full;slotSet(k,f.full)}})}).catch(err=>toast(fixErr(err),"err"))}}
+document.addEventListener("change",async e=>{const k=e.target.dataset&&e.target.dataset.img;if(!k||!e.target.files[0])return;
+ try{const full=await imgResize(e.target.files[0],k==="photo"?640:1280,.78,360000),mini=k==="photo"?await imgResize(e.target.files[0],96,.7,15000):null;ui.dos[k]={full,mini,keep:false};slotSet(k,full)}catch(err){toast(err.message,"err")}});
 function livForm(l){const u=l&&usr(l.user_id),r=(l&&l.remu)||S.config.remu;
  modal(l?"Modifier le livreur":"Nouveau livreur",`<div class="g2"><label>Nom et prénoms<input name="nom" required value="${esc(l?l.nom:"")}"></label><label>Téléphone<input name="tel" required value="${esc(l?l.tel:"")}"></label></div>
  <div class="g2"><label>Zone habituelle<select name="zone">${opts(S.config.zones.map(z=>z.nom),l?l.zone:"")}</select></label><label>Moto<select name="moto"><option value="">— aucune —</option>${opts(S.motos.map(m=>({v:m.id,t:m.immat+" ("+m.statut+")"})),l?l.moto_id:"")}</select></label></div>
@@ -639,6 +690,7 @@ VIEWS.params0=()=>{const c=S.config;return`<h1>Paramètres</h1>
  <label style="margin-top:10px">Conservation de l'historique GPS (jours)<input id="p_g4" type="number" value="${c.gps_retention_jours}" style="max-width:200px"></label><button class="btn" style="margin-top:10px" data-act="saveParams">Enregistrer</button></div>
  <h2>Société et documents</h2><div class="card"><div class="g2"><label>Adresse<input id="p_ad" value="${esc(c.ste.adresse)}"></label><label>Téléphones<input id="p_stel" value="${esc(c.ste.tel)}"></label></div><div class="g2" style="margin-top:10px"><label>NIF<input id="p_nif" value="${esc(c.ste.nif)}"></label><label>RCCM<input id="p_rccm" value="${esc(c.ste.rccm)}"></label></div>
  <label style="margin-top:10px">Mention en bas des documents<textarea id="p_ml" rows="2">${esc(c.mention_legale)}</textarea></label><label style="margin-top:10px">Signature du destinataire obligatoire dès (F, 0 = jamais)<input id="p_sig" type="number" min="0" value="${c.signature_seuil}" style="max-width:220px"></label></div>
+ <h2>Dossiers des livreurs</h2><div class="card"><label style="display:flex;gap:8px;align-items:center;font-size:14px;color:var(--tx);font-weight:600"><input type="checkbox" id="p_do" style="width:auto" ${c.dossier_obligatoire?"checked":""}> Exiger un dossier complet et à jour (pièce d'identité, permis, photos, accord) avant toute affectation</label><div class="sm mu" style="margin-top:6px">Quand c'est coché, un livreur au dossier incomplet ou expiré ne peut recevoir ni mission ni tournée.</div></div>
  <h2>Étiquettes colis (QR code)</h2><div class="card"><label style="display:flex;gap:8px;align-items:center;font-size:14px;color:var(--tx);font-weight:600"><input type="checkbox" id="p_es" style="width:auto" ${c.etiq_scan?"checked":""}> Scan obligatoire des colis à la prise en charge et à la remise (quand la commande a des étiquettes)</label>
  <label style="display:flex;gap:8px;align-items:center;font-size:14px;color:var(--tx);font-weight:600;margin-top:8px"><input type="checkbox" id="p_em" style="width:auto" ${c.etiq_montant?"checked":""}> Imprimer le montant à encaisser sur l'étiquette <span class="sm mu">(le montant de l'application fait foi)</span></label>
  <label style="display:flex;gap:8px;align-items:center;font-size:14px;color:var(--tx);font-weight:600;margin-top:8px"><input type="checkbox" id="p_et" style="width:auto" ${c.etiq_tel?"checked":""}> Imprimer le téléphone du client sur l'étiquette</label></div>
@@ -698,6 +750,7 @@ function gpsConsent(next){const lv=livreurOf(ME);if(lv.gps_consent)return next()
 const done=(msg)=>{if(CL.on)return refresh().then(()=>{if(msg)toast(msg,"ok");render()}).catch(e=>toast(fixErr(e),"err"));save();if(msg)toast(msg,"ok");render()};
 const ACT={
  nav:id=>{view=id;render()},
+ dossier:id=>dossierForm(liv(id)),dosDel:k=>{if(ui.dos){ui.dos[k]=null;slotSet(k,null)}},
  demoIn:id=>{const u=usr(id);if(!u||CL.on)return;ME=u;sessionStorage.setItem("angels_me",u.id);view=ME.role==="livreur"?view:"dashboard";audit("Connexion",u.nom);save();render()},
  tab:id=>{const[k,v]=id.split("|");ui[k]=v;render()},
  logout:()=>{if(CL.on){if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null}return CL.logout()}if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null}sessionStorage.removeItem("angels_me");ME=null;render()},
@@ -750,7 +803,7 @@ const ACT={
  togUser:id=>{if(CL.on)return CL.go(()=>CL.updBy("membres","user_id",id,{actif:!usr(id).actif}),"Compte mis à jour");const u=usr(id);u.actif=!u.actif;audit(u.actif?"Compte réactivé":"Compte désactivé",u.nom);done()},
  pinUser:id=>{const u=usr(id);modal("Nouveau PIN — "+u.nom,`<label>PIN (${PINMIN} à 8 chiffres)<input name="pin" pattern="[0-9]{${PINMIN},8}" inputmode="numeric" required></label>`,{onSubmit:d=>{if(CL.on)return CL.go(()=>CL.fn("creer-utilisateur",{action:"reset",user_id:u.id,mot_de_passe:d.pin}),"Mot de passe modifié");u.pin_h=hashPin(u.id,d.pin);audit("PIN réinitialisé",u.nom);done("PIN modifié")}})},
  newZone:()=>zoneForm(),editZone:id=>zoneForm(S.config.zones.find(z=>z.id===id)),
- saveParams:()=>{const c=S.config,L=id=>$(id).value.split("\n").map(s=>s.trim()).filter(Boolean);c.motifs=L("#p_motifs");c.cats=L("#p_cats");c.remu={type:$("#p_rt").value,fixe:+$("#p_rf").value||0,pct:+$("#p_rp").value||0};c.gps_stale_ok=+$("#p_g1").value||2;c.gps_stale_warn=+$("#p_g2").value||10;c.gps_interval=+$("#p_g3").value||20;c.gps_retention_jours=+$("#p_g4").value||30;c.ste={adresse:$("#p_ad").value,tel:$("#p_stel").value,nif:$("#p_nif").value,rccm:$("#p_rccm").value};c.mention_legale=$("#p_ml").value;c.etiq_scan=$("#p_es").checked;c.etiq_montant=$("#p_em").checked;c.etiq_tel=$("#p_et").checked;c.signature_seuil=Math.max(0,+$("#p_sig").value||0);["confirmee","en_cours","livree","echouee"].forEach(k=>{c.notif[k]=$("#pn_"+k).checked;c.tpl[k]=$("#pt_"+k).value.trim()||TPL_DEF[k]});if(CL.on)return CL.saveConfig();audit("Paramètres modifiés","");done("Paramètres enregistrés")},
+ saveParams:()=>{const c=S.config,L=id=>$(id).value.split("\n").map(s=>s.trim()).filter(Boolean);c.motifs=L("#p_motifs");c.cats=L("#p_cats");c.remu={type:$("#p_rt").value,fixe:+$("#p_rf").value||0,pct:+$("#p_rp").value||0};c.gps_stale_ok=+$("#p_g1").value||2;c.gps_stale_warn=+$("#p_g2").value||10;c.gps_interval=+$("#p_g3").value||20;c.gps_retention_jours=+$("#p_g4").value||30;c.ste={adresse:$("#p_ad").value,tel:$("#p_stel").value,nif:$("#p_nif").value,rccm:$("#p_rccm").value};c.mention_legale=$("#p_ml").value;c.dossier_obligatoire=$("#p_do").checked;c.etiq_scan=$("#p_es").checked;c.etiq_montant=$("#p_em").checked;c.etiq_tel=$("#p_et").checked;c.signature_seuil=Math.max(0,+$("#p_sig").value||0);["confirmee","en_cours","livree","echouee"].forEach(k=>{c.notif[k]=$("#pn_"+k).checked;c.tpl[k]=$("#pt_"+k).value.trim()||TPL_DEF[k]});if(CL.on)return CL.saveConfig();audit("Paramètres modifiés","");done("Paramètres enregistrés")},
  exportData:()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:"application/json"}));a.download="angels_erp_"+new Date().toISOString().slice(0,10)+".json";a.click()},
  resetData:()=>{if(confirm("Effacer toutes les données et recharger la démonstration ?")){localStorage.removeItem(KEY);ME=null;sessionStorage.removeItem("angels_me");load();render()}},
  /* livreur */
@@ -817,7 +870,7 @@ function ensureConfig(){
  c.ste=Object.assign({adresse:"",nif:"",rccm:"",tel:"05 84 16 32 32 / 05 00 66 04 37 / 07 88 07 45 18"},c.ste||{});
  if(c.mention_legale==null)c.mention_legale="Document de gestion. Si l'entreprise est assujettie à la facturation normalisée électronique, la facture réglementaire doit être émise via le dispositif officiel.";
  if(c.signature_seuil==null)c.signature_seuil=100000;
- if(c.etiq_scan==null)c.etiq_scan=true;if(c.etiq_montant==null)c.etiq_montant=false;if(c.etiq_tel==null)c.etiq_tel=false;
+ if(c.dossier_obligatoire==null)c.dossier_obligatoire=false;if(c.etiq_scan==null)c.etiq_scan=true;if(c.etiq_montant==null)c.etiq_montant=false;if(c.etiq_tel==null)c.etiq_tel=false;
  S.docs=S.docs||[];S.notifs=S.notifs||[];S.seq=S.seq||{cmd:0,inc:0};S.seq.doc=S.seq.doc||{}}
 const fillTpl=(t,v)=>String(t).replace(/\{(\w+)\}/g,(_,k)=>v[k]!=null?v[k]:"");
 function notifier(c,to,note){
@@ -1000,6 +1053,7 @@ function ordreTournee(cs,start){
 function creerTournee(lid,cids){
  const lv=liv(lid),cs=cids.map(cmd).filter(Boolean);
  if(!lv||cs.length<2||cs.some(c=>c.statut!=="prete")){toast("Sélectionnez au moins 2 commandes prêtes à livrer","err");return null}
+ if(S.config.dossier_obligatoire&&!dossierEtat(lv).ok){toast("Dossier de "+lv.nom+" incomplet ou expiré : tournée impossible","err");return null}
  const mo=lv.moto_id&&moto(lv.moto_id);if(mo&&!["disponible","affectee"].includes(mo.statut)){toast(`Moto ${mo.immat} ${mo.statut} : affectation impossible sans validation`,"err");return null}
  const t={id:uid("t"),numero:"T-"+String(S.tournees.length+1).padStart(4,"0"),livreur_id:lid,ts:now(),par:who()};
  ordreTournee(cs,S.pos[lid]).forEach((c,i)=>{const l=affecter(c,lid,"");if(l){l.tournee_id=t.id;l.ordre=i+1}});
@@ -1279,6 +1333,9 @@ async function hydrate(){
  Object.assign(N.pos,CL.pos);
  CL.vd={};dues.forEach(d=>CL.vd[d.vendeur_id]={acquis:+d.acquis,regle:+d.regle,restant:+d.restant,attente:+d.attente,elig:[]});
  elig.forEach(e=>{(CL.vd[e.vendeur_id]=CL.vd[e.vendeur_id]||{acquis:0,regle:0,restant:0,attente:0,elig:[]}).elig.push({commande_id:e.commande_id,net:+e.net,livree_le:e.livree_le})});
+ try{const [dd,ff]=await Promise.all([fetchAll("livreur_dossiers","livreur_id"),CL.sb.from("livreur_fichiers").select("livreur_id,kind,miniature").range(0,999)]);
+  const byL=Object.fromEntries(dd.map(x=>[x.livreur_id,x])),fl=grp(ff.data||[],"livreur_id");
+  N.livreurs.forEach(l=>{l.dossier=byL[l.id]||null;l.fichiers={};(fl[l.id]||[]).forEach(f=>{l.fichiers[f.kind]={mini:f.miniature||null,full:null}})})}catch(e){}   // dossiers : lisibles seulement par l'administrateur, le superviseur et le livreur lui-même
  S=N;ensureConfig();
  ME={id:me.user_id,nom:me.nom,role:me.role,actif:me.actif};
 }
@@ -1338,6 +1395,13 @@ Object.assign(CL,{
    if(l.user_id){await CL.updBy("membres","user_id",l.user_id,{nom:d.nom,actif:!!d.actif});if(d.pin)await CL.fn("creer-utilisateur",{action:"reset",user_id:l.user_id,mot_de_passe:d.pin})}}
   else await CL.fn("creer-utilisateur",{nom:d.nom,role:"livreur",identifiant:(d.ident||d.tel||"").trim(),mot_de_passe:d.pin,tel:d.tel,zone:d.zone,moto_id:d.moto||null,remu})
  },"Livreur enregistré")},
+ dossierSave(l,dd,dos){return CL.go(async()=>{
+  await CL.chk(CL.sb.from("livreur_dossiers").upsert(Object.assign({livreur_id:l.id,org_id:CL.org},dd),{onConflict:"livreur_id"}));
+  for(const[k]of FKINDS){const f=dos[k];
+   if(f&&!f.keep&&f.full)await CL.chk(CL.sb.from("livreur_fichiers").upsert({org_id:CL.org,livreur_id:l.id,kind:k,fichier:f.full,miniature:f.mini||null},{onConflict:"livreur_id,kind"}));
+   else if(!f&&l.fichiers&&l.fichiers[k])await CL.chk(CL.sb.from("livreur_fichiers").delete().eq("livreur_id",l.id).eq("kind",k))}
+ },"Dossier enregistré")},
+ async dossierLoad(l){const rows=await CL.chk(CL.sb.from("livreur_fichiers").select("kind,fichier").eq("livreur_id",l.id));rows.forEach(r=>{l.fichiers=l.fichiers||{};l.fichiers[r.kind]=Object.assign(l.fichiers[r.kind]||{},{full:r.fichier})})},
  motoSave(m,v){return CL.go(async()=>{if(m)await CL.upd("motos",m.id,v);else await CL.ins("motos",Object.assign({org_id:CL.org},v))},"Moto enregistrée")},
  zoneSave(z,d){return CL.go(async()=>{const row={nom:d.nom,frais:+d.frais,delai_min:+d.delai};if(z)await CL.upd("zones",z.id,row);else await CL.ins("zones",Object.assign({org_id:CL.org},row))},"Zone enregistrée")},
  saveConfig(){return CL.go(async()=>{const cfg=Object.assign({},S.config);delete cfg.zones;delete cfg.org;delete cfg.whatsapp;await CL.upd("organisations",CL.org,{config:cfg})},"Paramètres enregistrés")},
