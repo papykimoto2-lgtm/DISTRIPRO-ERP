@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0e7490">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="ANGEL'S GROUP"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script>try{var _t=localStorage.getItem("angels_theme");if(_t)document.documentElement.dataset.theme=_t}catch(e){}</script>
 <title>ANGEL'S GROUP ERP — Livraisons</title>
 <style>
@@ -381,22 +385,36 @@ function loginHTMLLocal(){
  <label style="margin-top:10px">Code PIN<input name="pin" type="password" inputmode="numeric" autocomplete="off" required></label>
  <button class="btn" style="width:100%;margin-top:12px">Se connecter</button></form>
  <div class="al warn sm" style="margin-top:10px">PIN : admin 1234 · direction 0000 · superviseur 1111 · caissier 2222 · commercial 3333 · préparateur 4444 · livreurs 0001 / 0002 / 0003 · vendeur 5555.</div></details>
- <div style="margin-top:14px"><div class="mu sm" style="margin-bottom:6px">Couleur du logiciel</div>${themeDots()}</div><div class="mu sm" style="margin-top:12px">💡 Ouvrez un second onglet pour jouer le livreur pendant que vous supervisez.</div></div></div>`}
+ <div style="margin-top:14px"><div class="mu sm" style="margin-bottom:6px">Couleur du logiciel</div>${themeDots()}</div><div style="margin-top:14px">${instBox()}</div><div class="mu sm" style="margin-top:12px">💡 Ouvrez un second onglet pour jouer le livreur pendant que vous supervisez.</div></div></div>`}
 
 /* ---------- Gabarit ---------- */
-function render(){render0();carteHook()}
+function render(){render0();carteHook();refreshInstall()}
 function render0(){
  if(!S&&!CL.on)return;
  if(!ME){$("#app").innerHTML=loginHTML();return}
  if(ME.role==="livreur"){$("#app").innerHTML=livreurHTML();syncGPS();initMaps();return}
  const nav=NAV.filter(n=>n.r.includes(ME.role));if(!nav.find(n=>n.v===view))view=nav[0].v;
- $("#app").innerHTML=`<div class="shell"><aside><div class="brand">ANGEL'S GROUP<small>ERP · Livraisons V1</small></div>${clkBox()}${nav.map(n=>`<a class="${n.v===view?"on":""}" data-act="nav" data-id="${n.v}">${n.i} ${n.l}</a>`).join("")}<div class="who">👤 ${esc(ME.nom)}<br><span style="opacity:.7">${ROLES[ME.role]}</span><div class="themes">${THEMES.map(([k,t,c])=>`<button type="button" class="${themeCur()===k?"on":""}" style="background:${c}" data-act="theme" data-id="${k}" title="${t}" aria-label="${t}"></button>`).join("")}</div><a data-act="logout" style="padding:6px 0">⏏ Déconnexion</a></div></aside><main>${VIEWS[view]()}</main></div>`}
+ $("#app").innerHTML=`<div class="shell"><aside><div class="brand">ANGEL'S GROUP<small>ERP · Livraisons V1</small></div>${clkBox()}${nav.map(n=>`<a class="${n.v===view?"on":""}" data-act="nav" data-id="${n.v}">${n.i} ${n.l}</a>`).join("")}<div class="who">👤 ${esc(ME.nom)}<br><span style="opacity:.7">${ROLES[ME.role]}</span><div class="themes">${THEMES.map(([k,t,c])=>`<button type="button" class="${themeCur()===k?"on":""}" style="background:${c}" data-act="theme" data-id="${k}" title="${t}" aria-label="${t}"></button>`).join("")}</div><div style="margin:8px 0 2px">${instBox()}</div><a data-act="logout" style="padding:6px 0">⏏ Déconnexion</a></div></aside><main>${VIEWS[view]()}</main></div>`}
 
 /* ============================================================
    VUES
    ============================================================ */
 const VIEWS={};
 
+/* ---------- Application installable (PWA) ---------- */
+let IPROMPT=null;
+const isStandalone=()=>(window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone===true;
+const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)&&!window.MSStream;
+const instBox=()=>`<div class="inst"></div>`;
+function refreshInstall(){
+ let h="";
+ if(!isStandalone()&&/^https?:$/.test(location.protocol)){
+  if(IPROMPT)h=`<button type="button" class="btn ghost" data-act="installApp" style="width:100%">📲 Installer l'application</button>`;
+  else if(isIOS())h=`<div class="sm mu">📲 Pour installer : touchez <b>Partager</b> puis <b>Sur l'écran d'accueil</b>.</div>`}
+ document.querySelectorAll(".inst").forEach(e=>{e.innerHTML=h;e.style.display=h?"block":"none"})}
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();IPROMPT=e;refreshInstall()});
+window.addEventListener("appinstalled",()=>{IPROMPT=null;refreshInstall();try{toast("Application installée ✔","ok")}catch(e){}});
+if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 /* ---------- Carte centrale : tous les livreurs en direct ---------- */
 const CARTE={map:null,lg:null,mk:{},fitted:false,timer:null,view:null,sim:null};
 const ini=n=>(n||"?").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
@@ -797,7 +815,7 @@ function livreurHTML(){
  const lv=livreurOf(ME);if(!lv)return`<div class="lv"><div class="card">Compte livreur non rattaché. <a data-act="logout" href="#">Déconnexion</a></div></div>`;
  const mine=S.livraisons.filter(l=>l.livreur_id===lv.id),todo=mine.filter(isActive).sort((a,b)=>(a.tournee_id?0:1)-(b.tournee_id?0:1)||(a.ordre||99)-(b.ordre||99)||new Date(a.affectee_at)-new Date(b.affectee_at)),today=new Date().toDateString(),done=mine.filter(l=>["livree","echouee"].includes(l.statut)&&new Date(l.fin_at).toDateString()===today);
  const aEnc=todo.reduce((a,l)=>a+l.montant_attendu,0),det=soldeLiv(lv.id);
- return`<div class="lv"><div class="lvh"><div class="between"><div><b style="font-size:17px">${esc(lv.nom)}</b><br><span style="opacity:.75" class="sm">${lv.statut==="disponible"?"🟢 Disponible":"🔴 Indisponible"}</span><br><span class="sm" style="opacity:.85">${avisMoy(lv.id).n?"★ "+avisMoy(lv.id).m.toFixed(1)+" · "+avisMoy(lv.id).n+" avis clients":"Pas encore d'avis"}</span><br><span class="sm clk" data-k="td" style="opacity:.75">${new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})+" · "+clkT().slice(0,5)}</span></div><div class="flex"><button class="btn sm ghost" data-act="myStatus">Statut</button><button class="btn sm ghost" data-act="logout">⏏</button></div></div>
+ return`<div class="lv"><div class="lvh"><div class="between"><div><b style="font-size:17px">${esc(lv.nom)}</b><br><span style="opacity:.75" class="sm">${lv.statut==="disponible"?"🟢 Disponible":"🔴 Indisponible"}</span><br><span class="sm" style="opacity:.85">${avisMoy(lv.id).n?"★ "+avisMoy(lv.id).m.toFixed(1)+" · "+avisMoy(lv.id).n+" avis clients":"Pas encore d'avis"}</span><br><span class="sm clk" data-k="td" style="opacity:.75">${new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})+" · "+clkT().slice(0,5)}</span></div><div class="flex"><button class="btn sm ghost" data-act="myStatus">Statut</button><button class="btn sm ghost" data-act="logout">⏏</button></div></div><div style="margin-top:8px">${instBox()}</div>
  <div class="grid" style="margin-top:10px;grid-template-columns:repeat(3,1fr)"><div><div style="font-size:20px;font-weight:800">${todo.length}</div><div class="sm" style="opacity:.75">à faire</div></div><div><div style="font-size:20px;font-weight:800">${done.filter(l=>l.statut==="livree").length}</div><div class="sm" style="opacity:.75">livrées aujourd'hui</div></div><div><div style="font-size:20px;font-weight:800">${fcfa(det)}</div><div class="sm" style="opacity:.75">à reverser</div></div></div></div>
  ${aEnc?`<div class="al warn">Montants à encaisser sur vos courses : <b>${fcfa(aEnc)}</b></div>`:""}
  ${todo.length?todo.map(missionCard).join(""):'<div class="card mu">Aucune mission pour le moment. Les nouvelles missions apparaissent ici.</div>'}
@@ -830,6 +848,7 @@ const ACT={
  nav:id=>{view=id;render()},
  dossier:id=>dossierForm(liv(id)),dosDel:k=>{if(ui.dos){ui.dos[k]=null;slotSet(k,null)}},
  theme:k=>{setTheme(k);render()},
+ installApp:async()=>{if(!IPROMPT)return;IPROMPT.prompt();try{await IPROMPT.userChoice}catch(e){}IPROMPT=null;refreshInstall()},
  carteFit:()=>carteFit(),carteFocus:id=>{const m=CARTE.mk[id];if(m&&CARTE.map){CARTE.map.setView(m.getLatLng(),16);m.openPopup()}else toast("Ce livreur n'a pas partagé sa position","err")},
  suiviLien:async id=>{const c=cmd(id);let link;if(CL.on){const t=await CL.rpc("creer_lien_suivi",{p_commande:id});link=location.href.split("#")[0].split("?")[0]+"#suivi="+t}else link=location.href.split("#")[0]+"#suivi="+id;suiviModal(c,link)},
  cpTxt:t=>{(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast("Lien copié","ok"),()=>prompt("Copiez ce lien :",t))},
