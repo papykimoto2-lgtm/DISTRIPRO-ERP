@@ -4,9 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#1a3aa8">
+<script>try{var _t=localStorage.getItem("angels_theme");if(_t)document.documentElement.dataset.theme=_t}catch(e){}</script>
 <title>ANGEL'S GROUP ERP — Livraisons</title>
 <style>
-:root{--b:#1a3aa8;--b2:#0f2570;--bg:#f2f4fa;--card:#fff;--tx:#1b2240;--mu:#6b7390;--ok:#118a4b;--wa:#b86e00;--er:#c62828;--bd:#dfe3f0;--okbg:#e3f5ea;--wabg:#fff1d6;--erbg:#fde5e5;--bbg:#e5ebfb}
+:root{--b:#1a3aa8;--b2:#0f2570;--b3:#2a55d6;--bg:#f2f4fa;--card:#fff;--tx:#1b2240;--mu:#6b7390;--ok:#118a4b;--wa:#b86e00;--er:#c62828;--bd:#dfe3f0;--okbg:#e3f5ea;--wabg:#fff1d6;--erbg:#fde5e5;--bbg:#e5ebfb}
 *{box-sizing:border-box}
 body{margin:0;font:14px/1.45 system-ui,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--tx)}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -66,7 +67,7 @@ label input,label select,label textarea{margin-top:3px;color:var(--tx);font-weig
 .bars i{display:block;background:var(--b);border-radius:5px 5px 0 0;min-height:2px;margin-bottom:3px}
 .login{max-width:380px;margin:8vh auto;padding:0 14px}
 .login.hero{max-width:none;margin:0;padding:0;display:grid;grid-template-columns:1.05fr 1fr;min-height:100vh}
-.hero-l{background:linear-gradient(155deg,#0f2570 0%,#1a3aa8 60%,#2a55d6 100%);color:#fff;padding:48px 40px;display:flex;flex-direction:column;justify-content:center;gap:18px}
+.hero-l{background:linear-gradient(155deg,var(--b2) 0%,var(--b) 60%,var(--b3) 100%);color:#fff;padding:48px 40px;display:flex;flex-direction:column;justify-content:center;gap:18px}
 .hero-l h1{font-size:30px;line-height:1.15;margin:0}.hero-l p{margin:0;opacity:.88;font-size:15px}
 .hero-l ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:10px}.hero-l li{display:flex;gap:10px;align-items:flex-start;font-size:14px}
 .hero-l li b{display:block;font-size:14px}.hero-l li span.i{font-size:20px;line-height:1.1}
@@ -75,7 +76,7 @@ label input,label select,label textarea{margin-top:3px;color:var(--tx);font-weig
 .pcard{all:unset;box-sizing:border-box;cursor:pointer;background:#fff;border:1px solid var(--bd);border-radius:12px;padding:12px;display:flex;gap:10px;align-items:center;transition:.15s}
 .pcard:hover,.pcard:focus-visible{border-color:var(--b);box-shadow:0 4px 14px rgba(26,58,168,.15);transform:translateY(-1px)}
 .pcard .ic{font-size:22px}.pcard b{display:block;font-size:13px}.pcard small{color:var(--mu);font-size:11.5px}
-.welcome{background:linear-gradient(120deg,#0f2570,#1a3aa8);color:#fff;border-radius:14px;padding:18px 20px;margin:10px 0 4px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
+.welcome{background:linear-gradient(120deg,var(--b2),var(--b));color:#fff;border-radius:14px;padding:18px 20px;margin:10px 0 4px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
 .welcome h2{margin:0 0 4px;color:#fff;font-size:20px}.welcome .big{font-size:13px;opacity:.9}
 .welcome .hl{display:flex;gap:22px;flex-wrap:wrap}.welcome .hl div{text-align:center}.welcome .hl b{display:block;font-size:24px}.welcome .hl span{font-size:11.5px;opacity:.85}
 .tour{border:2px dashed var(--b);background:var(--bbg);border-radius:14px;padding:14px 16px;margin:12px 0}
@@ -85,6 +86,14 @@ label input,label select,label textarea{margin-top:3px;color:var(--tx);font-weig
 .av{width:34px;height:34px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;background:var(--bd)}
 .slot{border:1px dashed var(--bd);border-radius:10px;padding:8px;text-align:center;background:#fff}.slot img{max-width:100%;max-height:130px;border-radius:6px;display:block;margin:6px auto}
 .slot .ph{height:70px;display:flex;align-items:center;justify-content:center;color:var(--mu);font-size:12px}.slot b{font-size:12px}
+
+html[data-theme=emeraude]{--b:#0f7b5f;--b2:#08523f;--b3:#17a67f;--bbg:#e0f4ee;--bg:#f1f7f5;--bd:#d9e6e1}
+html[data-theme=orange]{--b:#c9500a;--b2:#7d3004;--b3:#f27a2c;--bbg:#fdebdd;--bg:#faf5f1;--bd:#ecdfd5}
+html[data-theme=violet]{--b:#6a32c9;--b2:#3e1a85;--b3:#8a55e6;--bbg:#eee6fb;--bg:#f6f3fb;--bd:#e4dcf2}
+html[data-theme=turquoise]{--b:#0e7490;--b2:#0b3b4c;--b3:#1aa3c6;--bbg:#dff3f8;--bg:#f1f6f8;--bd:#d6e4ea}
+html[data-theme=or]{--b:#9a6f12;--b2:#15171d;--b3:#c8962a;--bbg:#f6edd8;--bg:#f5f4f1;--bd:#e6e2d8}
+.themes{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.themes button{all:unset;cursor:pointer;width:26px;height:26px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--bd);transition:.15s}.themes button:hover{transform:scale(1.15)}.themes button.on{box-shadow:0 0 0 2px var(--tx)}
+aside .themes{margin:6px 0 2px}aside .themes button{width:18px;height:18px;border-color:rgba(255,255,255,.5)}
 .kpi{transition:.15s}.kpi:hover{box-shadow:0 4px 14px rgba(15,37,112,.12);transform:translateY(-1px)}
 @media(max-width:760px){.login.hero{grid-template-columns:1fr}.hero-l{padding:28px 22px;min-height:0}.hero-l h1{font-size:23px}.hero-r{padding:22px 16px}.pcards{grid-template-columns:1fr}}
 
@@ -333,6 +342,11 @@ const waLink=(tel,txt)=>{let t=String(tel||"").replace(/\D/g,"");if(t.length===1
 
 /* ---------- Connexion ---------- */
 function loginHTML(){return CL.on?loginHTMLCloud():loginHTMLLocal()}
+const THEMES=[["bleu","Bleu (standard)","#1a3aa8"],["emeraude","Vert émeraude","#0f7b5f"],["orange","Orange énergie","#c9500a"],["violet","Violet","#6a32c9"],["turquoise","Turquoise","#0e7490"],["or","Nuit & or","#15171d"]];
+const themeCur=()=>document.documentElement.dataset.theme||"bleu";
+const themeDots=()=>`<div class="themes" title="Couleur du logiciel">${THEMES.map(([k,t,c])=>`<button type="button" class="${themeCur()===k?"on":""}" style="background:${c}" data-act="theme" data-id="${k}" aria-label="${t}" title="${t}"></button>`).join("")}</div>`;
+function setTheme(k){if(k==="bleu")delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=k;try{k==="bleu"?localStorage.removeItem("angels_theme"):localStorage.setItem("angels_theme",k)}catch(e){}
+ const m=document.querySelector('meta[name=theme-color]');if(m)m.content=getComputedStyle(document.documentElement).getPropertyValue("--b").trim()}
 const HERO=`<div class="hero-l"><div style="font-size:13px;letter-spacing:2px;opacity:.8">ANGEL'S GROUP</div><h1>Chaque colis suivi, chaque franc encaissé, chaque client prévenu.</h1><p>Le logiciel de gestion de vos livraisons à moto — du bon de commande à la preuve de livraison.</p>
  <ul><li><span class="i">📍</span><div><b>Adresse sur carte pour le livreur</b>Le client place lui-même son repère depuis son téléphone.</div></li>
  <li><span class="i">🏷️</span><div><b>Étiquette QR sur chaque colis</b>Scan au départ et à la remise : aucun colis perdu ou échangé.</div></li>
@@ -349,7 +363,7 @@ function loginHTMLLocal(){
  <label style="margin-top:10px">Code PIN<input name="pin" type="password" inputmode="numeric" autocomplete="off" required></label>
  <button class="btn" style="width:100%;margin-top:12px">Se connecter</button></form>
  <div class="al warn sm" style="margin-top:10px">PIN : admin 1234 · direction 0000 · superviseur 1111 · caissier 2222 · commercial 3333 · préparateur 4444 · livreurs 0001 / 0002 / 0003 · vendeur 5555.</div></details>
- <div class="mu sm" style="margin-top:12px">💡 Ouvrez un second onglet pour jouer le livreur pendant que vous supervisez.</div></div></div>`}
+ <div style="margin-top:14px"><div class="mu sm" style="margin-bottom:6px">Couleur du logiciel</div>${themeDots()}</div><div class="mu sm" style="margin-top:12px">💡 Ouvrez un second onglet pour jouer le livreur pendant que vous supervisez.</div></div></div>`}
 
 /* ---------- Gabarit ---------- */
 function render(){
@@ -357,7 +371,7 @@ function render(){
  if(!ME){$("#app").innerHTML=loginHTML();return}
  if(ME.role==="livreur"){$("#app").innerHTML=livreurHTML();syncGPS();initMaps();return}
  const nav=NAV.filter(n=>n.r.includes(ME.role));if(!nav.find(n=>n.v===view))view=nav[0].v;
- $("#app").innerHTML=`<div class="shell"><aside><div class="brand">ANGEL'S GROUP<small>ERP · Livraisons V1</small></div>${nav.map(n=>`<a class="${n.v===view?"on":""}" data-act="nav" data-id="${n.v}">${n.i} ${n.l}</a>`).join("")}<div class="who">👤 ${esc(ME.nom)}<br><span style="opacity:.7">${ROLES[ME.role]}</span><br><a data-act="logout" style="padding:6px 0">⏏ Déconnexion</a></div></aside><main>${VIEWS[view]()}</main></div>`}
+ $("#app").innerHTML=`<div class="shell"><aside><div class="brand">ANGEL'S GROUP<small>ERP · Livraisons V1</small></div>${nav.map(n=>`<a class="${n.v===view?"on":""}" data-act="nav" data-id="${n.v}">${n.i} ${n.l}</a>`).join("")}<div class="who">👤 ${esc(ME.nom)}<br><span style="opacity:.7">${ROLES[ME.role]}</span><div class="themes">${THEMES.map(([k,t,c])=>`<button type="button" class="${themeCur()===k?"on":""}" style="background:${c}" data-act="theme" data-id="${k}" title="${t}" aria-label="${t}"></button>`).join("")}</div><a data-act="logout" style="padding:6px 0">⏏ Déconnexion</a></div></aside><main>${VIEWS[view]()}</main></div>`}
 
 /* ============================================================
    VUES
@@ -751,6 +765,7 @@ const done=(msg)=>{if(CL.on)return refresh().then(()=>{if(msg)toast(msg,"ok");re
 const ACT={
  nav:id=>{view=id;render()},
  dossier:id=>dossierForm(liv(id)),dosDel:k=>{if(ui.dos){ui.dos[k]=null;slotSet(k,null)}},
+ theme:k=>{setTheme(k);render()},
  demoIn:id=>{const u=usr(id);if(!u||CL.on)return;ME=u;sessionStorage.setItem("angels_me",u.id);view=ME.role==="livreur"?view:"dashboard";audit("Connexion",u.nom);save();render()},
  tab:id=>{const[k,v]=id.split("|");ui[k]=v;render()},
  logout:()=>{if(CL.on){if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null}return CL.logout()}if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null}sessionStorage.removeItem("angels_me");ME=null;render()},
