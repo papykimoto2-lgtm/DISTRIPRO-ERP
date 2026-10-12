@@ -1,0 +1,17 @@
+const { chromium } = require('/opt/node-tools/node_modules/playwright');
+let ok=0,ko=0;const chk=(n,c,x)=>{c?ok++:ko++;console.log((c?'✔':'✘')+' '+n+(c?'':'  → '+(typeof x==='string'?x:JSON.stringify(x))))};
+(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});
+const pg=await (await b.newContext({viewport:{width:1300,height:1000}})).newPage();const er=[];pg.on('pageerror',e=>er.push(e.message));pg.on('dialog',d=>d.accept());
+await pg.goto('file:///home/user/DISTRIPRO-ERP/index.html');await pg.waitForTimeout(300);
+const as=async role=>{await pg.evaluate(r=>{ME=S.users.find(u=>u.role===r);sessionStorage.setItem('angels_me',ME.id);view='__x';render()},role);await pg.waitForTimeout(150)};
+const ids=()=>pg.$$eval('aside [data-act=nav]',a=>a.map(x=>x.dataset.id)),gts=()=>pg.$$eval('aside .gt',a=>a.map(x=>x.textContent));
+await as('admin');
+chk('administrateur : ordre de la marche en avant',JSON.stringify(await ids())===JSON.stringify(["dashboard","carte","vendeurs","clients","commandes","notifs","produits","journal","inventaire","livraisons","livreurs","incidents","finance","caisse","etats","documents","audit","utilisateurs","params"]),await ids());
+chk('titres de sections dans l\'ordre',JSON.stringify(await gts())===JSON.stringify(["Pilotage","Tiers & partenaires","Commandes","Stock & préparation","Livraison","Argent","Contrôle & documents","Administration"]),await gts());
+await as('caissier');chk('caissier : Argent puis contrôle, ouvre sur Finance',JSON.stringify(await ids())===JSON.stringify(["finance","caisse","etats","documents"])&&await pg.evaluate(()=>view)==='finance',[await ids(),await pg.evaluate(()=>view)]);
+await as('vendeur');chk('vendeur : « Mon espace » seulement, ouvre sur Mes commandes',JSON.stringify(await gts())===JSON.stringify(["Mon espace"])&&await pg.evaluate(()=>view)==='mesCmd');
+await as('preparateur');chk('préparateur : commandes puis stock',JSON.stringify(await ids())===JSON.stringify(["commandes","produits","journal","inventaire","incidents"])&&await pg.evaluate(()=>view)==='commandes',await ids());
+await as('direction');chk('direction : ouvre sur le tableau de bord',(await ids())[0]==='dashboard'&&await pg.evaluate(()=>view)==='dashboard');
+await as('admin');await pg.evaluate(()=>{view='dashboard';render()});await pg.screenshot({path:'nav_desktop.png',clip:{x:0,y:0,width:300,height:900}});
+await pg.setViewportSize({width:420,height:800});await pg.waitForTimeout(200);chk('mobile : titres masqués, menu horizontal',!(await pg.isVisible('aside .gt')));await pg.screenshot({path:'nav_mobile.png',clip:{x:0,y:0,width:420,height:200}});
+chk('aucune erreur JS',er.length===0,er);console.log(ok+' ok / '+ko+' échecs');await b.close()})();
