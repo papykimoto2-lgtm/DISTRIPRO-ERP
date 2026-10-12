@@ -99,6 +99,13 @@ aside .themes{margin:6px 0 2px}aside .themes button{width:18px;height:18px;borde
 .stp li i{width:22px;height:22px;border-radius:50%;border:2px solid var(--bd);background:#fff;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-size:12px;flex-shrink:0}
 .stp li.ok{color:var(--tx)}.stp li.ok i{background:var(--b);border-color:var(--b);color:#fff}.stp li.cur{color:var(--b2);font-weight:700}.stp li.cur i{border-color:var(--b);box-shadow:0 0 0 4px var(--bbg)}
 .stp li small{margin-left:auto;font-weight:400}.stars{display:flex;gap:6px;justify-content:center;margin:8px 0}.stars button{all:unset;cursor:pointer;font-size:34px;line-height:1;color:#cfd5e3}.stars button.on{color:#f5a700}
+.cm{display:grid;grid-template-columns:1fr 300px;gap:12px;align-items:start}#cm_map{height:calc(100vh - 230px);min-height:420px;border-radius:12px;overflow:hidden;background:#e8ebf5;border:1px solid var(--bd)}
+.cmside{max-height:calc(100vh - 230px);min-height:420px;overflow:auto;background:#fff;border:1px solid var(--bd);border-radius:12px}.cmside .it{display:flex;gap:8px;align-items:flex-start;padding:9px 10px;border-bottom:1px solid var(--bd);cursor:pointer}.cmside .it:hover{background:var(--bbg)}.cmside .it b{font-size:13px}
+.dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;margin-top:4px;background:#999}.dot.libre{background:#118a4b}.dot.mission{background:var(--b)}.dot.indispo{background:#8b93a8}
+.mk{width:34px;height:34px;border-radius:50%;color:#fff;font:700 12px/30px system-ui;text-align:center;border:3px solid #fff;box-shadow:0 2px 8px #0005;transform:translate(-50%,-50%)}.mk.libre{background:#118a4b}.mk.mission{background:var(--b)}.mk.indispo{background:#8b93a8}.mk.old{opacity:.55;border-style:dashed;border-color:#b86e00}
+.mkd{font-size:24px;line-height:24px;transform:translate(-50%,-100%);filter:drop-shadow(0 1px 2px #0006)}
+.lgd{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--mu);margin:6px 0 10px}.lgd span{display:inline-flex;gap:5px;align-items:center}
+@media(max-width:900px){.cm{grid-template-columns:1fr}.cmside{max-height:260px;min-height:0}#cm_map{height:60vh}}
 .kpi{transition:.15s}.kpi:hover{box-shadow:0 4px 14px rgba(15,37,112,.12);transform:translateY(-1px)}
 @media(max-width:760px){.login.hero{grid-template-columns:1fr}.hero-l{padding:28px 22px;min-height:0}.hero-l h1{font-size:23px}.hero-r{padding:22px 16px}.pcards{grid-template-columns:1fr}}
 
@@ -160,6 +167,7 @@ const NAV=[
  {v:"dashboard",l:"Tableau de bord",i:"📊",r:["admin","direction","superviseur"]},
  {v:"commandes",l:"Commandes",i:"🧾",r:["admin","superviseur","commercial","preparateur"]},
  {v:"livraisons",l:"Centre de livraison",i:"🏍️",r:["admin","superviseur"]},
+ {v:"carte",l:"Carte en direct",i:"🗺️",r:["admin","superviseur","direction"]},
  {v:"documents",l:"Documents",i:"📄",r:["admin","direction","commercial","caissier","superviseur"]},
  {v:"notifs",l:"Notifications",i:"💬",r:["admin","superviseur","commercial"]},
  {v:"clients",l:"Clients",i:"👥",r:["admin","superviseur","commercial"]},
@@ -323,6 +331,7 @@ function seed(){
   creerCmdVendeur(V,{nom:"Mme Konan",tel:"0505777777",zone:"Abobo",quartier:"Anonkoua",repere:"Face à l'église",ins:"",lignes:[{desig:"Robe wax",qte:1,pu:15000},{desig:"Foulard",qte:2,pu:3000}],pay:"livraison",obs:""});
   const vo=creerCmdVendeur(V,{nom:"Cliente Fatou",tel:"0505444444",zone:"Cocody",quartier:"Angré",repere:"Château d'eau",ins:"",lignes:[{desig:"Sac à main",qte:2,pu:12000}],pay:"livraison",obs:""});
   setStatut(vo,"confirmee");toPrete(vo);const lv=affecter(vo,L1.id,"");accepter(lv);priseEnCharge(lv,1);demarrer(lv);confirmer(lv,{code:lv.code,montant:vo.total,mode:"Espèces",recu_par:"Fatou"})}
+ {const t=new Date().toISOString();[[L1,5.3525,-3.9745],[L3,5.3350,-4.0700]].forEach(([l,la,ln])=>{if(!S.pos[l.id])S.pos[l.id]={lat:la,lng:ln,acc:15,ts:t,livraison_id:null}})}
  S.avis=S.avis||[];S.livraisons.filter(l=>l.statut==="livree").forEach((l,i)=>S.avis.push({livraison_id:l.id,livreur_id:l.livreur_id,note:[5,4,5][i%3],commentaire:i===0?"Très rapide, merci !":null,ts:l.fin_at}));
  S.notifs=S.notifs.slice(-3);
  S.audit.push({ts:now(),user:"Système",role:"système",action:"Initialisation",detail:"Données de démonstration chargées"});
@@ -375,7 +384,8 @@ function loginHTMLLocal(){
  <div style="margin-top:14px"><div class="mu sm" style="margin-bottom:6px">Couleur du logiciel</div>${themeDots()}</div><div class="mu sm" style="margin-top:12px">💡 Ouvrez un second onglet pour jouer le livreur pendant que vous supervisez.</div></div></div>`}
 
 /* ---------- Gabarit ---------- */
-function render(){
+function render(){render0();carteHook()}
+function render0(){
  if(!S&&!CL.on)return;
  if(!ME){$("#app").innerHTML=loginHTML();return}
  if(ME.role==="livreur"){$("#app").innerHTML=livreurHTML();syncGPS();initMaps();return}
@@ -387,6 +397,50 @@ function render(){
    ============================================================ */
 const VIEWS={};
 
+/* ---------- Carte centrale : tous les livreurs en direct ---------- */
+const CARTE={map:null,lg:null,mk:{},fitted:false,timer:null,view:null,sim:null};
+const ini=n=>(n||"?").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
+function etatLiv(l){const act=S.livraisons.filter(x=>x.livreur_id===l.id&&isActive(x));return{act,k:l.statut==="indisponible"?"indispo":act.length?"mission":"libre"}}
+VIEWS.carte=()=>{
+ const fz=ui.cz||"",fs=ui.cs||"";
+ const rows=S.livreurs.filter(l=>!fz||l.zone===fz).map(l=>Object.assign({l},etatLiv(l),{p:S.pos[l.id]})).filter(x=>!fs||x.k===fs);
+ const nM=rows.filter(x=>x.k==="mission").length,nL=rows.filter(x=>x.k==="libre").length,nI=rows.filter(x=>x.k==="indispo").length,nS=rows.filter(x=>!x.p).length;
+ const wait=S.commandes.filter(c=>c.statut==="prete").length;
+ return`<div class="between"><h1>Carte en direct</h1><div class="flex"><select data-f="cz" style="width:auto"><option value="">Toutes zones</option>${opts(S.config.zones.map(z=>z.nom),fz)}</select><select data-f="cs" style="width:auto"><option value="">Tous les livreurs</option>${opts([{v:"mission",t:"En mission"},{v:"libre",t:"Libres"},{v:"indispo",t:"Indisponibles"}],fs)}</select><button class="btn ghost" data-act="carteFit">⤢ Tout voir</button></div></div>
+ <div class="grid"><div class="kpi o"><div class="v">${rows.length}</div><div class="l">Livreurs affichés</div></div>${kpi("En mission",nM)}${kpi("Libres",nL,"o")}${kpi("Indisponibles",nI)}${kpi("Sans position",nS,nS?"w":"")}${kpi("Commandes à affecter",wait,wait?"w":"")}</div>
+ <div class="lgd"><span><i class="dot libre"></i>Libre</span><span><i class="dot mission"></i>En mission</span><span><i class="dot indispo"></i>Indisponible</span><span>🏍️ position partagée · bordure orange pointillée = position ancienne</span><span>📍 destination · ⏳ commande à affecter</span>${CL.on?"":'<span style="color:var(--wa)">Démo : les livreurs en course avancent de façon simulée</span>'}</div>
+ <div class="cm"><div id="cm_map"><div class="al sm" style="margin:10px">Chargement de la carte…</div></div>
+ <div class="cmside" id="cm_list">${rows.length?rows.sort((a,b)=>({mission:0,libre:1,indispo:2})[a.k]-({mission:0,libre:1,indispo:2})[b.k]).map(x=>{const f=fraicheur(x.p),c=x.act[0]&&cmd(x.act[0].commande_id);return`<div class="it" data-act="carteFocus" data-id="${x.l.id}"><i class="dot ${x.k}"></i><div><b>${esc(x.l.nom)}</b><br><span class="sm mu">${x.k==="mission"?"En mission"+(c?" · "+c.numero+" · "+esc(c.adr.zone):""):x.k==="libre"?"Libre":"Indisponible"} · ${esc(x.l.zone||"")}</span><br><span class="sm ${x.p?"":"mu"}">${x.p?"📍 "+f.t:"Aucune position partagée"}</span></div></div>`}).join(""):'<div class="mu" style="padding:12px">Aucun livreur.</div>'}</div></div>
+ <p class="mu sm">La position n'est partagée que pendant une course, avec l'accord du livreur. Une position ancienne ne prouve pas que le livreur est arrêté.</p>`};
+function carteMarkers(){
+ if(!CARTE.map||!window.L)return;
+ const fz=ui.cz||"",fs=ui.cs||"";CARTE.lg.clearLayers();CARTE.mk={};
+ S.livreurs.filter(l=>!fz||l.zone===fz).forEach(l=>{const e=etatLiv(l);if(fs&&e.k!==fs)return;
+  e.act.forEach(a=>{const c=cmd(a.commande_id),g=c&&c.adr.gps;if(g){L.marker([g.lat,g.lng],{icon:L.divIcon({html:'<div class="mkd">📍</div>',className:"",iconSize:[0,0]})}).bindPopup(`<b>${esc(c.numero)}</b><br>${esc(c.adr.zone)} · ${esc(c.adr.quartier||"")}<br>Livreur : ${esc(l.nom)}`).addTo(CARTE.lg);
+    const p=S.pos[l.id];if(p&&a.statut==="en_cours")L.polyline([[p.lat,p.lng],[g.lat,g.lng]],{color:"#0e7490",weight:3,dashArray:"6 8",opacity:.8}).addTo(CARTE.lg)}});
+  const p=S.pos[l.id];if(!p)return;const f=fraicheur(p);
+  const m=L.marker([p.lat,p.lng],{icon:L.divIcon({html:`<div class="mk ${e.k}${f.k==="ok"?"":" old"}">${esc(ini(l.nom))}</div>`,className:"",iconSize:[0,0]}),zIndexOffset:500}).addTo(CARTE.lg);
+  m.bindPopup(`<b>${esc(l.nom)}</b><br>${e.k==="mission"?"En mission":e.k==="libre"?"Libre":"Indisponible"}${e.act[0]?" · "+esc(cmd(e.act[0].commande_id).numero):""}<br><span style="color:#666">📍 ${esc(f.t)}</span>${l.tel?`<br><a href="tel:${esc(l.tel)}">📞 ${esc(l.tel)}</a>`:""}`);CARTE.mk[l.id]=m});
+ if(!fs||fs==="libre"||fs==="mission")S.commandes.filter(c=>c.statut==="prete"&&c.adr.gps&&(!fz||c.adr.zone===fz)&&!fs).forEach(c=>L.marker([c.adr.gps.lat,c.adr.gps.lng],{icon:L.divIcon({html:'<div class="mkd">⏳</div>',className:"",iconSize:[0,0]})}).bindPopup(`<b>${esc(c.numero)}</b> · à affecter<br>${esc(c.adr.zone)} · ${esc(c.adr.quartier||"")}<br><a data-act="assign" data-id="${c.id}" href="#">Affecter un livreur</a>`).addTo(CARTE.lg))}
+function carteFit(){if(!CARTE.map)return;const pts=[];Object.values(CARTE.mk).forEach(m=>pts.push(m.getLatLng()));CARTE.lg.eachLayer(l=>{if(l.getLatLng&&!CARTE.mk[l._leaflet_id])pts.push(l.getLatLng())});
+ if(pts.length)CARTE.map.fitBounds(L.latLngBounds(pts),{padding:[40,40],maxZoom:16})}
+function carteHook(){
+ if(CARTE.timer){clearInterval(CARTE.timer);CARTE.timer=null}
+ if(CARTE.map){try{CARTE.view={c:CARTE.map.getCenter(),z:CARTE.map.getZoom()};CARTE.map.remove()}catch(e){}CARTE.map=null}
+ if(!ME||view!=="carte"||!document.getElementById("cm_map"))return;
+ loadLeaflet().then(()=>{const el=document.getElementById("cm_map");if(!el||view!=="carte")return;el.innerHTML="";
+  CARTE.map=L.map(el).setView(CARTE.view?[CARTE.view.c.lat,CARTE.view.c.lng]:[5.345,-4.02],CARTE.view?CARTE.view.z:12);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(CARTE.map);CARTE.lg=L.layerGroup().addTo(CARTE.map);
+  carteMarkers();if(!CARTE.view)carteFit();setTimeout(()=>CARTE.map&&CARTE.map.invalidateSize(),150);
+  CARTE.timer=setInterval(()=>{
+   if(view!=="carte"||!CARTE.map){clearInterval(CARTE.timer);return}
+   const tick=()=>{carteMarkers();const q=document.getElementById("cm_list");if(q&&!$("#modal").innerHTML){/* liste mise à jour sans détruire la carte */const tmp=document.createElement("div");tmp.innerHTML=VIEWS.carte();const n=tmp.querySelector("#cm_list");if(n)q.innerHTML=n.innerHTML}};
+   if(CL.on)refresh().then(tick).catch(()=>{});
+   else{simulerPos();tick()}},CL.on?15000:3000)})
+ .catch(()=>{const el=document.getElementById("cm_map");if(el)el.innerHTML='<div class="al warn" style="margin:10px">Carte indisponible (pas de connexion Internet). La liste à droite donne l\'état de chaque livreur.</div>'})}
+/* Démonstration : les livreurs en course avancent vers leur destination (en mémoire seulement, rien n'est enregistré). */
+function simulerPos(){const t0=new Date().toISOString();S.livreurs.forEach(l=>{if(S.pos[l.id]&&S.pos[l.id].ts&&Date.now()-new Date(S.pos[l.id].ts)<3600000)S.pos[l.id]=Object.assign({},S.pos[l.id],{ts:t0})});S.livraisons.filter(l=>l.statut==="en_cours").forEach(l=>{const c=cmd(l.commande_id),g=c&&c.adr.gps,p=S.pos[l.livreur_id];if(!g||!p)return;
+ const d=Math.hypot(g.lat-p.lat,g.lng-p.lng);if(d<.0004)return;const k=.0006/d;S.pos[l.livreur_id]=Object.assign({},p,{lat:p.lat+(g.lat-p.lat)*Math.min(1,k),lng:p.lng+(g.lng-p.lng)*Math.min(1,k),ts:new Date().toISOString()})})}
 /* ---------- Tableau de bord ---------- */
 function alertes(){
  const a=[],t=Date.now();
@@ -776,6 +830,7 @@ const ACT={
  nav:id=>{view=id;render()},
  dossier:id=>dossierForm(liv(id)),dosDel:k=>{if(ui.dos){ui.dos[k]=null;slotSet(k,null)}},
  theme:k=>{setTheme(k);render()},
+ carteFit:()=>carteFit(),carteFocus:id=>{const m=CARTE.mk[id];if(m&&CARTE.map){CARTE.map.setView(m.getLatLng(),16);m.openPopup()}else toast("Ce livreur n'a pas partagé sa position","err")},
  suiviLien:async id=>{const c=cmd(id);let link;if(CL.on){const t=await CL.rpc("creer_lien_suivi",{p_commande:id});link=location.href.split("#")[0].split("?")[0]+"#suivi="+t}else link=location.href.split("#")[0]+"#suivi="+id;suiviModal(c,link)},
  cpTxt:t=>{(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast("Lien copié","ok"),()=>prompt("Copiez ce lien :",t))},
  demoIn:id=>{const u=usr(id);if(!u||CL.on)return;ME=u;sessionStorage.setItem("angels_me",u.id);view=ME.role==="livreur"?view:"dashboard";audit("Connexion",u.nom);save();render()},
