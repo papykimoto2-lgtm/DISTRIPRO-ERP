@@ -304,13 +304,24 @@ function echec(l,motif,obs){
  l.statut="echouee";l.fin_at=now();l.motif_echec=motif;l.obs=obs||"";lhist(l,"echouee",{note:motif});audit("Livraison échouée",`${c.numero} — ${motif}`);return true}
 
 /* ---------- Données de démonstration ---------- */
+/* Zones de livraison par défaut : Grand Abidjan et périphérie (nom, frais FCFA, délai min) + quartiers suggérés par zone */
+const ZONES_GA=[["Plateau",1500,40],["Cocody",1500,45],["Marcory",1500,40],["Treichville",1500,40],["Adjamé",1500,40],["Koumassi",2000,50],["Attécoubé",2000,50],["Abobo",2000,60],["Yopougon",2000,60],["Port-Bouët",2500,60],["Bingerville",3000,60],["Anyama",3000,70],["Songon",3500,75],["Grand-Bassam",4500,90],["Dabou",4500,90],["Bonoua",5000,100],["Azaguié",5000,100],["Alépé",6000,110],["Sikensi",6000,110],["Jacqueville",6000,120],["Assinie",7000,130],["Autre localité (tarif à convenir)",6000,120]];
+const QUARTIERS_PAR_ZONE={"Plateau":["Centre des affaires","Indénié","Plateau Dokui","Boulevard de la République","Cathédrale"],"Cocody":["Angré","Angré 7e tranche","Angré 8e tranche","Angré Château","Riviera 1","Riviera 2","Riviera 3","Riviera Palmeraie","Riviera Golf","Riviera Faya","Riviera Bonoumin","Riviera Attoban","II Plateaux Vallons","II Plateaux 7e tranche","II Plateaux Aghien","Danga","Blockhauss","Saint-Jean","Ambassades","Cocody Centre","M'Pouto","Abatta","Akouédo","Bonoumin","Lycée Technique","Cité des Arts","Cocody Les Deux Plateaux"],"Marcory":["Zone 3","Zone 4","Zone 4C","Biétry","Résidentiel","Anoumabo","Remblais","Sans-Fil","Hibiscus","Konan Raphaël"],"Treichville":["Arras","Avenue 16","Avenue 12","Biafra","Belleville","Zone portuaire","Habitat","Treichville Centre"],"Adjamé":["Liberté","220 Logements","Williamsville","Bracodi","Habitat Extension","Paillet","Adjamé Centre","Marché Gouro","Renault"],"Koumassi":["Remblais","Grand Campement","Sicogi","Prodomo","Soweto","Zone industrielle","Divo","Nouveau Koumassi","Koumassi Centre"],"Attécoubé":["Locodjro","Banco","Abattoir","Agban","Boribana","Santé","Attécoubé Centre"],"Abobo":["Anonkoua-Kouté","Abobo Baoulé","Avocatier","PK 18","Sagbé","N'Dotré","Samaké","Dokui","Belleville","Akeikoi","Clouetcha","Abobo Gare","Abobo Sogefiha","Plaque 1","Plaque 2"],"Yopougon":["Niangon Nord","Niangon Sud","Niangon Lokoa","Sicogi","Toit Rouge","Selmer","Maroc","Millionnaire","Wassakara","Sideci","Andokoi","Gesco","Ananeraie","Sipim","Gadouan","Yopougon Attié","Banco 2","Port-Bouët 2","Kouté","Yopougon Zone industrielle"],"Port-Bouët":["Vridi","Gonzagueville","Adjouffou","Jean-Folly","Aéroport","Anani","Derrière Wharf","Petit-Bassam","Vridi Cité"],"Bingerville":["Centre","Féh Kessé","Akandjé","Santai","Adjin","Ebimpé"],"Anyama":["Centre","Ahoué","Anyama-Adjamé","Schneider","Agbaoua","Anyama Gare"],"Songon":["Songon-Agban","Songon-Kassemblé","Songon-M'Brathé","Songon-Dagbé","Songon-Té","Songon Centre"],"Grand-Bassam":["Quartier France","Impérial","Mondoukou","Phare","Azuretti","Modeste","Abbé Africain","Moossou","Bassam Centre"],"Dabou":["Centre","Débrimou","Lopou","Toupah","Dabou-Ouest","Gare"],"Bonoua":["Centre","Adiaké","Marché"],"Azaguié":["Centre","Azaguié Gare"],"Alépé":["Centre"],"Sikensi":["Centre"],"Jacqueville":["Centre","Attoutou"],"Assinie":["Assinie-Mafia","Assouindé","Centre"]};
+const zKey=n=>String(n||"").toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g,"");
+(function(){const all=[...new Set(Object.values(QUARTIERS_PAR_ZONE).flat())].sort((a,b)=>a.localeCompare(b,"fr"));
+ const dl=(id,L)=>`<datalist id="${id}">${L.map(x=>`<option value="${x.replace(/"/g,"&quot;")}">`).join("")}</datalist>`;
+ document.body.insertAdjacentHTML("beforeend",dl("dl_q",all)+Object.keys(QUARTIERS_PAR_ZONE).map(z=>dl("dl_q_"+zKey(z),QUARTIERS_PAR_ZONE[z])).join(""));
+ const QSEL='[data-qz],[name=a_q],[name=quartier],[data-wf$=":quartier"],#o_q',ZSEL='select[name=z],select[name=a_zone],select[name=zone],select[data-wf$=":zone"],#o_zone';
+ const upd=(el,sel)=>{const id="dl_q_"+zKey(sel&&sel.value);el.setAttribute("list",document.getElementById(id)?id:"dl_q")};
+ document.addEventListener("focusin",e=>{const el=e.target;if(!el.matches||!el.matches(QSEL))return;const root=el.closest(".wcard,.g3,.mf,form,.card")||document;upd(el,root.querySelector(ZSEL))});
+ document.addEventListener("change",e=>{const sel=e.target;if(!sel.matches||!sel.matches(ZSEL))return;const root=sel.closest(".wcard,.g3,.mf,form,.card")||document;root.querySelectorAll(QSEL).forEach(el=>upd(el,sel))})})();
 function seed(){
  S={v:1,seq:{cmd:0,inc:0},
   config:{org:"ANGEL'S GROUP",whatsapp:"0584163232",gps_stale_ok:2,gps_stale_warn:10,gps_interval:20,gps_retention_jours:30,remu:{type:"mixte",fixe:500,pct:0},
    modes:["Espèces","Wave","Orange Money","MTN MoMo","Moov Money","Virement","Autre"],momo_comptes:["Wave : 05 84 16 32 32 (exemple à modifier)","Orange Money : 07 88 07 45 18 (exemple à modifier)"],
    motifs:["Client absent","Client injoignable","Adresse incorrecte","Accès impossible","Client a refusé le colis","Paiement indisponible","Colis endommagé","Incident de moto","Conditions de sécurité défavorables","Autre motif"],
    cats:["Retard","Colis manquant","Colis endommagé","Mauvaise adresse","Erreur de montant","Contestation de livraison","Panne de moto","Incident de sécurité","Réclamation client"],
-   zones:[["Cocody",1500,45],["Abobo",2000,60],["Yopougon",2000,60],["Marcory",1500,40],["Treichville",1500,40],["Koumassi",2000,50],["Port-Bouët",2500,60],["Plateau",1500,40]].map(z=>({id:uid("z"),nom:z[0],frais:z[1],delai_min:z[2]}))},
+   zones:ZONES_GA.map(z=>({id:uid("z"),nom:z[0],frais:z[1],delai_min:z[2]}))},
   vendeurs:[],reglements:[],tournees:[],entretiens:[],users:[],clients:[],produits:[],livreurs:[],motos:[],commandes:[],livraisons:[],fonds:[],paie:[],depenses:[],incidents:[],retours:[],stock_mvts:[],pos:{},gps_hist:[],audit:[]};
  ensureConfig();
  const mkU=(nom,role,pin)=>{const u={id:uid("u"),nom,role,pin_h:0,actif:true};u.pin_h=hashPin(u.id,pin);S.users.push(u);return u};
@@ -458,6 +469,9 @@ const QUARTIERS={cocody:"Cocody",angre:"Cocody",riviera:"Cocody","deux plateaux"
  yopougon:"Yopougon",yop:"Yopougon",niangon:"Yopougon",sicogi:"Yopougon",selmer:"Yopougon",maroc:"Yopougon",banco:"Yopougon",
  abobo:"Abobo",anonkoua:"Abobo",avocatier:"Abobo",sagbe:"Abobo",pk18:"Abobo",marcory:"Marcory",bietry:"Marcory","zone 4":"Marcory",anoumabo:"Marcory",
  treichville:"Treichville",arras:"Treichville",koumassi:"Koumassi",remblais:"Koumassi",soweto:"Koumassi","port-bouet":"Port-Bouët","port bouet":"Port-Bouët",vridi:"Port-Bouët",gonzagueville:"Port-Bouët",plateau:"Plateau"};
+{const _na=t=>String(t).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");   // les zones et quartiers ajoutés (Grand Abidjan, périphérie) sont reconnus dans les messages
+ ZONES_GA.forEach(z=>{const k=_na(z[0]);if(!(k in QUARTIERS)&&!/\(/.test(k))QUARTIERS[k]=z[0]});
+ Object.entries(QUARTIERS_PAR_ZONE).forEach(([z,L])=>L.forEach(q=>{const k=_na(q);if(q.length>=6&&!/^centre|gare$|marche/.test(k)&&!(k in QUARTIERS))QUARTIERS[k]=z}))}
 function waTel(t){RX_TEL.lastIndex=0;const m=RX_TEL.exec(String(t||""));return m?m[1].replace(/\D/g,""):""}
 function waNum(s,suf){s=String(s).trim();let v;if(/^\d{1,3}(?:[ . ]\d{3})+$/.test(s))v=+s.replace(/[ . ]/g,"");else v=+s.replace(/\s/g,"").replace(",",".");if(/^k/i.test((suf||"").trim()))v*=1000;return v}
 const WA_FILL=/\b(?:article|produit|designation|commande|je veux|je prends|je voudrais|je souhaite|j'aimerais|svp|stp|s'il vous plait|bonjour|bonsoir|salut|merci|prix|pu|qte|quantite|unite|total|au total|les \d+|chacune?|piece|c'est|cest|ca fait|ça fait|il fait|parfait|ok|d'accord|daccord|plus|avec|livraison|ensemble)\b/gi;
@@ -636,7 +650,7 @@ const COL_K={planifiee:"wa",acceptee:"",en_route:"",collectee:"wa",recue:"ok",ec
 const colOpen=c=>["planifiee","acceptee","en_route","collectee"].includes(c.statut);
 const colOf=cid=>(S.collectes||[]).find(c=>colOpen(c)&&c.lignes.some(l=>l.commande_id===cid));
 const aCollecter=vid=>S.commandes.filter(c=>c.vendeur_id===vid&&c.statut==="confirmee"&&!colOf(c.id));
-const colAdrTxt=a=>a&&(a.zone||a.quartier||a.repere)?[a.zone,a.quartier,a.repere].filter(Boolean).join(" · "):"adresse non renseignée";
+const colAdrTxt=a=>a&&(a.zone||a.quartier||a.repere)?[a.zone,a.quartier,a.repere].filter(Boolean).join(" · ")+(a.lat!=null?" · 📍 GPS":""):"adresse non renseignée";
 const colBadge=c=>badge(COL_L[c.statut]||c.statut,COL_K[c.statut]||"");
 const dtLocal=t=>{const d=new Date(t);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+"T"+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")};
 const colVend=c=>c.vendeur_nom||(vendOf(c.vendeur_id)||{}).nom||"Vendeur";
@@ -677,7 +691,7 @@ function colPlanLocal(a){
  if(S.config.dossier_obligatoire&&!dossierEtat(l).ok)throw new Error("Dossier du livreur incomplet ou expiré : mission impossible");
  if(!a.commandes.length)throw new Error("Sélectionnez au moins une commande");
  a.commandes.forEach(id=>{const c=cmd(id);if(!c||c.vendeur_id!==v.id)throw new Error("Commande étrangère à ce vendeur");if(c.statut!=="confirmee")throw new Error("Commande "+c.numero+" : elle doit être « confirmée »");if(colOf(id))throw new Error("Commande "+c.numero+" : une collecte est déjà en cours")});
- if(a.adresse)v.adresse_collecte=a.adresse;if(!v.adresse_collecte)throw new Error("Adresse de collecte du vendeur non renseignée");
+ if(a.adresse){const o=v.adresse_collecte||{};v.adresse_collecte=Object.assign({},a.adresse);if(a.adresse.lat==null&&o.lat!=null){v.adresse_collecte.lat=o.lat;v.adresse_collecte.lng=o.lng}}if(!v.adresse_collecte)throw new Error("Adresse de collecte du vendeur non renseignée");
  const y=new Date().getFullYear(),n=(S.collectes||[]).filter(c=>c.numero.startsWith("COL-"+y)).length+1;
  const col={id:uid("col"),numero:"COL-"+y+"-"+String(n).padStart(4,"0"),vendeur_id:v.id,vendeur_nom:v.nom,vendeur_tel:v.tel,livreur_id:l.id,livreur_prenom:l.nom.split(" ")[0],statut:"planifiee",creneau:a.creneau,note:a.note||"",adresse:Object.assign({},v.adresse_collecte),essais_code:0,cree_le:now(),cree_par_nom:ME.nom,
   code:String(Math.floor(Math.random()*10000)).padStart(4,"0"),lignes:a.commandes.map(id=>{const c=cmd(id);return{commande_id:id,numero:c.numero,resume:c.lignes.map(x=>x.qte+"× "+lname(x)).join(", "),colis_collectes:null,colis_recus:null}})};
@@ -691,7 +705,7 @@ function colPlanForm(vid){
  modal("Planifier la collecte — "+v.nom,`<div class="sm mu">ANGEL'S GROUP passe chercher les colis chez le vendeur. Le vendeur voit un code à 4 chiffres dans son espace : il ne le remet au livreur que contre les colis.</div>
  <div class="sec">Commandes à collecter</div>${L.map(c=>`<label style="display:flex;gap:8px;align-items:flex-start;font-size:14px;margin:4px 0"><input type="checkbox" name="c_${c.id}" checked style="width:auto;margin-top:3px"><span><b>${esc(c.numero)}</b> — ${esc(c.lignes.map(l=>l.qte+"× "+lname(l)).join(", "))}</span></label>`).join("")}
  <div class="g2"><label>Livreur<select name="l">${S.livreurs.map(l=>{const n=S.livraisons.filter(x=>x.livreur_id===l.id&&isActive(x)).length,k=S.collectes&&S.collectes.filter(x=>x.livreur_id===l.id&&colOpen(x)).length;return`<option value="${l.id}">${esc(l.nom)} — ${l.statut==="disponible"?"disponible":"indisponible"}, ${n} course(s), ${k||0} collecte(s)</option>`}).join("")}</select></label><label>Créneau de passage<input type="datetime-local" name="cr" value="${dtLocal(Date.now()+3600e3)}" required></label></div>
- <div class="sec">Adresse de collecte</div><div class="g3"><label>Zone<select name="z">${opts(S.config.zones.map(z=>z.nom),a.zone||"")}</select></label><label>Quartier<input name="q" value="${esc(a.quartier||"")}"></label><label>Point de repère<input name="r" value="${esc(a.repere||"")}"></label></div>
+ <div class="sec">Adresse de collecte</div><div class="g3"><label>Zone<select name="z">${opts(S.config.zones.map(z=>z.nom),a.zone||"")}</select></label><label>Quartier<input name="q" data-qz value="${esc(a.quartier||"")}" placeholder="Choisissez ou saisissez"></label><label>Point de repère<input name="r" value="${esc(a.repere||"")}"></label></div>
  <label>Note pour le livreur (facultatif)<input name="n" placeholder="ex. passer avant 16 h, demander Mme Aya"></label>`,
  {wide:true,label:"Planifier la collecte",onSubmit:d=>{
   const ids=L.filter(c=>d["c_"+c.id]).map(c=>c.id);if(!ids.length)return toast("Sélectionnez au moins une commande","err"),false;
@@ -750,10 +764,18 @@ function vendCollectes(v){
   ${c.statut==="collectee"?'<div class="sm mu" style="margin-top:6px">Colis remis au livreur, en route vers le dépôt.</div>':""}</div>`).join("")}
  ${!open.length&&!att?'<div class="mu sm">Aucune collecte en cours.</div>':""}`}
 function vAdrForm(){
- const v=vend(),a=v.adresse_collecte||{};
- modal("Mon adresse de collecte",`<div class="sm mu">Là où le livreur viendra chercher vos colis.</div><div class="g3"><label>Zone<select name="z">${opts(S.config.zones.map(z=>z.nom),a.zone||"")}</select></label><label>Quartier<input name="q" value="${esc(a.quartier||"")}"></label><label>Point de repère<input name="r" value="${esc(a.repere||"")}"></label></div>`,
- {label:"Enregistrer",onSubmit:d=>{if(!d.z||!(d.q.trim()||d.r.trim()))return toast("Indiquez la zone et le quartier ou un repère","err"),false;const adr={zone:d.z,quartier:d.q.trim(),repere:d.r.trim()};
-  if(CL.on)return CL.go(()=>CL.rpc("maj_adresse_collecte",{p:adr}),"Adresse enregistrée");v.adresse_collecte=adr;audit("Adresse de collecte mise à jour",v.nom);save();render();toast("Adresse enregistrée","ok")}})}
+ const v=vend(),a=v.adresse_collecte||{};let pos=a.lat!=null?{lat:+a.lat,lng:+a.lng}:null;
+ const gt=()=>pos?`✔ Position enregistrée (${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}) · <a target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=${pos.lat}&mlon=${pos.lng}#map=17/${pos.lat}/${pos.lng}">voir</a> · <a href="#" id="va_clr">effacer</a>`:'<span class="mu">Sans position, le livreur n\'a que le quartier : touchez le bouton ci-dessus <b>depuis votre boutique</b>.</span>';
+ modal("Mon adresse de collecte",`<div class="sm mu">Là où le livreur viendra chercher vos colis.</div><div class="g3"><label>Zone<select name="z">${opts(S.config.zones.map(z=>z.nom),a.zone||"")}</select></label><label>Quartier<input name="q" data-qz value="${esc(a.quartier||"")}" placeholder="Choisissez ou saisissez"></label><label>Point de repère<input name="r" value="${esc(a.repere||"")}"></label></div>
+ <div style="margin:10px 0 4px"><button type="button" class="btn" id="va_gps">📍 Utiliser ma position actuelle</button></div><div class="sm" id="va_gt">${gt()}</div>
+ <label style="margin-top:8px">… ou collez un lien Google Maps / « latitude, longitude » <input name="geo" placeholder="https://maps.google.com/?q=5.3571,-3.9810"></label>`,
+ {label:"Enregistrer",onSubmit:d=>{if(!d.z||!(d.q.trim()||d.r.trim()||pos))return toast("Indiquez la zone et le quartier ou un repère","err"),false;
+  if(String(d.geo||"").trim()){const g=parseGeo(d.geo);if(!g)return toast("Lien ou coordonnées non reconnus","err"),false;pos={lat:g.lat,lng:g.lng}}
+  const adr={zone:d.z,quartier:d.q.trim(),repere:d.r.trim()};if(pos){adr.lat=+pos.lat.toFixed(6);adr.lng=+pos.lng.toFixed(6)}
+  if(CL.on)return CL.go(()=>CL.rpc("maj_adresse_collecte",{p:adr}),"Adresse enregistrée");v.adresse_collecte=adr;audit("Adresse de collecte mise à jour",v.nom);save();render();toast("Adresse enregistrée","ok")}});
+ const paint=()=>{const e=$("#va_gt");if(!e)return;e.innerHTML=gt();const c=$("#va_clr");if(c)c.onclick=ev=>{ev.preventDefault();pos=null;paint()}};paint();
+ $("#va_gps").onclick=()=>{if(!navigator.geolocation)return toast("Géolocalisation indisponible sur cet appareil","err");
+  navigator.geolocation.getCurrentPosition(g=>{pos={lat:g.coords.latitude,lng:g.coords.longitude};paint();toast("Position trouvée (±"+Math.round(g.coords.accuracy||0)+" m)","ok")},e=>toast("Position impossible : autorisez la localisation ("+e.message+")","err"),{enableHighAccuracy:true,timeout:20000})}}
 
 /* ---------- Versements des livreurs à ANGEL'S GROUP : au comptant ou par Mobile Money ---------- */
 const bindMomo=()=>{const sel=document.querySelector("#mf [name=mode]");if(!sel)return;const m=estMobile(sel.value);["mm_box","mm_box2"].forEach(i=>{const b=document.getElementById(i);if(b)b.classList.toggle("hide",!m)})};
@@ -1499,7 +1521,8 @@ const TPL_DEF={
  livree:"Merci {client} ! Votre commande {numero} a été livrée. — {org}",
  echouee:"{client}, nous n'avons pas pu vous livrer la commande {numero} ({motif}). Nous vous recontactons pour une nouvelle tentative. — {org}"};
 function ensureConfig(){
- const c=S.config;if(!c.modes||JSON.stringify(c.modes)===JSON.stringify(["Espèces","Mobile Money","Virement","Autre"]))c.modes=["Espèces","Wave","Orange Money","MTN MoMo","Moov Money","Virement","Autre"];if(!c.momo_comptes)c.momo_comptes=[];
+ const c=S.config;if(!CL.on&&!c.zones_ga&&Array.isArray(c.zones)){const have=new Set(c.zones.map(z=>z.nom));ZONES_GA.forEach(z=>{if(!have.has(z[0]))c.zones.push({id:uid("z"),nom:z[0],frais:z[1],delai_min:z[2]})});c.zones_ga=1}
+ if(!c.modes||JSON.stringify(c.modes)===JSON.stringify(["Espèces","Mobile Money","Virement","Autre"]))c.modes=["Espèces","Wave","Orange Money","MTN MoMo","Moov Money","Virement","Autre"];if(!c.momo_comptes)c.momo_comptes=[];
  c.tpl=Object.assign({},TPL_DEF,c.tpl||{});
  c.notif=Object.assign({confirmee:true,en_cours:true,livree:true,echouee:true},c.notif||{});
  c.ste=Object.assign({adresse:"",nif:"",rccm:"",tel:"05 84 16 32 32 / 05 00 66 04 37 / 07 88 07 45 18"},c.ste||{});
@@ -2158,7 +2181,7 @@ async function cmdLien(renew){const v=vend();if(!v)return;let link;
  try{if(CL.on){const t=await CL.rpc("creer_lien_commande",{p_renouveler:!!renew});link=location.href.split("#")[0].split("?")[0]+"#commande="+t}else{if(!String(v.tel||"").replace(/\D/g,""))return toast("Renseignez d'abord le téléphone WhatsApp du vendeur (fiche vendeur)","err");
    link=location.href.split("#")[0].split("?")[0]+"#commande="+b64({o:S.config.org,w:S.config.whatsapp||"",v:v.nom,t:v.tel,z:S.config.zones.map(z=>z.nom)})}}catch(e){return toast(fixErr(e),"err")}
  const msg=`Bonjour ! Passez votre commande chez ${v.nom} en ligne (articles, captures, quantités, position de livraison) : ${link}`;
- modal("Lien de commande de vos clients",`<p class="sm mu">Partagez ce lien ou ce QR code (WhatsApp, statut, boutique). Vos clients y décrivent leur commande : articles, captures d'écran, quantités, prix s'ils le connaissent, et leur position de livraison. Rien n'est livré avant votre validation.${CL.on?"":" <b>Sans serveur</b> : la commande du client vous arrive sur WhatsApp (au numéro de votre fiche) ; collez-la dans « Saisie depuis WhatsApp » et tout est prérempli, position GPS comprise. Le client joint ses captures dans la conversation."}</p>
+ modal("Lien de commande de vos clients",`<p class="sm mu">Partagez ce lien ou ce QR code (WhatsApp, statut, boutique). Vos clients y décrivent leur commande : articles, captures d'écran, quantités, prix s'ils le connaissent, et leur position de livraison. Rien n'est livré avant votre validation.${CL.on?"":` <b>Sans serveur</b> : la commande du client vous arrive sur WhatsApp, <b>au ${esc(v.tel||"numéro de votre fiche")}</b> ; collez-la dans « Saisie depuis WhatsApp » et tout est prérempli, position GPS comprise. Le client y joint ses captures d'écran s'il le peut.`}</p>
  <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><div style="width:150px;height:150px;background:#fff;padding:6px;border-radius:8px">${qrSvg(link)}</div><div style="flex:1;min-width:200px"><label>Lien<input readonly value="${esc(link)}" onfocus="this.select()"></label></div></div>
  <div class="flex" style="margin-top:10px"><button type="button" class="btn" data-act="cpTxt" data-id="${esc(link)}">📋 Copier le lien</button><a class="btn ok" target="_blank" rel="noopener" style="text-decoration:none" href="https://wa.me/?text=${encodeURIComponent(msg)}">💬 Partager sur WhatsApp</a>${CL.on?'<button type="button" class="btn ghost er" data-act="cmdLienNew">Renouveler (l\'ancien lien cessera de fonctionner)</button>':""}</div>`,{label:"Fermer",onSubmit:()=>true,focus:false})}
 /* Page publique */

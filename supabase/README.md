@@ -90,3 +90,6 @@ Migration `20261020000000_versements_mobile_money.sql` : `fonds.ref` (référenc
 
 ### Commande passée par le client (lien du fournisseur)
 Migration `20261021000000_commande_client.sql` : tables `commande_liens` (jeton secret par fournisseur, aucune politique d'accès direct) et `demandes_commande` (lecture réservée au fournisseur concerné et à l'équipe), fonctions `creer_lien_commande` (fournisseur ou équipe ; `p_renouveler` invalide l'ancien lien), `commande_lien_get` et `demande_deposer` (accessibles sans connexion ; validations strictes, 6 photos maximum de 600 000 caractères, limite de débit 5/heure/téléphone et 40/heure/fournisseur) et `demande_traiter` (traitée ou rejetée avec motif). `vendeur_deposer_commande` accepte désormais `adresse.lat` / `adresse.lng` (la position du client géolocalise l'adresse). Tests : `tests/test_commande_client.sql`, `tests/banc/e2e_commande_client*.js`.
+
+### Zones du Grand Abidjan et position du fournisseur
+Migration `20261022000000_zones_grand_abidjan.sql` : `app.zones_defaut(org)` (22 zones, `on conflict do nothing`, jamais appelable par un utilisateur), appliquée aux sociétés existantes et à `amorcer_organisation` ; `maj_adresse_collecte` valide la position GPS et la conserve quand l'adresse est modifiée sans position. Tests : `tests/test_zones_gps.sql`, `tests/banc/e2e_zones_gps*.js`.

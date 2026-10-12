@@ -192,7 +192,7 @@ select t_root();
 
 -- ================= Isolation entre sociétés =================
 select t_ok(t_q(u('B'),$$select count(*) from public.commandes$$)::int=0 and t_q(u('B'),$$select count(*) from public.clients$$)::int=0 and t_q(u('B'),$$select count(*) from public.fonds$$)::int=0, 'autre société: 0 commande, 0 client, 0 encaissement visibles');
-select t_ok(t_q(u('B'),$$select count(*) from public.zones$$)::int=8, 'autre société: ses propres 8 zones seulement');
+select t_ok(t_q(u('B'),$$select count(*) from public.zones$$)::int=22, 'autre société: ses propres 22 zones seulement');
 select t_fail(u('B'), format($$select public.commande_action(%L,'confirmer')$$,:'cmd1'), 'introuvable', 'autre société ne peut pas agir sur nos commandes');
 select t_fail(u('B'), format($$select public.affecter_livraison(%L,%L)$$,:'cmd2','00000000-0000-0000-0000-0000000000a1'), 'introuvable', 'autre société ne peut pas affecter nos livreurs');
 select t_fail(u('X'), $$select count(*) from public.commandes$$, 'x', 'placeholder') where false;
