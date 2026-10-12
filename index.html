@@ -65,6 +65,26 @@ label input,label select,label textarea{margin-top:3px;color:var(--tx);font-weig
 .bars div{flex:1;text-align:center;font-size:11px;color:var(--mu)}
 .bars i{display:block;background:var(--b);border-radius:5px 5px 0 0;min-height:2px;margin-bottom:3px}
 .login{max-width:380px;margin:8vh auto;padding:0 14px}
+.login.hero{max-width:none;margin:0;padding:0;display:grid;grid-template-columns:1.05fr 1fr;min-height:100vh}
+.hero-l{background:linear-gradient(155deg,#0f2570 0%,#1a3aa8 60%,#2a55d6 100%);color:#fff;padding:48px 40px;display:flex;flex-direction:column;justify-content:center;gap:18px}
+.hero-l h1{font-size:30px;line-height:1.15;margin:0}.hero-l p{margin:0;opacity:.88;font-size:15px}
+.hero-l ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:10px}.hero-l li{display:flex;gap:10px;align-items:flex-start;font-size:14px}
+.hero-l li b{display:block;font-size:14px}.hero-l li span.i{font-size:20px;line-height:1.1}
+.hero-r{padding:40px 32px;display:flex;flex-direction:column;justify-content:center;background:var(--bg)}
+.pcards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.pcard{all:unset;box-sizing:border-box;cursor:pointer;background:#fff;border:1px solid var(--bd);border-radius:12px;padding:12px;display:flex;gap:10px;align-items:center;transition:.15s}
+.pcard:hover,.pcard:focus-visible{border-color:var(--b);box-shadow:0 4px 14px rgba(26,58,168,.15);transform:translateY(-1px)}
+.pcard .ic{font-size:22px}.pcard b{display:block;font-size:13px}.pcard small{color:var(--mu);font-size:11.5px}
+.welcome{background:linear-gradient(120deg,#0f2570,#1a3aa8);color:#fff;border-radius:14px;padding:18px 20px;margin:10px 0 4px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
+.welcome h2{margin:0 0 4px;color:#fff;font-size:20px}.welcome .big{font-size:13px;opacity:.9}
+.welcome .hl{display:flex;gap:22px;flex-wrap:wrap}.welcome .hl div{text-align:center}.welcome .hl b{display:block;font-size:24px}.welcome .hl span{font-size:11.5px;opacity:.85}
+.tour{border:2px dashed var(--b);background:var(--bbg);border-radius:14px;padding:14px 16px;margin:12px 0}
+.tour .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:8px}
+.tour .st{all:unset;box-sizing:border-box;cursor:pointer;background:#fff;border:1px solid var(--bd);border-radius:10px;padding:10px;font-size:13px}
+.tour .st:hover{border-color:var(--b)}.tour .st b{display:block;color:var(--b2)}.tour .st small{color:var(--mu)}
+.kpi{transition:.15s}.kpi:hover{box-shadow:0 4px 14px rgba(15,37,112,.12);transform:translateY(-1px)}
+@media(max-width:760px){.login.hero{grid-template-columns:1fr}.hero-l{padding:28px 22px;min-height:0}.hero-l h1{font-size:23px}.hero-r{padding:22px 16px}.pcards{grid-template-columns:1fr}}
+
 .login .card{padding:20px}
 .lv{max-width:520px;margin:0 auto;padding:12px}
 .lvh{background:var(--b2);color:#fff;border-radius:14px;padding:14px;margin-bottom:12px}
@@ -304,13 +324,23 @@ const waLink=(tel,txt)=>{let t=String(tel||"").replace(/\D/g,"");if(t.length===1
 
 /* ---------- Connexion ---------- */
 function loginHTML(){return CL.on?loginHTMLCloud():loginHTMLLocal()}
+const HERO=`<div class="hero-l"><div style="font-size:13px;letter-spacing:2px;opacity:.8">ANGEL'S GROUP</div><h1>Chaque colis suivi, chaque franc encaissé, chaque client prévenu.</h1><p>Le logiciel de gestion de vos livraisons à moto — du bon de commande à la preuve de livraison.</p>
+ <ul><li><span class="i">📍</span><div><b>Adresse sur carte pour le livreur</b>Le client place lui-même son repère depuis son téléphone.</div></li>
+ <li><span class="i">🏷️</span><div><b>Étiquette QR sur chaque colis</b>Scan au départ et à la remise : aucun colis perdu ou échangé.</div></li>
+ <li><span class="i">🔐</span><div><b>Code de livraison + signature</b>La livraison n'est validée que par le client.</div></li>
+ <li><span class="i">💬</span><div><b>Messages WhatsApp / SMS automatiques</b>Le client sait où en est sa commande.</div></li>
+ <li><span class="i">💰</span><div><b>Caisse et reversements sous contrôle</b>Écarts, commissions et règlements vendeurs tracés.</div></li></ul></div>`;
+const DEMO_P=[["admin","🛡️","Administrateur","Tout voir et tout régler"],["superviseur","🏍️","Superviseur","Affecter, suivre les courses"],["commercial","📞","Commercial","Prendre les commandes"],["preparateur","📦","Préparateur","Préparer, étiqueter"],["caissier","💰","Caissier","Reversements, écarts"],["direction","📊","Direction","Tableau de bord, marges"],["livreur","🛵","Livreur","Mission, scan, carte, code"],["vendeur","🏪","Vendeur partenaire","Déposer ses commandes"]];
 function loginHTMLLocal(){
  const act=S.users.filter(u=>u.actif);
- return`<div class="login"><div class="card"><div style="font-size:22px;font-weight:800;color:var(--b2)">ANGEL'S GROUP</div><div class="mu" style="margin-bottom:14px">Gestion intégrée · Livraisons à moto</div>
- <form id="lf"><label>Utilisateur<select name="u">${act.map(u=>`<option value="${u.id}">${esc(u.nom)} — ${ROLES[u.role]}</option>`).join("")}</select></label>
+ const cards=DEMO_P.map(([r,ic,t,d])=>{const u=act.find(x=>x.role===r);return u?`<button type="button" class="pcard" data-act="demoIn" data-id="${u.id}"><span class="ic">${ic}</span><span><b>${t}</b><small>${d}</small></span></button>`:""}).join("");
+ return`<div class="login hero">${HERO}<div class="hero-r"><div style="font-size:20px;font-weight:800;color:var(--b2)">Essayez sans rien installer</div><div class="mu sm">Choisissez un profil : vous entrez directement, avec des données d'exemple.</div>
+ <div class="pcards">${cards}</div>
+ <details><summary class="mu sm" style="cursor:pointer">Connexion avec un code PIN</summary><form id="lf" style="margin-top:8px"><label>Utilisateur<select name="u">${act.map(u=>`<option value="${u.id}">${esc(u.nom)} — ${ROLES[u.role]}</option>`).join("")}</select></label>
  <label style="margin-top:10px">Code PIN<input name="pin" type="password" inputmode="numeric" autocomplete="off" required></label>
- <button class="btn" style="width:100%;margin-top:14px">Se connecter</button></form>
- <div class="al warn sm" style="margin-top:14px"><b>Mode démonstration.</b> PIN : admin 1234 · direction 0000 · superviseur 1111 · caissier 2222 · commercial 3333 · préparateur 4444 · livreurs 0001 / 0002 / 0003 · vendeur partenaire 5555.<br>Astuce : ouvrez un second onglet pour jouer le livreur pendant que vous supervisez.</div></div></div>`}
+ <button class="btn" style="width:100%;margin-top:12px">Se connecter</button></form>
+ <div class="al warn sm" style="margin-top:10px">PIN : admin 1234 · direction 0000 · superviseur 1111 · caissier 2222 · commercial 3333 · préparateur 4444 · livreurs 0001 / 0002 / 0003 · vendeur 5555.</div></details>
+ <div class="mu sm" style="margin-top:12px">💡 Ouvrez un second onglet pour jouer le livreur pendant que vous supervisez.</div></div></div>`}
 
 /* ---------- Gabarit ---------- */
 function render(){
@@ -371,7 +401,17 @@ VIEWS.dashboard=()=>{
  const enM=S.livreurs.filter(l=>S.livraisons.some(x=>x.livreur_id===l.id&&isActive(x))).length;
  const days=[...Array(7)].map((_,i)=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-6+i);const n=S.livraisons.filter(l=>l.statut==="livree"&&new Date(l.fin_at).toDateString()===d.toDateString()).length;return{l:d.toLocaleDateString("fr-FR",{weekday:"short"}),n}});
  const mx=Math.max(1,...days.map(d=>d.n));
- return`<div class="between"><h1>Tableau de bord</h1><div class="flex">${perSel()}<select data-f="dz" style="width:auto"><option value="">Toutes zones</option>${opts(S.config.zones.map(z=>z.nom),ui.dz||"")}</select><select data-f="dl" style="width:auto"><option value="">Tous livreurs</option>${opts(S.livreurs.map(l=>({v:l.id,t:l.nom})),ui.dl||"")}</select><select data-f="dc" style="width:auto"><option value="">Tous types de commande</option>${opts(["Téléphone","WhatsApp","Vente en ligne","Commande directe","Vendeur partenaire","Autre"],ui.dc||"")}</select></div></div>
+const hr=new Date().getHours(),hello=hr<12?"Bonjour":hr<18?"Bon après-midi":"Bonsoir",today=new Date().toDateString(),livAuj=S.livraisons.filter(l=>l.statut==="livree"&&l.fin_at&&new Date(l.fin_at).toDateString()===today).length;
+ const welcome=`<div class="welcome"><div><h2>${hello} ${esc(ME.nom.split(" ")[0])} 👋</h2><div class="big">${new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})} · ${al.length?al.length+" point(s) demandent votre attention":"tout est sous contrôle"}</div></div>
+  <div class="hl"><div><b>${actifs.length}</b><span>courses en cours</span></div><div><b>${livAuj}</b><span>livrées aujourd'hui</span></div><div><b>${dispo}</b><span>livreurs libres</span></div><div><b>${fcfa(aRev)}</b><span>à reverser</span></div></div></div>`;
+ const tour=CL.on?"":`<div class="tour"><b>🎬 Visite guidée — 5 gestes pour voir l'essentiel</b><div class="steps">
+  <button class="st" data-act="newCmd"><b>1 · Prendre une commande</b><small>Client, adresse, produits, frais auto</small></button>
+  <button class="st" data-act="nav" data-id="livraisons"><b>2 · Affecter un livreur</b><small>Carte, charge, tournées</small></button>
+  <button class="st" data-act="nav" data-id="commandes"><b>3 · Étiquette QR du colis</b><small>Ouvrir une commande → Étiquettes</small></button>
+  <button class="st" data-act="nav" data-id="documents"><b>4 · Facture, reçu, bon de livraison</b><small>Numérotés, non modifiables</small></button>
+  <button class="st" data-act="nav" data-id="finance"><b>5 · Caisse &amp; reversements</b><small>Écarts, commissions, marges</small></button></div>
+  <div class="mu sm" style="margin-top:8px">Pour voir le côté livreur et vendeur : déconnexion, puis choisissez ces profils.</div></div>`;
+  return`${welcome}${tour}<div class="between"><h1>Tableau de bord</h1><div class="flex">${perSel()}<select data-f="dz" style="width:auto"><option value="">Toutes zones</option>${opts(S.config.zones.map(z=>z.nom),ui.dz||"")}</select><select data-f="dl" style="width:auto"><option value="">Tous livreurs</option>${opts(S.livreurs.map(l=>({v:l.id,t:l.nom})),ui.dl||"")}</select><select data-f="dc" style="width:auto"><option value="">Tous types de commande</option>${opts(["Téléphone","WhatsApp","Vente en ligne","Commande directe","Vendeur partenaire","Autre"],ui.dc||"")}</select></div></div>
  <h2>Opérations en direct</h2><div class="grid">
  ${kpi("Prêtes à affecter",S.commandes.filter(c=>c.statut==="prete").length,"w")}${kpi("En cours",actifs.length)}${kpi("En retard",al.filter(a=>a.m.startsWith("Retard")).length,"e")}
  ${kpi("Échecs à traiter",S.commandes.filter(c=>c.statut==="echouee").length,"e")}${kpi("Retours à réceptionner",S.commandes.filter(c=>c.statut==="retour_cours").length,"w")}
@@ -658,6 +698,7 @@ function gpsConsent(next){const lv=livreurOf(ME);if(lv.gps_consent)return next()
 const done=(msg)=>{if(CL.on)return refresh().then(()=>{if(msg)toast(msg,"ok");render()}).catch(e=>toast(fixErr(e),"err"));save();if(msg)toast(msg,"ok");render()};
 const ACT={
  nav:id=>{view=id;render()},
+ demoIn:id=>{const u=usr(id);if(!u||CL.on)return;ME=u;sessionStorage.setItem("angels_me",u.id);view=ME.role==="livreur"?view:"dashboard";audit("Connexion",u.nom);save();render()},
  tab:id=>{const[k,v]=id.split("|");ui[k]=v;render()},
  logout:()=>{if(CL.on){if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null}return CL.logout()}if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null}sessionStorage.removeItem("angels_me");ME=null;render()},
  closeModal,
@@ -1187,11 +1228,11 @@ const toEmail=id=>{id=String(id||"").trim();return id.includes("@")?id.toLowerCa
 const livreeLe=c=>{for(const k in CL.vd){const e=(CL.vd[k].elig||[]).find(x=>x.commande_id===c.id);if(e)return e.livree_le}};
 function loadSb(){return new Promise((ok,ko)=>{if(window.supabase)return ok();const sc=document.createElement("script");sc.src=SB_LIB;sc.integrity=SB_SRI;sc.crossOrigin="anonymous";sc.onload=ok;sc.onerror=()=>ko(new Error("Bibliothèque Supabase indisponible (connexion Internet requise)"));document.head.appendChild(sc)})}
 function loginHTMLCloud(){
- return`<div class="login"><div class="card"><div style="font-size:22px;font-weight:800;color:var(--b2)">${esc((S&&S.config&&S.config.org)||"ANGEL'S GROUP")}</div><div class="mu" style="margin-bottom:14px">Gestion intégrée · Livraisons à moto</div>
+ return`<div class="login hero">${HERO}<div class="hero-r"><div class="card"><div style="font-size:22px;font-weight:800;color:var(--b2)">${esc((S&&S.config&&S.config.org)||"ANGEL'S GROUP")}</div><div class="mu" style="margin-bottom:14px">Gestion intégrée · Livraisons à moto</div>
  <form id="lf"><label>Identifiant<input name="ident" required autocomplete="username" autocapitalize="none"></label>
  <label style="margin-top:10px">Code secret<input name="pwd" type="password" required autocomplete="current-password"></label>
  <button class="btn" style="width:100%;margin-top:14px">Se connecter</button></form>
- <div class="sm mu" style="margin-top:12px">Identifiant et code secret vous sont remis par l'administrateur.</div></div></div>`}
+ <div class="sm mu" style="margin-top:12px">Identifiant et code secret vous sont remis par l'administrateur.</div></div></div></div>`}
 const emptyS=()=>({v:1,seq:{cmd:0,inc:0,doc:{}},config:{org:"ANGEL'S GROUP",zones:[]},users:[],clients:[],produits:[],livreurs:[],motos:[],vendeurs:[],commandes:[],livraisons:[],fonds:[],paie:[],depenses:[],incidents:[],retours:[],stock_mvts:[],pos:{},gps_hist:[],audit:[],reglements:[],tournees:[],entretiens:[],docs:[],notifs:[]});
 async function fetchAll(t,col){const out=[];for(let from=0;;from+=1000){const{data,error}=await CL.sb.from(t).select("*").order(col||"id").range(from,from+999);if(error)throw new Error(t+" : "+fixErr(error));out.push(...data);if(data.length<1000)break}return out}
 async function fetchLast(t,n){const{data,error}=await CL.sb.from(t).select("*").order("ts",{ascending:false}).limit(n);if(error)throw new Error(t+" : "+fixErr(error));return data.reverse()}
