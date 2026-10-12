@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#1a3aa8">
+<meta name="theme-color" content="#0e7490">
 <script>try{var _t=localStorage.getItem("angels_theme");if(_t)document.documentElement.dataset.theme=_t}catch(e){}</script>
 <title>ANGEL'S GROUP ERP — Livraisons</title>
 <style>
-:root{--b:#1a3aa8;--b2:#0f2570;--b3:#2a55d6;--bg:#f2f4fa;--card:#fff;--tx:#1b2240;--mu:#6b7390;--ok:#118a4b;--wa:#b86e00;--er:#c62828;--bd:#dfe3f0;--okbg:#e3f5ea;--wabg:#fff1d6;--erbg:#fde5e5;--bbg:#e5ebfb}
+:root{--b:#0e7490;--b2:#0b3b4c;--b3:#1aa3c6;--bg:#f1f6f8;--card:#fff;--tx:#1b2240;--mu:#6b7390;--ok:#118a4b;--wa:#b86e00;--er:#c62828;--bd:#d6e4ea;--okbg:#e3f5ea;--wabg:#fff1d6;--erbg:#fde5e5;--bbg:#dff3f8}
 *{box-sizing:border-box}
 body{margin:0;font:14px/1.45 system-ui,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--tx)}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -90,7 +90,7 @@ label input,label select,label textarea{margin-top:3px;color:var(--tx);font-weig
 html[data-theme=emeraude]{--b:#0f7b5f;--b2:#08523f;--b3:#17a67f;--bbg:#e0f4ee;--bg:#f1f7f5;--bd:#d9e6e1}
 html[data-theme=orange]{--b:#c9500a;--b2:#7d3004;--b3:#f27a2c;--bbg:#fdebdd;--bg:#faf5f1;--bd:#ecdfd5}
 html[data-theme=violet]{--b:#6a32c9;--b2:#3e1a85;--b3:#8a55e6;--bbg:#eee6fb;--bg:#f6f3fb;--bd:#e4dcf2}
-html[data-theme=turquoise]{--b:#0e7490;--b2:#0b3b4c;--b3:#1aa3c6;--bbg:#dff3f8;--bg:#f1f6f8;--bd:#d6e4ea}
+html[data-theme=bleu]{--b:#1a3aa8;--b2:#0f2570;--b3:#2a55d6;--bbg:#e5ebfb;--bg:#f2f4fa;--bd:#dfe3f0}
 html[data-theme=or]{--b:#9a6f12;--b2:#15171d;--b3:#c8962a;--bbg:#f6edd8;--bg:#f5f4f1;--bd:#e6e2d8}
 .themes{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.themes button{all:unset;cursor:pointer;width:26px;height:26px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--bd);transition:.15s}.themes button:hover{transform:scale(1.15)}.themes button.on{box-shadow:0 0 0 2px var(--tx)}
 aside .themes{margin:6px 0 2px}aside .themes button{width:18px;height:18px;border-color:rgba(255,255,255,.5)}
@@ -289,7 +289,7 @@ function seed(){
  const mkL=(nom,tel,zn,mo,pin)=>{const u=mkU(nom,"livreur",pin);const l={id:uid("lv"),user_id:u.id,nom,tel,zone:zn,moto_id:mo?mo.id:null,statut:"disponible",gps_consent:false,remu:null};S.livreurs.push(l);return l};
  const L1=mkL("Issa Traoré","0707000001","Cocody",m1,"0001"),L2=mkL("Kouamé Yves","0707000002","Marcory",m2,"0002"),L3=mkL("Sékou Camara","0707000003","Yopougon",m3,"0003");
  {const sp=(t,bg,fg)=>"data:image/svg+xml;utf8,"+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="420" height="270"><rect width="420" height="270" rx="16" fill="${bg}"/><text x="210" y="125" font-family="sans-serif" font-size="26" font-weight="700" fill="${fg}" text-anchor="middle">${t}</text><text x="210" y="165" font-family="sans-serif" font-size="15" fill="${fg}" text-anchor="middle">SPÉCIMEN — exemple de démonstration</text></svg>`),
-  av=()=>"data:image/svg+xml;utf8,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#1a3aa8"/><circle cx="100" cy="78" r="38" fill="#cfd8f7"/><path d="M30 190c8-45 40-62 70-62s62 17 70 62z" fill="#cfd8f7"/></svg>'),
+  av=()=>"data:image/svg+xml;utf8,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#0e7490"/><circle cx="100" cy="78" r="38" fill="#cfd8f7"/><path d="M30 190c8-45 40-62 70-62s62 17 70 62z" fill="#cfd8f7"/></svg>'),
   exp=new Date(Date.now()+400*864e5).toISOString().slice(0,10);
   L1.dossier={piece_type:"cni",piece_numero:"SPECIMEN-0001",piece_expire:exp,permis_numero:"SPECIMEN-P-01",permis_categorie:"A",permis_expire:exp,adresse:"Cocody, Abidjan",contact_urgence_nom:"Famille Traoré",contact_urgence_tel:"0100000001",garant_nom:"",garant_tel:"",date_naissance:"1996-04-12",consent_le:now(),maj_le:now()};
   L1.fichiers={photo:{full:av(),mini:av()},piece_recto:{full:sp("CARTE D'IDENTITÉ — RECTO","#e8f0ff","#0f2570")},piece_verso:{full:sp("CARTE D'IDENTITÉ — VERSO","#e8f0ff","#0f2570")},permis:{full:sp("PERMIS DE CONDUIRE","#fff1d6","#7a4a00")}}}
@@ -342,10 +342,10 @@ const waLink=(tel,txt)=>{let t=String(tel||"").replace(/\D/g,"");if(t.length===1
 
 /* ---------- Connexion ---------- */
 function loginHTML(){return CL.on?loginHTMLCloud():loginHTMLLocal()}
-const THEMES=[["bleu","Bleu (standard)","#1a3aa8"],["emeraude","Vert émeraude","#0f7b5f"],["orange","Orange énergie","#c9500a"],["violet","Violet","#6a32c9"],["turquoise","Turquoise","#0e7490"],["or","Nuit & or","#15171d"]];
-const themeCur=()=>document.documentElement.dataset.theme||"bleu";
+const THEMES=[["turquoise","Turquoise (standard)","#0e7490"],["bleu","Bleu","#1a3aa8"],["emeraude","Vert émeraude","#0f7b5f"],["orange","Orange énergie","#c9500a"],["violet","Violet","#6a32c9"],["or","Nuit & or","#15171d"]];
+const themeCur=()=>document.documentElement.dataset.theme||"turquoise";
 const themeDots=()=>`<div class="themes" title="Couleur du logiciel">${THEMES.map(([k,t,c])=>`<button type="button" class="${themeCur()===k?"on":""}" style="background:${c}" data-act="theme" data-id="${k}" aria-label="${t}" title="${t}"></button>`).join("")}</div>`;
-function setTheme(k){if(k==="bleu")delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=k;try{k==="bleu"?localStorage.removeItem("angels_theme"):localStorage.setItem("angels_theme",k)}catch(e){}
+function setTheme(k){if(k==="turquoise")delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=k;try{k==="turquoise"?localStorage.removeItem("angels_theme"):localStorage.setItem("angels_theme",k)}catch(e){}
  const m=document.querySelector('meta[name=theme-color]');if(m)m.content=getComputedStyle(document.documentElement).getPropertyValue("--b").trim()}
 const HERO=`<div class="hero-l"><div style="font-size:13px;letter-spacing:2px;opacity:.8">ANGEL'S GROUP</div><h1>Chaque colis suivi, chaque franc encaissé, chaque client prévenu.</h1><p>Le logiciel de gestion de vos livraisons à moto — du bon de commande à la preuve de livraison.</p>
  <ul><li><span class="i">📍</span><div><b>Adresse sur carte pour le livreur</b>Le client place lui-même son repère depuis son téléphone.</div></li>
