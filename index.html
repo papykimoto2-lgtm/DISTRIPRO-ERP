@@ -16,6 +16,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 aside{width:230px;background:var(--b2);color:#fff;padding:14px 10px;flex-shrink:0;position:sticky;top:0;height:100vh;overflow:auto}
 aside .brand{font-weight:800;font-size:16px;padding:6px 8px 12px;line-height:1.2}
 aside .brand small{display:block;font-weight:400;opacity:.7;font-size:11px}
+.clkbox{margin:0 8px 12px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.1);line-height:1.25}.clkbox b{display:block;font-size:22px;letter-spacing:1px;font-variant-numeric:tabular-nums}.clkbox span{font-size:11.5px;opacity:.8;text-transform:capitalize}
 aside a{display:flex;gap:8px;align-items:center;padding:9px 10px;border-radius:8px;color:#dbe2ff;cursor:pointer;text-decoration:none}
 aside a:hover{background:rgba(255,255,255,.1)}
 aside a.on{background:#fff;color:var(--b2);font-weight:700}
@@ -342,6 +343,9 @@ const waLink=(tel,txt)=>{let t=String(tel||"").replace(/\D/g,"");if(t.length===1
 
 /* ---------- Connexion ---------- */
 function loginHTML(){return CL.on?loginHTMLCloud():loginHTMLLocal()}
+const clkT=()=>new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"}),clkD=()=>new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+const clkBox=()=>`<div class="clkbox"><b class="clk" data-k="t">${clkT()}</b><span class="clk" data-k="d">${clkD()}</span></div>`;
+setInterval(()=>{document.querySelectorAll(".clk").forEach(e=>{const k=e.dataset.k;e.textContent=k==="t"?clkT():k==="d"?clkD():new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})+" · "+clkT().slice(0,5)})},1000);
 const THEMES=[["turquoise","Turquoise (standard)","#0e7490"],["bleu","Bleu","#1a3aa8"],["emeraude","Vert émeraude","#0f7b5f"],["orange","Orange énergie","#c9500a"],["violet","Violet","#6a32c9"],["or","Nuit & or","#15171d"]];
 const themeCur=()=>document.documentElement.dataset.theme||"turquoise";
 const themeDots=()=>`<div class="themes" title="Couleur du logiciel">${THEMES.map(([k,t,c])=>`<button type="button" class="${themeCur()===k?"on":""}" style="background:${c}" data-act="theme" data-id="${k}" aria-label="${t}" title="${t}"></button>`).join("")}</div>`;
@@ -371,7 +375,7 @@ function render(){
  if(!ME){$("#app").innerHTML=loginHTML();return}
  if(ME.role==="livreur"){$("#app").innerHTML=livreurHTML();syncGPS();initMaps();return}
  const nav=NAV.filter(n=>n.r.includes(ME.role));if(!nav.find(n=>n.v===view))view=nav[0].v;
- $("#app").innerHTML=`<div class="shell"><aside><div class="brand">ANGEL'S GROUP<small>ERP · Livraisons V1</small></div>${nav.map(n=>`<a class="${n.v===view?"on":""}" data-act="nav" data-id="${n.v}">${n.i} ${n.l}</a>`).join("")}<div class="who">👤 ${esc(ME.nom)}<br><span style="opacity:.7">${ROLES[ME.role]}</span><div class="themes">${THEMES.map(([k,t,c])=>`<button type="button" class="${themeCur()===k?"on":""}" style="background:${c}" data-act="theme" data-id="${k}" title="${t}" aria-label="${t}"></button>`).join("")}</div><a data-act="logout" style="padding:6px 0">⏏ Déconnexion</a></div></aside><main>${VIEWS[view]()}</main></div>`}
+ $("#app").innerHTML=`<div class="shell"><aside><div class="brand">ANGEL'S GROUP<small>ERP · Livraisons V1</small></div>${clkBox()}${nav.map(n=>`<a class="${n.v===view?"on":""}" data-act="nav" data-id="${n.v}">${n.i} ${n.l}</a>`).join("")}<div class="who">👤 ${esc(ME.nom)}<br><span style="opacity:.7">${ROLES[ME.role]}</span><div class="themes">${THEMES.map(([k,t,c])=>`<button type="button" class="${themeCur()===k?"on":""}" style="background:${c}" data-act="theme" data-id="${k}" title="${t}" aria-label="${t}"></button>`).join("")}</div><a data-act="logout" style="padding:6px 0">⏏ Déconnexion</a></div></aside><main>${VIEWS[view]()}</main></div>`}
 
 /* ============================================================
    VUES
@@ -733,7 +737,7 @@ function livreurHTML(){
  const lv=livreurOf(ME);if(!lv)return`<div class="lv"><div class="card">Compte livreur non rattaché. <a data-act="logout" href="#">Déconnexion</a></div></div>`;
  const mine=S.livraisons.filter(l=>l.livreur_id===lv.id),todo=mine.filter(isActive).sort((a,b)=>(a.tournee_id?0:1)-(b.tournee_id?0:1)||(a.ordre||99)-(b.ordre||99)||new Date(a.affectee_at)-new Date(b.affectee_at)),today=new Date().toDateString(),done=mine.filter(l=>["livree","echouee"].includes(l.statut)&&new Date(l.fin_at).toDateString()===today);
  const aEnc=todo.reduce((a,l)=>a+l.montant_attendu,0),det=soldeLiv(lv.id);
- return`<div class="lv"><div class="lvh"><div class="between"><div><b style="font-size:17px">${esc(lv.nom)}</b><br><span style="opacity:.75" class="sm">${lv.statut==="disponible"?"🟢 Disponible":"🔴 Indisponible"}</span></div><div class="flex"><button class="btn sm ghost" data-act="myStatus">Statut</button><button class="btn sm ghost" data-act="logout">⏏</button></div></div>
+ return`<div class="lv"><div class="lvh"><div class="between"><div><b style="font-size:17px">${esc(lv.nom)}</b><br><span style="opacity:.75" class="sm">${lv.statut==="disponible"?"🟢 Disponible":"🔴 Indisponible"}</span><br><span class="sm clk" data-k="td" style="opacity:.75">${new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})+" · "+clkT().slice(0,5)}</span></div><div class="flex"><button class="btn sm ghost" data-act="myStatus">Statut</button><button class="btn sm ghost" data-act="logout">⏏</button></div></div>
  <div class="grid" style="margin-top:10px;grid-template-columns:repeat(3,1fr)"><div><div style="font-size:20px;font-weight:800">${todo.length}</div><div class="sm" style="opacity:.75">à faire</div></div><div><div style="font-size:20px;font-weight:800">${done.filter(l=>l.statut==="livree").length}</div><div class="sm" style="opacity:.75">livrées aujourd'hui</div></div><div><div style="font-size:20px;font-weight:800">${fcfa(det)}</div><div class="sm" style="opacity:.75">à reverser</div></div></div></div>
  ${aEnc?`<div class="al warn">Montants à encaisser sur vos courses : <b>${fcfa(aEnc)}</b></div>`:""}
  ${todo.length?todo.map(missionCard).join(""):'<div class="card mu">Aucune mission pour le moment. Les nouvelles missions apparaissent ici.</div>'}
