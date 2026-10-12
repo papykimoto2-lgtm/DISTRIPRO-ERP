@@ -56,6 +56,9 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 - Le vendeur ne voit ni le code de confirmation, ni les notes internes, ni les livreurs ; il peut annuler tant que la commande n'est pas préparée, et envoyer à son client le lien du portail de position.
 - **Limite :** comme le reste, l'isolation entre vendeurs n'est appliquée que dans l'interface tant qu'il n'y a pas de backend. Pour de vrais vendeurs externes sur Internet, le backend (Supabase + règles d'accès) est indispensable ; l'inscription en libre-service reste à construire.
 
+## Dossiers des livreurs
+Menu *Livreurs & motos* → **📁 Dossier** : photo, pièce d'identité (recto/verso), permis, personne à prévenir, garant, accord du livreur ; les photos sont réduites dans le navigateur. Statut *Dossier complet / À compléter*, alertes sur le tableau de bord (dossier incomplet, échéance à 30 jours), et option *Paramètres → Exiger un dossier complet avant toute affectation*. En démonstration, les images restent dans le navigateur (le livreur Issa a un dossier-spécimen) ; en mode connecté, elles sont stockées côté serveur avec accès restreint (administrateur, superviseur, livreur concerné).
+
 ## Tournées et motos
 - **Tournée :** dans « Centre de livraison », « 🔁 Créer une tournée » regroupe au moins 2 commandes prêtes sur un livreur. L'ordre de passage est proposé (plus proche voisin depuis sa dernière position, adresses sans GPS en dernier) et reste ajustable avec ↑ ↓ tant que l'arrêt n'a pas démarré. Le livreur voit « Tournée T-0001 · arrêt 2/4 » et ses missions dans cet ordre ; il garde la liberté d'adapter son trajet.
 - **Estimation :** distance à vol d'oiseau × 1,35, 18 km/h en moyenne, 8 min par arrêt. C'est une indication, pas un itinéraire routier ; elle ignore le trafic (un vrai calcul d'itinéraire demande un service cartographique externe).
