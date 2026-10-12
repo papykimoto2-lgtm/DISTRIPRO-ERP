@@ -93,3 +93,6 @@ Migration `20261021000000_commande_client.sql` : tables `commande_liens` (jeton 
 
 ### Zones du Grand Abidjan et position du fournisseur
 Migration `20261022000000_zones_grand_abidjan.sql` : `app.zones_defaut(org)` (22 zones, `on conflict do nothing`, jamais appelable par un utilisateur), appliquée aux sociétés existantes et à `amorcer_organisation` ; `maj_adresse_collecte` valide la position GPS et la conserve quand l'adresse est modifiée sans position. Tests : `tests/test_zones_gps.sql`, `tests/banc/e2e_zones_gps*.js`.
+
+### Livreurs externes (commission d'ANGEL'S)
+Migration `20261023000000_livreurs_externes.sql` : `livreurs.type` (`interne`/`externe`) et `commission_pct`, `livraisons.part_livreur` et `commission_angels` (figées par un déclencheur quand la course passe à `livree`), `app.retenu_livreur` / `app.solde_livreur` (la part retenue est limitée à l'argent réellement détenu sur la course), `solde_livreurs()` (+ colonne `retenu`) ; `reversement`, `declarer_versement` et `traiter_versement` utilisent le solde net. La fonction `creer-utilisateur` transmet `type` et `commission_pct`. Tests : `tests/test_livreurs_externes.sql`, `tests/banc/e2e_livreurs_externes*.js`.
