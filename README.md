@@ -60,6 +60,11 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 - Le vendeur ne voit ni le code de confirmation, ni les notes internes, ni les livreurs ; il peut annuler tant que la commande n'est pas préparée, et envoyer à son client le lien du portail de position.
 - **Limite :** comme le reste, l'isolation entre vendeurs n'est appliquée que dans l'interface tant qu'il n'y a pas de backend. Pour de vrais vendeurs externes sur Internet, le backend (Supabase + règles d'accès) est indispensable ; l'inscription en libre-service reste à construire.
 
+## Photos des commandes (fournisseur)
+Le fournisseur joint des photos ou captures d'écran à ses commandes (jusqu'à **8 par commande**, réduites automatiquement) :
+- **à la création** : bloc « Photos / captures des articles » dans *Nouvelle commande* (et déjà via la saisie WhatsApp et les demandes de clients) ;
+- **après coup** : bouton **📷** sur la ligne de la commande ou « Ajouter des photos » dans son détail, tant que la commande n'est pas livrée, annulée ou retournée. Le fournisseur peut aussi **retirer** une photo. L'équipe ANGEL'S GROUP (administrateur, superviseur, commercial) peut ajouter et retirer ; le livreur et l'équipe consultent. Une commande terminée est en lecture seule, un fournisseur ne touche jamais aux commandes d'un autre.
+
 ## Zones du Grand Abidjan et de la périphérie, position du fournisseur
 - **22 zones de livraison par défaut** (tarif et délai modifiables dans *Paramètres*) : les dix communes d'Abidjan (Plateau, Cocody, Marcory, Treichville, Adjamé, Koumassi, Attécoubé, Abobo, Yopougon, Port-Bouët), Bingerville, Anyama, Songon, Grand-Bassam, Dabou, Bonoua, Azaguié, Alépé, Sikensi, Jacqueville, Assinie et « Autre localité (tarif à convenir) ». Les installations existantes reçoivent les zones manquantes une seule fois, sans toucher à vos tarifs ni ressusciter une zone supprimée.
 - **Quartiers suggérés par zone** (environ 200) dans tous les formulaires d'adresse, y compris la page de commande des clients ; la saisie libre reste possible. L'analyse des messages WhatsApp reconnaît aussi ces zones et quartiers.
