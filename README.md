@@ -60,6 +60,14 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 - Le vendeur ne voit ni le code de confirmation, ni les notes internes, ni les livreurs ; il peut annuler tant que la commande n'est pas préparée, et envoyer à son client le lien du portail de position.
 - **Limite :** comme le reste, l'isolation entre vendeurs n'est appliquée que dans l'interface tant qu'il n'y a pas de backend. Pour de vrais vendeurs externes sur Internet, le backend (Supabase + règles d'accès) est indispensable ; l'inscription en libre-service reste à construire.
 
+## Le client commande lui-même chez son fournisseur
+Chaque fournisseur dispose d'un **lien et d'un QR code de commande** (bouton « 🔗 Lien de commande client » dans *Mes commandes*), à partager sur WhatsApp, en statut ou en boutique. Sans compte ni mot de passe, le client y :
+- ajoute ses **articles** : désignation, quantité, **prix unitaire s'il le connaît**, et la **capture d'écran / photo** du produit (jusqu'à 6) ;
+- indique son nom, son téléphone, sa zone, son quartier, un repère, et envoie sa **position GPS** d'un tap ;
+- reçoit une **référence** de demande et un bouton pour joindre ANGEL'S GROUP sur WhatsApp.
+
+La demande arrive dans **« 📥 Demandes reçues de vos clients »**. Elle n'est **pas** une commande : le prix donné par le client n'est qu'une proposition. Le fournisseur la vérifie dans l'écran de saisie habituel (préremplie, captures et position jointes), fixe les prix manquants puis **crée la commande** (ANGEL'S GROUP confirme et collecte comme d'habitude) ou **refuse** avec un motif. La position du client devient la position GPS de l'adresse de livraison : le livreur aura la carte. *Renouveler* le lien invalide l'ancien. Protection : jeton secret de 256 bits, 5 demandes par heure et par téléphone et 40 par fournisseur, photos limitées en taille, aucune lecture possible par le public.
+
 ## Versements des livreurs : au comptant ou par Mobile Money
 Quand le client règle à la réception, le livreur encaisse puis reverse à ANGEL'S GROUP :
 - **À la livraison** : le livreur choisit le mode de paiement du client (Espèces, Wave, Orange Money, MTN MoMo, Moov Money…). En Mobile Money, la **référence de la transaction** (identifiant du SMS) est obligatoire et ne peut servir qu'une fois. Case **« payé directement sur le compte d'ANGEL'S GROUP »** : le client a payé sur le compte de la société, le livreur ne détient rien et n'a rien à reverser (l'opération reste tracée avec sa référence).

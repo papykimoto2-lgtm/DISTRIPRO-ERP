@@ -353,6 +353,7 @@ function seed(){
    const vc=creerCmdVendeur(V,{nom:"M. Diallo",tel:"0505888888",zone:"Marcory",quartier:"Biétry",repere:"Près du marché",ins:"",lignes:[{desig:"Pagnes (lot de 3)",qte:2,pu:9000},{desig:"Sandales",qte:1,pu:7500}],pay:"livraison",obs:""});setStatut(vc,"confirmee")}
  {const t=new Date().toISOString();[[L1,5.3525,-3.9745],[L3,5.3350,-4.0700]].forEach(([l,la,ln])=>{if(!S.pos[l.id])S.pos[l.id]={lat:la,lng:ln,acc:15,ts:t,livraison_id:null}})}
  S.inventaires=S.inventaires||[];
+ {const aya=S.vendeurs.find(v=>/Aya/.test(v.nom));if(aya)S.demandes=[{id:uid("dm"),vendeur_id:aya.id,nom:"Mme Traoré",tel:"0707111222",zone:"Cocody",quartier:"Riviera 3",repere:"Près de la pharmacie",lat:5.3571,lng:-3.9810,lignes:[{desig:"Robe wax",qte:1,pu:15000,img:-1},{desig:"Foulard",qte:2,pu:null,img:-1}],photos:[],note:"Livrer après 17 h",statut:"nouvelle",cree_le:now()}]}
  S.versements=[{id:uid("vd"),livreur_id:L1.id,montant:10000,mode:"Wave",ref:"WV-DEMO-0001",note:"Virement de 17 h",statut:"declare",cree_le:now()}];
  {const bk=d=>new Date(Date.now()-d*864e5).toISOString(),mv=(p,q,t,r,d,par)=>{p.stock+=q;S.stock_mvts.push({id:uid("m"),ts:bk(d),produit_id:p.id,type:t,qte:q,ref:r,par:par||"Responsable commercial"})};
   S.produits.forEach((p,i)=>mv(p,[40,60,50,30,80][i%5],"entree","BL-FRN-"+(1001+i)+" — Grossiste Abidjan",26-i));
@@ -558,6 +559,7 @@ function waCard(d,i){
  return`<div class="card wcard" style="margin:0 0 12px"><div class="between"><b>Commande ${i+1}</b>${d.warn.length?`<span>${d.warn.map(x=>badge(x,"wa")).join(" ")}</span>`:badge("Prêt","ok")}<button type="button" class="btn sm er" data-act="waDelDraft" data-id="${i}">Retirer</button></div>
  <div class="g3"><label>Nom du client<input data-wf="${i}:nom" value="${esc(d.nom)}"></label><label>Téléphone / WhatsApp<input data-wf="${i}:tel" value="${esc(d.tel)}" inputmode="tel"></label><label>Zone<select data-wf="${i}:zone"><option value="">— choisir —</option>${opts(S.config.zones.map(z=>z.nom),d.zone)}</select></label></div>
  <div class="g2"><label>Quartier / adresse<input data-wf="${i}:quartier" value="${esc(d.quartier)}"></label><label>Point de repère<input data-wf="${i}:repere" value="${esc(d.repere)}"></label></div>
+ ${d.gps?`<div class="sm" style="margin:4px 0">📍 Position GPS envoyée par le client (jointe à l'adresse de livraison) · <a target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=${d.gps.lat}&mlon=${d.gps.lng}#map=17/${d.gps.lat}/${d.gps.lng}">voir sur la carte</a></div>`:""}${d.demande_id?'<div class="sm mu" style="margin:4px 0">Demande passée par le client : les prix indiqués sont une proposition, à vérifier avant de créer la commande.</div>':""}
  <table class="wl"><tr><th>Article</th><th>Qté</th><th>Prix unit.</th><th>Total</th><th></th></tr>${d.lignes.map((l,j)=>waLine(i,j,l)).join("")}</table>
  <button type="button" class="btn sm ghost" data-act="waAddLine" data-id="${i}">+ Ajouter un article</button>
  <div class="wph">${d.photos.map((p,k)=>`<span class="wthumb"><img alt="" src="${p}"><button type="button" data-act="waDelPhoto" data-id="${i}:${k}" title="Retirer">✕</button></span>`).join("")}<label class="btn sm ghost" style="margin:0;cursor:pointer">🖼 Ajouter une capture<input type="file" accept="image/*" multiple data-wph="${i}" style="display:none"></label></div>
@@ -597,16 +599,16 @@ function waAnalyze(){
  dr.forEach(d=>{if(d._imgs){d.photos.push(...d._imgs);delete d._imgs}});
  if(dr.length===1&&WA.imgs.length){dr[0].photos.push(...WA.imgs);WA.imgs=[]}
  WA.drafts=dr;WA.stage=2;waRender()}
-function waValid(d){const m=[];if(!(d.tel||d.nom.trim()))m.push("nom ou téléphone");if(!d.zone)m.push("zone");if(!(d.quartier.trim()||d.repere.trim()))m.push("quartier");
+function waValid(d){const m=[];if(!(d.tel||d.nom.trim()))m.push("nom ou téléphone");if(!d.zone)m.push("zone");if(!(d.quartier.trim()||d.repere.trim()||d.gps))m.push("quartier");
  if(!d.lignes.length||d.lignes.some(l=>!l.desig.trim()||!(l.qte>0)||isNaN(l.pu)||l.pu<0))m.push("articles (désignation, quantité, prix)");if(d.pay==="partiel"&&!(waPv(d)>0))m.push("montant déjà payé chez le vendeur");return m}
 async function waCreate(){
  if(WA.stage===1){waAnalyze();return false}
  const v=vend();if(!v)return toast("Compte vendeur non rattaché","err"),false;let ok=0;const rest=[],errs=[];
  for(const d of WA.drafts){const m=waValid(d);if(m.length){rest.push(d);errs.push((d.nom||d.tel||"Commande")+" : "+m.join(", "));continue}
-  const o={nom:d.nom.trim()||"Client WhatsApp "+d.tel,tel:d.tel||"",zone:d.zone,quartier:d.quartier.trim(),repere:d.repere.trim(),ins:"",lignes:d.lignes.map(l=>({desig:l.desig.trim(),qte:l.qte,pu:l.pu})),pay:d.pay,paye_vendeur:waPv(d),obs:d.obs};
+  const o={gps:d.gps||null,nom:d.nom.trim()||"Client WhatsApp "+d.tel,tel:d.tel||"",zone:d.zone,quartier:d.quartier.trim(),repere:d.repere.trim(),ins:"",lignes:d.lignes.map(l=>({desig:l.desig.trim(),qte:l.qte,pu:l.pu})),pay:d.pay,paye_vendeur:waPv(d),obs:d.obs};
   try{
-   if(CL.on){const r=await CL.rpc("vendeur_deposer_commande",{p:{client:{nom:o.nom,tel:o.tel},adresse:{zone:o.zone,quartier:o.quartier,repere:o.repere,instructions:""},lignes:o.lignes,pay:o.pay,paye_vendeur:o.paye_vendeur,obs:o.obs}});for(const p of d.photos)await CL.rpc("ajouter_photo_commande",{p_commande:r.id,p_fichier:p})}
-   else{const c=creerCmdVendeur(v,o);if(d.photos.length)c.photos=d.photos.slice();audit("Saisie WhatsApp",c.numero)}
+   if(CL.on){const r=await CL.rpc("vendeur_deposer_commande",{p:{client:{nom:o.nom,tel:o.tel},adresse:{zone:o.zone,quartier:o.quartier,repere:o.repere,instructions:"",lat:o.gps?o.gps.lat:null,lng:o.gps?o.gps.lng:null},lignes:o.lignes,pay:o.pay,paye_vendeur:o.paye_vendeur,obs:o.obs}});if(d.demande_id)await CL.rpc("demande_traiter",{p_id:d.demande_id,p_action:"traitee",p_commande:r.id});for(const p of d.photos)await CL.rpc("ajouter_photo_commande",{p_commande:r.id,p_fichier:p})}
+   else{const c=creerCmdVendeur(v,o);if(d.photos.length)c.photos=d.photos.slice();if(d.demande_id){const dm=(S.demandes||[]).find(x=>x.id===d.demande_id);if(dm){dm.statut="traitee";dm.commande_id=c.id}}audit(d.demande_id?"Demande client transformée en commande":"Saisie WhatsApp",c.numero)}
    ok++}catch(e){rest.push(d);errs.push((d.nom||d.tel)+" : "+fixErr(e))}}
  if(CL.on)await refresh().catch(()=>{});else save();
  WA.drafts=rest;
@@ -769,7 +771,7 @@ function verserMomoForm(){
   if(!(m>0)||m>max)return toast("Montant invalide (maximum "+fcfa(max)+")","err"),false;if(ref.length<4)return toast("Référence de la transaction obligatoire","err"),false;
   if(CL.on)return CL.go(()=>CL.rpc("declarer_versement",{p_montant:m,p_mode:d.mode,p_ref:ref,p_note:d.note||null}),"Versement déclaré : la caisse va le valider");
   if(refUtilisee(ref))return toast("Cette référence de transaction est déjà enregistrée","err"),false;
-  S.versements=S.versements||[];S.versements.push({id:uid("vd"),livreur_id:lv.id,montant:m,mode:d.mode,ref,note:d.note||"",statut:"declare",cree_le:now()});audit("Versement Mobile Money déclaré",`${lv.nom} — ${fcfa(m)} (${d.mode} ${ref})`);save();render();toast("Versement déclaré : la caisse va le valider","ok")}})}
+  S.versements=S.versements||[];S.demandes=S.demandes||[];S.versements.push({id:uid("vd"),livreur_id:lv.id,montant:m,mode:d.mode,ref,note:d.note||"",statut:"declare",cree_le:now()});audit("Versement Mobile Money déclaré",`${lv.nom} — ${fcfa(m)} (${d.mode} ${ref})`);save();render();toast("Versement déclaré : la caisse va le valider","ok")}})}
 function versPending(){
  const L=(S.versements||[]).filter(v=>v.statut==="declare").sort((a,b)=>new Date(a.cree_le)-new Date(b.cree_le));if(!L.length)return"";
  return`<div class="card" style="margin:0 0 12px;border-left:4px solid var(--b)"><b>📲 Versements Mobile Money déclarés à valider (${L.length})</b><div class="sm mu">Vérifiez dans votre application Mobile Money que la somme est bien arrivée avec cette référence.</div>
@@ -1332,6 +1334,9 @@ const ACT={
  colCancel:id=>ask("Annuler la collecte","Motif de l'annulation (obligatoire)",m=>colDo(id,"annuler",{motif:m},"Collecte annulée"),{cls:"er"}),
 
  waOpen:()=>waOpen(),
+ cmdLien:()=>cmdLien(false),cmdLienNew:()=>modal("Renouveler le lien de commande","<p>L'ancien lien et son QR code cesseront de fonctionner : vos clients devront utiliser le nouveau.</p>",{label:"Renouveler",cls:"er",onSubmit:()=>{cmdLien(true);return true}}),
+ demTraiter:id=>demTraiter(id),demRejeter:id=>demRejeter(id),
+ photoZoomD:id=>{const[i,k]=id.split(":"),d=(S.demandes||[]).find(x=>x.id===i);if(d&&d.photos[+k])modal("Capture du client",`<img alt="" src="${d.photos[+k]}" style="max-width:100%">`,{label:"Fermer",onSubmit:()=>true,focus:false})},
  waPaste:async()=>{try{const t=await navigator.clipboard.readText();if(!t)return toast("Le presse-papiers est vide","err");WA.raw=(WA.raw?WA.raw+"\n\n":"")+t;waRender()}catch(e){toast("Collez avec Ctrl+V dans la zone de texte (le navigateur refuse l'accès direct)","err");const x=document.getElementById("wa_txt");if(x)x.focus()}},
  waSplit:()=>{WA.split=!WA.split;WA.imgs=WA.imgs.concat(...WA.drafts.map(d=>d.photos));WA.drafts=[];waAnalyze()},
  waBack:()=>{WA.stage=1;WA.imgs=WA.imgs.concat(...WA.drafts.map(d=>d.photos));WA.drafts=[];waRender()},
@@ -1728,7 +1733,7 @@ function creerCmdVendeur(v,d){
  let cl=S.clients.find(c=>c.vendeur_id===v.id&&c.tel.replace(/\s/g,"")===tel);
  if(!cl){cl={id:uid("cl"),nom:d.nom.trim(),tel:d.tel.trim(),tel2:"",adresses:[],note:"",vendeur_id:v.id};S.clients.push(cl)}
  let ad=cl.adresses.find(a=>a.zone===d.zone&&normTxt(a.quartier)===normTxt(d.quartier)&&normTxt(a.repere)===normTxt(d.repere));
- if(!ad){ad={id:uid("a"),libelle:"Livraison",zone:d.zone,quartier:(d.quartier||"").trim(),repere:(d.repere||"").trim(),gps:null,instructions:(d.ins||"").trim(),defaut:!cl.adresses.length};cl.adresses.push(ad)}
+ if(!ad){ad={id:uid("a"),libelle:"Livraison",zone:d.zone,quartier:(d.quartier||"").trim(),repere:(d.repere||"").trim(),gps:d.gps?{lat:d.gps.lat,lng:d.gps.lng}:null,instructions:(d.ins||"").trim(),defaut:!cl.adresses.length};cl.adresses.push(ad)}else if(d.gps&&!ad.gps)ad.gps={lat:d.gps.lat,lng:d.gps.lng};
  const prods=d.lignes.reduce((a,l)=>a+l.qte*l.pu,0),pv=d.pay==="paye"?prods:d.pay==="partiel"?Math.floor(+d.paye_vendeur||0):0;
  if(pv<0||pv>prods)throw new Error("Le montant payé au vendeur doit être compris entre 0 et le prix des articles ("+fcfa(prods)+")");if(d.pay==="partiel"&&pv===0)throw new Error("Indiquez le montant déjà payé au vendeur");
  const c=creerCmd({vendeur_id:v.id,vendeur_encaisse:prods>0&&pv>=prods,paye_vendeur:pv,client_id:cl.id,adr:Object.assign({},ad),lignes:d.lignes.map(l=>({produit_id:null,desig:l.desig,qte:l.qte,pu:l.pu})),frais:(zone(d.zone)||{}).frais||0,remise:0,paiement:pv>0?"partiel":"livraison",acompte:pv,mode:pv>0?"Payé au vendeur":"Espèces",priorite:"normale",canal:"Vendeur partenaire",obs:d.obs||"",confirmer:false});
@@ -1737,10 +1742,10 @@ function creerCmdVendeur(v,d){
 VIEWS.mesCmd=()=>{
  const v=vend();if(!v)return'<div class="card">Compte vendeur non rattaché à une fiche vendeur. Contactez ANGEL\'S GROUP.</div>';
  const mine=S.commandes.filter(c=>c.vendeur_id===v.id),d=vendDue(v),n=f=>mine.filter(f).length;
- return`<div class="between"><h1>Mes commandes à livrer</h1><div class="flex"><button class="btn" data-act="waOpen">💬 Saisie depuis WhatsApp</button><button class="btn ghost" data-act="newVCmd">➕ Nouvelle commande</button><button class="btn ghost" data-act="vImport">⬆ Importer un fichier CSV</button></div></div>
+ return`<div class="between"><h1>Mes commandes à livrer</h1><div class="flex"><button class="btn" data-act="waOpen">💬 Saisie depuis WhatsApp</button><button class="btn" data-act="cmdLien">🔗 Lien de commande client</button><button class="btn ghost" data-act="newVCmd">➕ Nouvelle commande</button><button class="btn ghost" data-act="vImport">⬆ Importer un fichier CSV</button></div></div>
  <p class="mu">Bienvenue <b>${esc(v.nom)}</b>. Déposez ici les commandes de vos clients : ANGEL'S GROUP confirme, prépare et livre à moto, puis vous règle le prix de vos articles.</p>
  <div class="grid">${kpi("À confirmer",n(c=>c.statut==="attente"),"w")}${kpi("En cours",n(c=>["confirmee","preparation","prete","affectee","en_cours"].includes(c.statut)))}${kpi("Livrées",n(c=>c.statut==="livree"),"o")}${kpi("Échecs / retours",n(c=>["echouee","retour_cours","retour_recu"].includes(c.statut)),"e")}${kpi("Reste à recevoir",fcfa(d.restant),"o")}</div>
- ${vendCollectes(v)}
+ ${demandesSection(v)}${vendCollectes(v)}
  <h2>Mes commandes</h2>${tbl(["Commande","Client / destination","Total client","Statut",""],mine.map(c=>`<tr><td><b>${c.numero}</b><br><span class="mu sm">${fdt(c.date)}</span></td><td>${esc(cli(c.client_id).nom)}<br><span class="mu sm">${esc(c.adr.zone)} · ${esc(c.adr.quartier||"")}</span></td><td>${fcfa(c.total)}<br><span class="mu sm">${c.vendeur_encaisse?"produits déjà payés":"à encaisser "+fcfa(soldeCmd(c))}</span></td><td>${sb(c)}</td><td><button class="btn sm ghost" data-act="cmdDetail" data-id="${c.id}">Ouvrir</button></td></tr>`),"Aucune commande pour le moment")}`};
 VIEWS.mesReg=()=>{
  const v=vend();if(!v)return'<div class="card">Compte vendeur non rattaché.</div>';const d=vendDue(v);
@@ -1965,6 +1970,7 @@ async function hydrate(){
  elig.forEach(e=>{(CL.vd[e.vendeur_id]=CL.vd[e.vendeur_id]||{acquis:0,regle:0,restant:0,attente:0,elig:[]}).elig.push({commande_id:e.commande_id,net:+e.net,livree_le:e.livree_le})});
  try{const ph=await CL.chk(CL.sb.from("commande_photos").select("id,commande_id").range(0,4999));const cnt={};ph.forEach(x=>cnt[x.commande_id]=(cnt[x.commande_id]||0)+1);N.commandes.forEach(c=>{if(cnt[c.id])c.nphotos=cnt[c.id]})}catch(e){}
  try{N.versements=await fetchAll("versements_declares")}catch(e){N.versements=[]}
+ try{N.demandes=await CL.chk(CL.sb.from("demandes_commande").select("*").eq("statut","nouvelle").order("cree_le").range(0,99))}catch(e){N.demandes=[]}
  try{const [cl,cc,cd]=await Promise.all([fetchAll("collectes"),fetchAll("collecte_commandes","commande_id"),fetchAll("collecte_codes","collecte_id")]);const g=grp(cc,"collecte_id"),codes=Object.fromEntries(cd.map(x=>[x.collecte_id,x.code]));N.collectes=cl.map(c=>Object.assign({},c,{code:codes[c.id],lignes:(g[c.id]||[]).map(l=>({commande_id:l.commande_id,numero:l.numero,resume:l.resume,colis_collectes:l.colis_collectes,colis_recus:l.colis_recus}))}))}catch(e){N.collectes=[]}
  try{const [iv,il]=await Promise.all([fetchAll("inventaires"),fetchAll("inventaire_lignes")]);const g=grp(il,"inventaire_id");N.inventaires=iv.map(i=>Object.assign({},i,{lignes:(g[i.id]||[]).map(l=>({produit_id:l.produit_id,theorique:l.theorique,compte:l.compte,note:l.note}))}))}catch(e){N.inventaires=[]}
  try{N.avis=(await fetchAll("avis_livraison","livraison_id")).map(a=>({livraison_id:a.livraison_id,livreur_id:a.livreur_id,note:a.note,commentaire:a.commentaire,ts:a.cree_le}))}catch(e){N.avis=[]}
@@ -2121,9 +2127,95 @@ function suiviModal(c,link){
  <label>Lien<input readonly value="${esc(link)}" onfocus="this.select()"></label>
  <div class="flex" style="margin-top:10px"><button type="button" class="btn" data-act="cpTxt" data-id="${esc(link)}">📋 Copier le lien</button>${w?`<a class="btn ok" target="_blank" rel="noopener" style="text-decoration:none" href="https://wa.me/${w.length===10?"225"+w:w}?text=${encodeURIComponent(msg)}">💬 Envoyer par WhatsApp</a>`:""}<a class="btn ghost" target="_blank" rel="noopener" style="text-decoration:none" href="${esc(link)}">👁 Voir la page</a></div>`,{label:"Fermer",onSubmit:()=>true})}
 
+
+/* ---------- Commande passée par le client lui-même (lien / QR du fournisseur) ---------- */
+const demandesOf=v=>(S.demandes||[]).filter(d=>d.vendeur_id===v.id&&d.statut==="nouvelle").sort((a,b)=>String(a.cree_le).localeCompare(String(b.cree_le)));
+function demandeCard(d){
+ const w=String(d.tel||"").replace(/\D/g,""),est=d.lignes.reduce((t,l)=>t+(l.pu==null?0:l.qte*l.pu),0),sans=d.lignes.some(l=>l.pu==null),ph=d.photos||[];
+ return`<div class="card" style="margin:0 0 12px"><div class="between"><b>${esc(d.nom)}</b><span class="mu sm">${fdt(d.cree_le)}</span></div>
+ <div class="sm">📞 <a href="tel:${esc(d.tel)}">${esc(d.tel)}</a>${w?` · <a target="_blank" rel="noopener" href="https://wa.me/${w.length===10?"225"+w:w}">💬 WhatsApp</a>`:""}<br>📍 ${esc(d.zone)} · ${esc(d.quartier||"")} ${d.repere?"· "+esc(d.repere):""}${d.lat!=null?` · <a target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=${d.lat}&mlon=${d.lng}#map=17/${d.lat}/${d.lng}">position GPS</a>`:' <span class="mu">(pas de position GPS)</span>'}</div>
+ <ul style="margin:8px 0 6px 18px">${d.lignes.map(l=>`<li>${l.qte} × ${esc(l.desig)} — ${l.pu==null?'<i class="mu">prix à fixer</i>':fcfa(l.pu)+" l'unité"}${l.img!=null&&l.img>=0&&ph[l.img]?` <span class="mu">(capture jointe)</span>`:""}</li>`).join("")}</ul>
+ ${ph.length?`<div class="wph">${ph.map((p,k)=>`<img alt="" src="${p}" data-act="photoZoomD" data-id="${d.id}:${k}" style="max-width:30%;border-radius:8px;cursor:zoom-in">`).join("")}</div>`:""}
+ ${d.note?`<div class="sm" style="margin-top:6px">💬 ${esc(d.note)}</div>`:""}
+ <div class="sm mu" style="margin-top:6px">${est?"Estimation client : "+fcfa(est)+(sans?" + articles sans prix":""):"Aucun prix indiqué"}</div>
+ <div class="flex" style="margin-top:10px"><button class="btn ok" data-act="demTraiter" data-id="${d.id}">✔ Créer la commande</button><button class="btn er ghost" data-act="demRejeter" data-id="${d.id}">Refuser</button></div></div>`}
+function demandesSection(v){const L=demandesOf(v);
+ return L.length?`<h2>📥 Demandes reçues de vos clients (${L.length})</h2><p class="mu sm">Vos clients commandent eux-mêmes via votre lien. Vérifiez les articles et les prix, puis créez la commande : ANGEL'S GROUP confirme et livre.</p>${L.map(demandeCard).join("")}`:""}
+function demTraiter(id){const d=(S.demandes||[]).find(x=>x.id===id);if(!d)return;
+ waOpen();const dr=waParseBlock("",S.config.zones);
+ Object.assign(dr,{nom:d.nom,tel:d.tel,zone:S.config.zones.some(z=>z.nom===d.zone)?d.zone:"",quartier:d.quartier||"",repere:d.repere||"",obs:d.note||"",
+  lignes:d.lignes.map(l=>({desig:l.desig,qte:l.qte,pu:l.pu==null?NaN:l.pu})),photos:(d.photos||[]).slice(),gps:d.lat!=null?{lat:+d.lat,lng:+d.lng}:null,demande_id:d.id,src:"",warn:d.lignes.some(l=>l.pu==null)?["prix à fixer"]:[]});
+ WA.drafts=[dr];WA.stage=2;waRender()}
+async function demRejeter(id){const d=(S.demandes||[]).find(x=>x.id===id);if(!d)return;
+ ask("Refuser la demande de "+d.nom,"Motif (article indisponible, zone non desservie…)",async m=>{
+  try{if(CL.on){await CL.rpc("demande_traiter",{p_id:id,p_action:"rejetee",p_motif:m});await refresh()}else{d.statut="rejetee";d.motif=m;audit("Demande client refusée",d.nom);save()}
+   toast("Demande refusée","ok");render();return true}catch(e){toast(fixErr(e),"err");return false}},{label:"Refuser",cls:"er"})}
+async function cmdLien(renew){const v=vend();if(!v)return;let link;
+ try{if(CL.on){const t=await CL.rpc("creer_lien_commande",{p_renouveler:!!renew});link=location.href.split("#")[0].split("?")[0]+"#commande="+t}else link=location.href.split("#")[0].split("?")[0]+"#commande="+v.id}catch(e){return toast(fixErr(e),"err")}
+ const msg=`Bonjour ! Passez votre commande chez ${v.nom} en ligne (articles, captures, quantités, position de livraison) : ${link}`;
+ modal("Lien de commande de vos clients",`<p class="sm mu">Partagez ce lien ou ce QR code (WhatsApp, statut, boutique). Vos clients y décrivent leur commande : articles, captures d'écran, quantités, prix s'ils le connaissent, et leur position de livraison. Rien n'est livré avant votre validation.</p>
+ <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><div style="width:150px;height:150px;background:#fff;padding:6px;border-radius:8px">${qrSvg(link)}</div><div style="flex:1;min-width:200px"><label>Lien<input readonly value="${esc(link)}" onfocus="this.select()"></label></div></div>
+ <div class="flex" style="margin-top:10px"><button type="button" class="btn" data-act="cpTxt" data-id="${esc(link)}">📋 Copier le lien</button><a class="btn ok" target="_blank" rel="noopener" style="text-decoration:none" href="https://wa.me/?text=${encodeURIComponent(msg)}">💬 Partager sur WhatsApp</a>${CL.on?'<button type="button" class="btn ghost er" data-act="cmdLienNew">Renouveler (l\'ancien lien cessera de fonctionner)</button>':""}</div>`,{label:"Fermer",onSubmit:()=>true,focus:false})}
+/* Page publique */
+function renderOrder(p,submit){
+ document.title=p.vendeur+" — Commander";
+ const st={lines:[{desig:"",qte:1,pu:"",img:-1}],photos:[],gps:null},app=$("#app"),gp=p.w&&String(p.w).replace(/\D/g,"");
+ const sync=()=>{[...app.querySelectorAll(".ol")].forEach((r,i)=>{if(!st.lines[i])return;st.lines[i].desig=r.querySelector(".o_d").value;st.lines[i].qte=Math.max(1,parseInt(r.querySelector(".o_q").value)||1);st.lines[i].pu=r.querySelector(".o_p").value})};
+ const lines=()=>st.lines.map((l,i)=>`<div class="ol" style="border:1px solid var(--line,#d8dee6);border-radius:10px;padding:8px;margin-bottom:8px"><div style="display:flex;gap:6px"><input class="o_d" placeholder="Article (ex. sac à main noir)" value="${esc(l.desig)}" style="flex:1"><button type="button" class="btn sm ghost er" data-o="del" data-i="${i}" ${st.lines.length<2?"disabled":""}>✕</button></div>
+  <div style="display:flex;gap:6px;margin-top:6px"><label style="flex:1">Quantité<input class="o_q" type="number" min="1" max="9999" value="${l.qte}"></label><label style="flex:1">Prix unitaire (F) <span class="mu sm">si vous le connaissez</span><input class="o_p" type="number" min="0" inputmode="numeric" value="${esc(l.pu)}"></label></div>
+  <div style="margin-top:6px">${l.img>=0&&st.photos[l.img]?`<img alt="" src="${st.photos[l.img]}" style="height:56px;border-radius:6px;vertical-align:middle"> <button type="button" class="btn sm ghost" data-o="unph" data-i="${i}">Retirer la capture</button>`:`<label class="btn sm ghost" style="display:inline-block;cursor:pointer">📷 Ajouter la capture d'écran / photo<input type="file" accept="image/*" data-o="ph" data-i="${i}" hidden></label>`}</div></div>`).join("");
+ const draw=()=>{app.innerHTML=`<div class="login"><div class="card" style="max-width:560px;width:100%">
+  <div style="font-size:13px;letter-spacing:1px;color:var(--b2);font-weight:700">${esc(p.org)}</div><h2 style="margin:2px 0 4px">Commander chez ${esc(p.vendeur)}</h2>
+  <div class="mu sm" style="margin-bottom:12px">Décrivez ce que vous voulez : ${esc(p.vendeur)} confirme votre commande et la fait livrer à moto par ${esc(p.org)}.</div>
+  <h3 style="margin:8px 0">1. Vos articles</h3><div id="o_lines">${lines()}</div><button type="button" class="btn ghost" data-o="add" ${st.lines.length>=30?"disabled":""}>+ Ajouter un article</button>
+  <h3 style="margin:14px 0 8px">2. Vous</h3><div class="g2"><label>Votre nom<input id="o_nom" maxlength="80" autocomplete="name"></label><label>Téléphone / WhatsApp<input id="o_tel" inputmode="tel" autocomplete="tel" placeholder="07 07 00 00 00"></label></div>
+  <h3 style="margin:14px 0 8px">3. Où livrer ?</h3><div class="g2"><label>Zone<select id="o_zone"><option value="">— choisir —</option>${p.zones.map(z=>`<option>${esc(z.nom)}</option>`).join("")}</select></label><label>Quartier<input id="o_q" maxlength="120"></label></div>
+  <label>Point de repère (pharmacie, école, couleur du portail…)<input id="o_rep" maxlength="200"></label>
+  <div style="margin:8px 0"><button type="button" class="btn" data-o="gps">📍 Utiliser ma position actuelle</button> <span id="o_gps" class="sm">${st.gps?`✔ Position enregistrée (±${st.gps.acc} m) · <a href="#" data-o="nogps">effacer</a>`:'<span class="mu">Recommandé : le livreur trouvera votre adresse plus facilement.</span>'}</span></div>
+  <label>Message pour le vendeur (facultatif)<textarea id="o_note" rows="2" maxlength="500"></textarea></label>
+  <div id="o_err" class="al warn sm" style="display:none;margin-top:8px"></div>
+  <button type="button" class="btn" id="o_send" style="width:100%;margin-top:12px">Envoyer ma commande</button>
+  <div class="mu sm" style="margin-top:8px">Votre demande n'est pas encore une commande : ${esc(p.vendeur)} vérifie les articles et les prix, puis vous contacte pour confirmer.</div></div></div>`;
+  app.querySelectorAll("[data-o]").forEach(b=>{const a=b.dataset.o,i=+b.dataset.i;
+   if(a==="ph")b.onchange=async()=>{const f=b.files[0];if(!f)return;sync();try{if(st.photos.length>=6)throw new Error("Maximum 6 photos");st.photos.push(await imgResize(f,900,.72,250000));st.lines[i].img=st.photos.length-1;keep()}catch(e){toast(e.message,"err")}};
+   else b.onclick=ev=>{ev.preventDefault();sync();
+    if(a==="add"){st.lines.push({desig:"",qte:1,pu:"",img:-1});keep()}
+    else if(a==="del"){st.lines.splice(i,1);keep()}
+    else if(a==="unph"){st.lines[i].img=-1;keep()}
+    else if(a==="nogps"){st.gps=null;keep()}
+    else if(a==="gps"){if(!navigator.geolocation)return toast("Géolocalisation indisponible : indiquez votre quartier et un repère","err");
+     navigator.geolocation.getCurrentPosition(g=>{st.gps={lat:+g.coords.latitude.toFixed(6),lng:+g.coords.longitude.toFixed(6),acc:Math.round(g.coords.accuracy||0)};keep()},e=>toast("Position impossible : autorisez la localisation ou indiquez votre quartier ("+e.message+")","err"),{enableHighAccuracy:true,timeout:20000})}}});
+  $("#o_send").onclick=send};
+ const FIELDS=["o_nom","o_tel","o_zone","o_q","o_rep","o_note"],keep=()=>{const v={};FIELDS.forEach(k=>{const e=document.getElementById(k);if(e)v[k]=e.value});draw();FIELDS.forEach(k=>{const e=document.getElementById(k);if(e&&v[k]!=null)e.value=v[k]})};
+ async function send(){sync();const err=m=>{const e=$("#o_err");e.textContent=m;e.style.display="block";e.scrollIntoView({block:"center"})};
+  const val=k=>$("#"+k).value.trim(),L=st.lines.filter(l=>l.desig.trim());
+  if(!L.length)return err("Ajoutez au moins un article");if(!val("o_nom"))return err("Indiquez votre nom");if(val("o_tel").replace(/\D/g,"").length<8)return err("Indiquez un numéro de téléphone valide");
+  if(!val("o_zone"))return err("Choisissez votre zone de livraison");if(!val("o_q")&&!val("o_rep")&&!st.gps)return err("Indiquez votre quartier, un point de repère ou envoyez votre position");
+  const used=[...new Set(L.map(l=>l.img).filter(i=>i>=0))],photos=used.map(i=>st.photos[i]);
+  const pl={nom:val("o_nom"),tel:val("o_tel"),zone:val("o_zone"),quartier:val("o_q"),repere:val("o_rep"),lat:st.gps?st.gps.lat:null,lng:st.gps?st.gps.lng:null,note:val("o_note")||null,photos,
+   lignes:L.map(l=>({desig:l.desig.trim(),qte:l.qte,pu:l.pu===""||isNaN(+l.pu)?null:Math.round(+l.pu),img:l.img>=0?used.indexOf(l.img):null}))};
+  const b=$("#o_send");b.disabled=true;
+  try{const r=await submit(pl);app.innerHTML=`<div class="login"><div class="card" style="text-align:center;max-width:460px"><div style="font-size:42px">✅</div><h2>Commande envoyée</h2><p>Référence <b style="font-size:20px;letter-spacing:2px">${esc(r.ref)}</b></p><p class="mu">${esc(p.vendeur)} va vérifier votre commande et vous contacter pour confirmer les prix et la livraison.</p>${gp?`<a class="btn ok" style="display:block;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${gp.length===10?"225"+gp:gp}?text=${encodeURIComponent("Bonjour, je viens d'envoyer une commande chez "+p.vendeur+" (réf. "+r.ref+")")}">💬 Contacter ${esc(p.org)}</a>`:""}</div></div>`}
+  catch(e){b.disabled=false;err(fixErr(e))}}
+ draw()}
+async function bootOrderCloud(token){
+ try{await CL.init();const p=await CL.rpc("commande_lien_get",{p_token:token});if(!p)throw new Error("Lien expiré ou invalide : demandez-en un nouveau à votre fournisseur.");
+  renderOrder(p,pl=>CL.rpc("demande_deposer",{p_token:token,p:pl}))}
+ catch(e){$("#app").innerHTML='<div class="login"><div class="card">'+esc(fixErr(e))+'</div></div>'}}
+function bootOrderLocal(vid){
+ let d=null;try{d=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+ const v=d&&d.v===1&&(d.vendeurs||[]).find(x=>x.id===vid);if(!v){$("#app").innerHTML='<div class="login"><div class="card">Lien indisponible : ouvrez-le sur l\'appareil de démonstration.</div></div>';return}
+ renderOrder({org:d.config.org,w:d.config.whatsapp,vendeur:v.nom,zones:d.config.zones.map(z=>({nom:z.nom,frais:z.frais}))},async pl=>{
+  const live=JSON.parse(localStorage.getItem(KEY));live.demandes=live.demandes||[];
+  if(live.demandes.filter(x=>x.vendeur_id===vid&&x.tel===pl.tel.replace(/[^0-9+]/g,"")&&Date.now()-new Date(x.cree_le)<36e5).length>=5)throw new Error("Trop de demandes envoyées : réessayez plus tard");
+  const id="dm"+Math.random().toString(36).slice(2,10);live.demandes.push({id,vendeur_id:vid,nom:pl.nom,tel:pl.tel.replace(/[^0-9+]/g,""),zone:pl.zone,quartier:pl.quartier,repere:pl.repere,lat:pl.lat,lng:pl.lng,lignes:pl.lignes,photos:pl.photos,note:pl.note,statut:"nouvelle",cree_le:new Date().toISOString()});
+  localStorage.setItem(KEY,JSON.stringify(live));return{ok:true,ref:id.slice(2,8).toUpperCase()}})}
+
 /* ---------- Démarrage ---------- */
-const _ptok=(location.hash.match(/^#portail=(.+)$/)||[])[1],_stok=(location.hash.match(/^#suivi=(.+)$/)||[])[1];
-if(_stok&&CL.on&&/^[a-f0-9]{64}$/.test(_stok)){bootSuiviCloud(_stok)}
+const _ptok=(location.hash.match(/^#portail=(.+)$/)||[])[1],_stok=(location.hash.match(/^#suivi=(.+)$/)||[])[1],_ctok=(location.hash.match(/^#commande=(.+)$/)||[])[1];
+if(_ctok&&CL.on&&/^[a-f0-9]{64}$/.test(_ctok)){bootOrderCloud(_ctok)}
+else if(_ctok&&!CL.on){bootOrderLocal(_ctok)}
+else if(_stok&&CL.on&&/^[a-f0-9]{64}$/.test(_stok)){bootSuiviCloud(_stok)}
 else if(_stok&&!CL.on){bootSuiviLocal(_stok)}
 else if(_ptok&&CL.on&&/^[a-f0-9]{64}$/.test(_ptok)){bootPortalCloud(_ptok)}
 else if(location.hash.startsWith("#portail=")){
