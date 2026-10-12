@@ -26,6 +26,7 @@ aside a:hover{background:rgba(255,255,255,.1)}
 .sosbtn{position:fixed;right:14px;bottom:18px;z-index:8500;width:66px;height:66px;border-radius:50%;border:3px solid #fff;background:#c4121f;color:#fff;font-size:26px;line-height:1;box-shadow:0 6px 20px rgba(0,0,0,.4);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0}.sosbtn small{font-size:11px;font-weight:800;letter-spacing:1px}
 body.gros .lv,body.gros #offre>div,body.gros .md{zoom:1.22}body.gros .lv .btn{padding:14px 12px;font-size:16px}
 body.eco img.av{display:none}body.eco *{animation:none!important;transition:none!important}
+#navbk{display:none}.mbar{display:none}.navp{display:block}
 aside .gt{margin:12px 10px 3px;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;opacity:.55;font-weight:700}
 aside a.on{background:#fff;color:var(--b2);font-weight:700}
 aside .who{margin-top:14px;padding:10px;border-top:1px solid rgba(255,255,255,.2);font-size:12px}
@@ -128,11 +129,20 @@ aside .themes{margin:6px 0 2px}aside .themes button{width:18px;height:18px;borde
 .mc .row{display:flex;gap:8px;flex-wrap:wrap}.mc .row .btn{flex:1}
 .pill{background:#f3f5fb;border-radius:8px;padding:6px 9px}
 .amt{font-size:20px;font-weight:800;color:var(--b2)}
-@media(max-width:820px){
+@media(max-width:1024px){   /* tablette et smartphone : menu déroulant vertical */
  .shell{display:block}
- aside{width:auto;height:auto;position:static;display:flex;gap:4px;overflow-x:auto;padding:8px}
- aside .brand,aside .who,aside .gt{display:none}
- aside a{white-space:nowrap}
+ aside{width:auto;height:auto;position:sticky;top:0;z-index:8700;padding:0;overflow:visible}
+ .mbar{display:flex;align-items:center;gap:10px;padding:8px 12px;min-height:56px}
+ .burger{background:rgba(255,255,255,.16);border:0;color:#fff;border-radius:10px;width:46px;height:42px;font-size:24px;line-height:1;cursor:pointer;flex-shrink:0}
+ .mtit{font-weight:700;font-size:16px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .mclk{font-variant-numeric:tabular-nums;opacity:.85;font-size:13px}
+ .navp{display:none;position:absolute;left:0;right:0;top:100%;max-height:calc(100vh - 124px);max-height:calc(100dvh - 124px);overflow-y:auto;overscroll-behavior:contain;background:var(--b2);padding:4px 10px 18px;box-shadow:0 16px 32px rgba(0,0,0,.45)}
+ body.menu-open .navp{display:block}
+ body.menu-open #navbk{display:block;position:fixed;inset:0;background:rgba(5,15,30,.5);z-index:8600}
+ aside a{white-space:normal;padding:12px 12px;font-size:15px}
+ aside .brand{padding:10px 8px 6px}
+}
+@media(max-width:820px){
  main{padding:12px}.g2,.g3{grid-template-columns:1fr}
 }
 @media print{aside,.noprint{display:none}}
@@ -450,7 +460,7 @@ function render0(){
  if(!ME){$("#app").innerHTML=loginHTML();return}
  if(ME.role==="livreur"){$("#app").innerHTML=livreurHTML()+sosBtnHTML;syncGPS();initMaps();setTimeout(offreCheck,0);return}
  const nav=NAV.filter(n=>n.r.includes(ME.role));if(!nav.find(n=>n.v===view))view=nav[0].v;
- $("#app").innerHTML=`<div class="shell"><aside><div class="brand">ANGEL'S GROUP<small>ERP · Livraisons V1</small></div>${clkBox()}${nav.map((n,k)=>(k===0||nav[k-1].g!==n.g?`<div class="gt">${n.g}</div>`:"")+`<a class="${n.v===view?"on":""}" data-act="nav" data-id="${n.v}">${n.i} ${n.l}</a>`).join("")}<div class="who">👤 ${esc(ME.nom)}<br><span style="opacity:.7">${ROLES[ME.role]}</span><div class="themes">${THEMES.map(([k,t,c])=>`<button type="button" class="${themeCur()===k?"on":""}" style="background:${c}" data-act="theme" data-id="${k}" title="${t}" aria-label="${t}"></button>`).join("")}</div><div style="margin:8px 0 2px">${instBox()}</div><a data-act="logout" style="padding:6px 0">⏏ Déconnexion</a></div></aside><main>${VIEWS[view]()}</main></div>`}
+ $("#app").innerHTML=`<div class="shell"><div id="navbk" data-act="menuClose"></div><aside><div class="mbar"><button type="button" class="burger" data-act="menu" aria-label="Menu" aria-expanded="false" aria-controls="navp">☰</button><span class="mtit">${(()=>{const n=nav.find(x=>x.v===view);return n?n.i+" "+n.l:""})()}</span><span class="clk mclk" data-k="t">${clkT().slice(0,5)}</span></div><div class="navp" id="navp"><div class="brand">ANGEL'S GROUP<small>ERP · Livraisons V1</small></div>${clkBox()}${nav.map((n,k)=>(k===0||nav[k-1].g!==n.g?`<div class="gt">${n.g}</div>`:"")+`<a class="${n.v===view?"on":""}" data-act="nav" data-id="${n.v}">${n.i} ${n.l}</a>`).join("")}<div class="who">👤 ${esc(ME.nom)}<br><span style="opacity:.7">${ROLES[ME.role]}</span><div class="themes">${THEMES.map(([k,t,c])=>`<button type="button" class="${themeCur()===k?"on":""}" style="background:${c}" data-act="theme" data-id="${k}" title="${t}" aria-label="${t}"></button>`).join("")}</div><div style="margin:8px 0 2px">${instBox()}</div><a data-act="logout" style="padding:6px 0">⏏ Déconnexion</a></div></div></aside><main>${VIEWS[view]()}</main></div>`;{const o=document.body.classList.contains("menu-open"),b=document.querySelector(".burger");if(b){b.setAttribute("aria-expanded",o?"true":"false");b.textContent=o?"✕":"☰"}}}
 
 /* ============================================================
    VUES
@@ -1399,7 +1409,9 @@ function gpsConsent(next){const lv=livreurOf(ME);if(lv.gps_consent)return next()
    ============================================================ */
 const done=(msg)=>{if(CL.on)return refresh().then(()=>{if(msg)toast(msg,"ok");render()}).catch(e=>toast(fixErr(e),"err"));save();if(msg)toast(msg,"ok");render()};
 const ACT={
- nav:id=>{view=id;render()},
+ nav:id=>{document.body.classList.remove("menu-open");view=id;window.scrollTo(0,0);render()},
+ menu:()=>{const o=document.body.classList.toggle("menu-open");const b=document.querySelector(".burger");if(b){b.setAttribute("aria-expanded",o?"true":"false");b.textContent=o?"✕":"☰"}},menuClose:()=>{document.body.classList.remove("menu-open");const b=document.querySelector(".burger");if(b){b.setAttribute("aria-expanded","false");b.textContent="☰"}},
+
  dossier:id=>dossierForm(liv(id)),dosDel:k=>{if(ui.dos){ui.dos[k]=null;slotSet(k,null)}},
  theme:k=>{setTheme(k);render()},
  verserMomo:verserMomoForm,versOk:id=>versTraiter(id,"valider"),versNo:id=>ask("Rejeter le versement","Motif du rejet (obligatoire)",m=>versTraiter(id,"rejeter",m),{cls:"er"}),
@@ -1576,7 +1588,7 @@ document.addEventListener("change",e=>{const t=e.target;
  if(CL.on){CL.rpc("saisir_comptage",{p_inventaire:i.id,p_produit:pid,p_compte:v,p_note:note||null}).then(save1).catch(x=>toast(fixErr(x),"err"))}else save1()});
 window.addEventListener("storage",e=>{if(e.key!==KEY||!e.newValue||$("#modal").innerHTML)return;try{S=JSON.parse(e.newValue)}catch(x){return}
  if(ME){const u=usr(ME.id);if(!u||!u.actif){ME=null;sessionStorage.removeItem("angels_me");toast("Votre compte a été désactivé","err")}else ME=u}render()});
-let _tk=0;setInterval(()=>{if(!CL.on&&(_tk++)%2)return;if(ME&&!(ME.role==="livreur"&&Object.values(ui.mapOpen||{}).some(Boolean))&&!$("#modal").innerHTML&&!document.activeElement.matches("input,select,textarea")){if(CL.on)refresh().then(render).catch(()=>{});else render()}},30000);
+let _tk=0;setInterval(()=>{if(!CL.on&&(_tk++)%2)return;if(ME&&!document.body.classList.contains("menu-open")&&!(ME.role==="livreur"&&Object.values(ui.mapOpen||{}).some(Boolean))&&!$("#modal").innerHTML&&!document.activeElement.matches("input,select,textarea")){if(CL.on)refresh().then(render).catch(()=>{});else render()}},30000);
 
 /* ============================================================
    DOCUMENTS COMMERCIAUX, NOTIFICATIONS CLIENT, SIGNATURE
@@ -2662,6 +2674,8 @@ function prefsForm(){modal("⚙️ Préférences d'affichage",`<label style="dis
  <label style="display:flex;gap:10px;align-items:flex-start;font-size:15px;color:var(--tx);font-weight:600;margin-top:12px"><input type="checkbox" id="pf_e" style="width:auto;margin-top:4px" ${PREF.eco?"checked":""}> <span>📶 Économie de données<br><span class="sm mu" style="font-weight:400">Pas de vignettes, photos envoyées plus légères, vérification des nouvelles courses moins fréquente, cartes seulement à la demande.</span></span></label>
  <div class="sm mu" style="margin-top:10px">Ces réglages sont mémorisés sur ce téléphone.</div>`,{label:"Enregistrer",onSubmit:()=>{PREF={gros:$("#pf_g").checked,eco:$("#pf_e").checked};try{localStorage.setItem("angels_pref",JSON.stringify(PREF))}catch(e){}applyPref();closeModal();render();return true}})}
 
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&document.body.classList.contains("menu-open"))ACT.menuClose()});
+window.addEventListener("resize",()=>{if(window.innerWidth>1024&&document.body.classList.contains("menu-open"))ACT.menuClose()});
 /* ---------- Démarrage ---------- */
 const _ptok=(location.hash.match(/^#portail=(.+)$/)||[])[1],_stok=(location.hash.match(/^#suivi=(.+)$/)||[])[1],_ctok=(location.hash.match(/^#commande=(.+)$/)||[])[1];
 if(_ctok&&CL.on&&/^[a-f0-9]{64}$/.test(_ctok)){bootOrderCloud(_ctok)}

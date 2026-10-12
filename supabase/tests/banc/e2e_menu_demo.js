@@ -13,5 +13,5 @@ await as('vendeur');chk('vendeur : « Mon espace » seulement, ouvre sur Mes com
 await as('preparateur');chk('préparateur : commandes puis stock',JSON.stringify(await ids())===JSON.stringify(["commandes","produits","journal","inventaire","incidents"])&&await pg.evaluate(()=>view)==='commandes',await ids());
 await as('direction');chk('direction : ouvre sur le tableau de bord',(await ids())[0]==='dashboard'&&await pg.evaluate(()=>view)==='dashboard');
 await as('admin');await pg.evaluate(()=>{view='dashboard';render()});await pg.screenshot({path:'nav_desktop.png',clip:{x:0,y:0,width:300,height:900}});
-await pg.setViewportSize({width:420,height:800});await pg.waitForTimeout(200);chk('mobile : titres masqués, menu horizontal',!(await pg.isVisible('aside .gt')));await pg.screenshot({path:'nav_mobile.png',clip:{x:0,y:0,width:420,height:200}});
+await pg.setViewportSize({width:420,height:800});await pg.waitForTimeout(200);chk('mobile : menu déroulant (bouton ☰), liste repliée',await pg.isVisible('.burger')&&!(await pg.isVisible('aside .gt')));await pg.screenshot({path:'nav_mobile.png',clip:{x:0,y:0,width:420,height:200}});
 chk('aucune erreur JS',er.length===0,er);console.log(ok+' ok / '+ko+' échecs');await b.close()})();
