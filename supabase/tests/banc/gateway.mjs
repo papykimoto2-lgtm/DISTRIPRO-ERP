@@ -46,7 +46,7 @@ http.createServer(async (req, res) => {
       const email = b.identifiant.includes("@") ? b.identifiant.toLowerCase() : `${b.identifiant.toLowerCase().replace(/[^a-z0-9._-]/g, "")}@users.angels-erp.app`;
       const u = (await db.query("insert into auth.users(email, mdp) values ($1, $2) returning id", [email, b.mot_de_passe])).rows[0];
       let lid = null, vid = null;
-      if (b.role === "livreur") lid = (await db.query("insert into public.livreurs(org_id, nom, tel, zone, moto_id, remu) values ($1,$2,$3,$4,$5,$6) returning id", [m.org_id, b.nom, b.tel ?? null, b.zone ?? null, b.moto_id ?? null, b.remu ? JSON.stringify(b.remu) : null])).rows[0].id;
+      if (b.role === "livreur") lid = (await db.query("insert into public.livreurs(org_id, nom, tel, zone, moto_id, remu, type, commission_pct) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id", [m.org_id, b.nom, b.tel ?? null, b.zone ?? null, b.moto_id ?? null, b.remu ? JSON.stringify(b.remu) : null, b.type === "externe" ? "externe" : "interne", Math.min(100, Math.max(0, Number(b.commission_pct) || 0))])).rows[0].id;
       if (b.role === "vendeur") vid = (await db.query("insert into public.vendeurs(org_id, nom, tel, commission_pct) values ($1,$2,$3,$4) returning id", [m.org_id, b.nom, b.tel ?? null, b.commission_pct ?? 0])).rows[0].id;
       await db.query("insert into public.membres(user_id, org_id, role, nom, livreur_id, vendeur_id) values ($1,$2,$3,$4,$5,$6)", [u.id, m.org_id, b.role, b.nom, lid, vid]);
       return send(res, 200, { ok: true, user_id: u.id, email });
