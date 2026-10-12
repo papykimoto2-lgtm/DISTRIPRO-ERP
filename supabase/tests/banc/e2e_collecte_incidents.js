@@ -1,0 +1,28 @@
+const { chromium } = require('/opt/node-tools/node_modules/playwright');const fs=require('fs');const {execSync}=require('child_process');
+const ANON=fs.readFileSync('/tmp/pgr/anon.key','utf8').trim();
+const sql=q=>execSync(`psql -h 127.0.0.1 -p 54330 -U postgres -d t -At -c "${q}"`).toString().trim();
+let ok=0,ko=0;const chk=(n,c,x)=>{c?ok++:ko++;console.log((c?'✔':'✘')+' '+n+(c?'':'  → '+(typeof x==='string'?x:JSON.stringify(x))))};
+(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});
+async function sess(u){const ctx=await b.newContext({viewport:{width:1280,height:950}});await ctx.addInitScript(k=>{window.ANGELS_CLOUD={url:'http://127.0.0.1:3011',key:k}},ANON);
+ await ctx.route('https://cdn.jsdelivr.net/npm/@supabase/**',r=>r.fulfill({path:'/tmp/pgr/sbjs/package/dist/umd/supabase.js',contentType:'application/javascript'}));
+ const pg=await ctx.newPage();pg.errs=[];pg.on('pageerror',e=>pg.errs.push(e.message));pg.on('dialog',d=>d.accept());
+ await pg.goto('file:///home/user/DISTRIPRO-ERP/index.html');await pg.waitForSelector('#lf');await pg.fill('input[name=ident]',u);await pg.fill('input[name=pwd]','pwd'+u);await pg.click('#lf button');
+ await pg.waitForFunction(()=>typeof ME!=='undefined'&&ME&&S.users.length>0,null,{timeout:8000});
+ await pg.evaluate(()=>{window.__t=[];const o=window.toast;window.toast=(m,k)=>{if(k==='err')__t.push(m);return o(m,k)}});return pg}
+const ay=await sess('aya');
+const mk=async(n,t)=>ay.evaluate(async([n,t])=>(await CL.rpc("vendeur_deposer_commande",{p:{client:{nom:n,tel:t},adresse:{zone:S.config.zones[0].nom,quartier:"Angré",repere:""},lignes:[{desig:"Robe "+n,qte:1,pu:10000}],pay:"livraison"}})).id,[n,t]);
+const a=await mk('IncA','0707123401'),bb=await mk('IncB','0707123402');
+const ad=await sess('admin');await ad.evaluate(async([a,b])=>{await CL.rpc("commande_action",{p_cid:a,p_action:"confirmer"});await CL.rpc("commande_action",{p_cid:b,p_action:"confirmer"})},[a,bb]);
+const col=await ad.evaluate(async([a,b])=>(await CL.rpc("planifier_collecte",{p_vendeur:S.vendeurs.find(v=>v.nom.startsWith("Aya")).id,p_commandes:[a,b],p_livreur:S.livreurs.find(l=>l.nom.startsWith("Issa")).id,p_creneau:new Date().toISOString(),p_note:null,p_adresse:null})).id,[a,bb]);
+const code=sql(`select code from public.collecte_codes where collecte_id='${col}'`);
+const is=await sess('issa');await is.evaluate(async([col,code,a,b])=>{await CL.rpc("collecte_action",{p_collecte:col,p_action:"accepter",p:{}});await CL.rpc("collecte_action",{p_collecte:col,p_action:"partir",p:{}});await CL.rpc("collecte_action",{p_collecte:col,p_action:"collecter",p:{code,colis:{[a]:3,[b]:1}}})},[col,code,a,bb]);
+const pr=await sess('moussa');await pr.evaluate(()=>{view='commandes';render()});await pr.waitForTimeout(600);
+await pr.click('button:has-text("Réceptionner") >> nth=0');await pr.waitForSelector('input[name^=r_]');
+await pr.fill(`input[name=r_${a}]`,'2');await pr.fill(`input[name=r_${bb}]`,'2');await pr.waitForTimeout(150);
+chk('aperçu des écarts avant validation',/incident/.test(await pr.innerText('#modal')));
+await pr.click('#mf .mf .btn:not(.ghost)');await pr.waitForTimeout(2200);
+chk('2 incidents créés côté serveur',+sql(`select count(*) from public.incidents where commande_id in ('${a}','${bb}')`)===2&&sql(`select cat from public.incidents where commande_id='${a}'`)==='Colis manquant'&&sql(`select cat from public.incidents where commande_id='${bb}'`)==='Écart de colis',await pr.evaluate(()=>__t));
+chk('statuts : manquant reste confirmé, surplus en préparation',sql(`select statut from public.commandes where id='${a}'`)==='confirmee'&&sql(`select statut from public.commandes where id='${bb}'`)==='preparation');
+chk('message d\'incidents affiché',/incident\(s\) ouvert\(s\)/.test(await pr.innerText('body')));
+await ad.evaluate(async()=>{await refresh();view='incidents';render()});await ad.waitForTimeout(400);chk('visibles pour l\'administrateur',/Colis manquant/.test(await ad.innerText('body')));
+console.log('erreurs JS',ay.errs,ad.errs,is.errs,pr.errs);console.log(ok+' ok / '+ko+' échecs');await b.close()})().catch(e=>{console.error('CRASH',e.message.slice(0,400));process.exit(1)});

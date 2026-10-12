@@ -88,6 +88,9 @@ select t_ok((select statut from public.collectes where id=:'col')='recue', 'coll
 select t_ok((select statut from public.commandes where id=:'o1')='preparation', 'la commande complète passe en préparation');
 select t_ok((select statut from public.commandes where id=:'o2')='confirmee', 'la commande sans colis reste confirmée');
 select t_fail(u('P'), format($$select public.collecte_action(%L,'recevoir')$$,:'col'), 'pas arrivée', 'pas de seconde réception');
+select t_ok((select count(*) from public.incidents where commande_id=:'o2' and cat='Colis manquant' and descr like '%n''a pas été remise%' and statut='ouvert')=1, 'incident automatique : commande non remise (0 colis collecté)');
+select t_ok((select count(*) from public.incidents where commande_id=:'o1')=0, 'aucun incident pour la commande complète');
+select t_ok((select ref from public.incidents where commande_id=:'o2') ~ '^INC-\d{4}$', 'incident numéroté comme les autres');
 -- 6. Réaffectation, annulation, échec
 select t_as(u('S'));
 select (public.planifier_collecte('00000000-0000-0000-0000-0000000000b1',array[:'o2']::uuid[],'00000000-0000-0000-0000-0000000000a1',now()+interval '2 hour'))->>'id' as col2 \gset
@@ -112,3 +115,24 @@ select public.collecte_action(:'col3','collecter','{"code":"0","colis":{}}') fro
 select t_root();
 select t_fail(u('L1'), format($$select public.collecte_action(%L,'collecter','{"code":"0","colis":{}}')$$,:'col3'), 'Trop d''essais', 'au-delà de 5 essais : bloqué');
 select t_ok((select count(*) from public.audit_log where action in ('Collecte planifiée','Colis collectés','Collecte réceptionnée','Collecte annulée','Collecte non réalisée'))>=5, 'les étapes sont journalisées');
+
+-- 8. Écarts à la réception : manquants et surplus
+select t_vcmd('V1','Cli 4') as o4 \gset
+select t_vcmd('V1','Cli 5') as o5 \gset
+select t_as(u('S')); select public.commande_action(:'o4','confirmer'); select public.commande_action(:'o5','confirmer');
+select (public.planifier_collecte('00000000-0000-0000-0000-0000000000b1',array[:'o4',:'o5']::uuid[],'00000000-0000-0000-0000-0000000000a1',now()+interval '1 hour'))->>'id' as col4 \gset
+select t_root();
+select code as bon4 from public.collecte_codes where collecte_id=:'col4' \gset
+select t_as(u('L1')); select public.collecte_action(:'col4','accepter'); select public.collecte_action(:'col4','partir');
+select public.collecte_action(:'col4','collecter',jsonb_build_object('code',:'bon4','colis',jsonb_build_object(:'o4',3,:'o5',1)));
+select t_root();
+select t_as(u('P')); select (public.collecte_action(:'col4','recevoir',jsonb_build_object('recus',jsonb_build_object(:'o4',2,:'o5',2)))) as rec4 \gset
+select t_root();
+select t_ok((:'rec4'::jsonb->>'incidents')::int=2, 'la réception annonce 2 incidents ouverts');
+select t_ok((select count(*) from public.incidents where commande_id=:'o4' and cat='Colis manquant' and descr like '%2 colis reçu(s)%sur 3%1 manquant%')=1, 'incident : 1 colis manquant sur 3');
+select t_ok((select count(*) from public.incidents where commande_id=:'o5' and cat='Écart de colis' and descr like '%1 en trop%')=1, 'incident : 1 colis en trop');
+select t_ok((select statut from public.commandes where id=:'o4')='confirmee', 'la commande avec manquant reste confirmée');
+select t_ok((select statut from public.commandes where id=:'o5')='preparation', 'la commande avec surplus passe en préparation');
+select t_ok(t_n(u('P'),'select count(*) from public.incidents')=3, 'le préparateur voit les incidents');
+select t_ok(t_n(u('V1'),'select count(*) from public.incidents')=0, 'le vendeur ne voit pas les incidents internes');
+select t_ok((select count(*) from public.audit_log where action='Incident ouvert automatiquement')=3, 'chaque incident automatique est journalisé');

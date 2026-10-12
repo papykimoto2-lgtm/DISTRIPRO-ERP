@@ -81,3 +81,6 @@ Migration `20261017000000_collectes.sql` : `vendeurs.adresse_collecte`, `collect
 
 ### Paiement chez le fournisseur et/ou chez le livreur
 Migration `20261018000000_paiement_vendeur.sql` : `commandes.paye_vendeur` (part des articles payée directement au vendeur, reprise de l'ancien indicateur `vendeur_encaisse`), `vendeur_deposer_commande` (`pay` = livraison | partiel + `paye_vendeur` | paye ; contrôle 0 ≤ montant ≤ prix des articles ; le paiement chez le vendeur est tracé en `fonds` mode « Payé au vendeur »), `vendeur_dues` et `vendeur_eligibles` (net = (articles − payé chez le vendeur) × (1 − commission), sur la seule part encaissée par ANGEL'S GROUP). Tests : `tests/test_paiement_vendeur.sql`, `tests/banc/e2e_paiement*.js`.
+
+### Incidents automatiques à la réception d'une collecte
+Migration `20261019000000_collecte_incidents.sql` : `app.incident_auto` et nouvelle version de `collecte_action` — à la réception, un incident est ouvert pour chaque commande en écart (« Colis manquant » : manquants ou commande non remise ; « Écart de colis » : colis en trop) ; la réponse indique le nombre d'incidents ouverts. Tests : `tests/test_collectes.sql` (section 8), `tests/banc/e2e_collecte_incidents*.js`.

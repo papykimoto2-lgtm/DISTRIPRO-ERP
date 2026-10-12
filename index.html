@@ -639,9 +639,13 @@ function colLocal(id,action,p){
   c.statut="collectee";c.collecte_at=now();audit("Colis collectés",c.numero+" — "+tot+" colis")}
  else if(action==="recevoir"){
   if(!can("admin","preparateur"))throw new Error("Accès refusé pour votre profil");if(c.statut!=="collectee")throw new Error("Cette collecte n'est pas arrivée au dépôt");
-  c.lignes.forEach(l=>{const n=Math.max(0,Math.floor(+((p.recus||{})[l.commande_id])));l.colis_recus=isNaN(n)?(l.colis_collectes||0):n;const o=cmd(l.commande_id);
-   if((l.colis_collectes||0)>0&&l.colis_recus>=l.colis_collectes&&o&&o.statut==="confirmee")setStatut(o,"preparation","Marchandise reçue — collecte "+c.numero)});
-  c.statut="recue";c.recue_at=now();c.recue_par_nom=ME.nom;audit("Collecte réceptionnée",c.numero)}
+  let inc=0;const incident=(cat,l,desc)=>{S.seq.inc++;S.incidents.push({id:uid("i"),ref:"INC-"+String(S.seq.inc).padStart(4,"0"),ts:now(),cat,commande_id:l.commande_id,par:who(),desc,statut:"ouvert",decision:""});audit("Incident ouvert automatiquement","INC-"+String(S.seq.inc).padStart(4,"0")+" — "+cat);inc++};
+  c.lignes.forEach(l=>{const n=Math.max(0,Math.floor(+((p.recus||{})[l.commande_id])));l.colis_recus=isNaN(n)?(l.colis_collectes||0):n;const o=cmd(l.commande_id),col=l.colis_collectes||0;
+   if(col>0&&l.colis_recus>=col&&o&&o.statut==="confirmee")setStatut(o,"preparation","Marchandise reçue — collecte "+c.numero);
+   if(col===0)incident("Colis manquant",l,`Collecte ${c.numero} chez ${colVend(c)} : la commande ${l.numero} n'a pas été remise par le fournisseur (0 colis collecté). La commande reste « confirmée ».`);
+   else if(l.colis_recus<col)incident("Colis manquant",l,`Collecte ${c.numero} chez ${colVend(c)} : ${l.colis_recus} colis reçu(s) au dépôt sur ${col} collecté(s) pour la commande ${l.numero} (${col-l.colis_recus} manquant(s)). La commande reste « confirmée ».`);
+   else if(l.colis_recus>col)incident("Écart de colis",l,`Collecte ${c.numero} chez ${colVend(c)} : ${l.colis_recus} colis reçu(s) au dépôt pour ${col} collecté(s) sur la commande ${l.numero} (${l.colis_recus-col} en trop).`)});
+  c.statut="recue";c.recue_at=now();c.recue_par_nom=ME.nom;audit("Collecte réceptionnée",c.numero);return{ok:true,incidents:inc}}
  else if(action==="reaffecter"){
   if(!can("admin","superviseur"))throw new Error("Accès refusé pour votre profil");if(!["planifiee","acceptee","echouee"].includes(c.statut))throw new Error("Cette collecte ne peut plus être réaffectée");
   const l=liv(p.livreur);if(!l)throw new Error("Livreur introuvable");if(S.config.dossier_obligatoire&&!dossierEtat(l).ok)throw new Error("Dossier du livreur incomplet ou expiré : mission impossible");
@@ -664,7 +668,7 @@ function colPlanLocal(a){
 async function colDo(id,action,p,msg){
  try{let r;if(CL.on){r=await CL.rpc("collecte_action",{p_collecte:id,p_action:action,p:p||{}});await refresh()}else{r=colLocal(id,action,p);save()}
   if(r&&r.ok===false){render();toast(r.erreur+(r.essais_restants!=null?" ("+r.essais_restants+" essai(s) restant(s))":""),"err");return false}
-  if(msg)toast(msg,"ok");render();return true}catch(e){toast(fixErr(e),"err");return false}}
+  if(msg)toast(msg+(r&&r.incidents?" — "+r.incidents+" incident(s) ouvert(s) pour écart (page Incidents)":""),r&&r.incidents?"err":"ok");render();return true}catch(e){toast(fixErr(e),"err");return false}}
 function colPlanForm(vid){
  const v=vendOf(vid),L=aCollecter(vid),a=v.adresse_collecte||{};if(!L.length)return toast("Aucune commande confirmée à collecter chez ce vendeur","err");
  modal("Planifier la collecte — "+v.nom,`<div class="sm mu">ANGEL'S GROUP passe chercher les colis chez le vendeur. Le vendeur voit un code à 4 chiffres dans son espace : il ne le remet au livreur que contre les colis.</div>
@@ -681,9 +685,11 @@ function colPlanForm(vid){
 function colRecvForm(id){
  const c=S.collectes.find(x=>x.id===id);
  modal("Réceptionner la collecte "+c.numero,`<div class="pill">Collecte chez <b>${esc(colVend(c))}</b> par ${esc(colLiv(c))}. Comptez les colis déposés au dépôt : les commandes complètes passent en préparation.</div>
- ${tbl(["Commande","Articles","Colis collectés","Colis reçus"],c.lignes.map(l=>`<tr><td><b>${esc(l.numero)}</b></td><td class="sm">${esc(l.resume||"")}</td><td>${l.colis_collectes||0}</td><td><input class="cnt" type="number" min="0" name="r_${l.commande_id}" value="${l.colis_collectes||0}"></td></tr>`))}
- <div class="sm mu">Un compte inférieur à celui du livreur laisse la commande « confirmée » : traitez l'écart avec le vendeur.</div>`,
- {wide:true,label:"Valider la réception",cls:"ok",onSubmit:d=>{const recus={};c.lignes.forEach(l=>recus[l.commande_id]=Math.max(0,Math.floor(+d["r_"+l.commande_id])||0));return colDo(id,"recevoir",{recus},"Collecte réceptionnée")}})}
+ ${tbl(["Commande","Articles","Colis collectés","Colis reçus","Écart"],c.lignes.map(l=>`<tr><td><b>${esc(l.numero)}</b></td><td class="sm">${esc(l.resume||"")}</td><td>${l.colis_collectes||0}</td><td><input class="cnt" type="number" min="0" name="r_${l.commande_id}" data-col="${l.colis_collectes||0}" value="${l.colis_collectes||0}"></td><td class="recc" data-r="${l.commande_id}">—</td></tr>`))}
+ <div class="sm mu">Chaque écart ouvre automatiquement un <b>incident</b> (colis manquant, commande non remise, colis en trop). Une commande avec manquant reste « confirmée » : traitez l'écart avec le vendeur.</div>`,
+ {wide:true,label:"Valider la réception",cls:"ok",onSubmit:d=>{const recus={};c.lignes.forEach(l=>recus[l.commande_id]=Math.max(0,Math.floor(+d["r_"+l.commande_id])||0));return colDo(id,"recevoir",{recus},"Collecte réceptionnée")}});
+ const hint=()=>document.querySelectorAll("input[data-col]").forEach(i=>{const e=+i.value-(+i.dataset.col),t=document.querySelector(`[data-r="${i.name.slice(2)}"]`);if(t)t.innerHTML=(+i.dataset.col===0)?'<span class="ecn">non remise → incident</span>':e===0?"—":`<span class="${e<0?"ecn":"ecp"}">${e>0?"+":""}${e} → incident</span>`});
+ $("#mf").addEventListener("input",hint);hint()}
 function colCollectForm(id){
  const c=S.collectes.find(x=>x.id===id);
  modal("Colis collectés — "+c.numero,`<div class="pill">Chez <b>${esc(colVend(c))}</b></div>
