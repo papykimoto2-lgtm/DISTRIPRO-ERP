@@ -84,3 +84,6 @@ Migration `20261018000000_paiement_vendeur.sql` : `commandes.paye_vendeur` (part
 
 ### Incidents automatiques à la réception d'une collecte
 Migration `20261019000000_collecte_incidents.sql` : `app.incident_auto` et nouvelle version de `collecte_action` — à la réception, un incident est ouvert pour chaque commande en écart (« Colis manquant » : manquants ou commande non remise ; « Écart de colis » : colis en trop) ; la réponse indique le nombre d'incidents ouverts. Tests : `tests/test_collectes.sql` (section 8), `tests/banc/e2e_collecte_incidents*.js`.
+
+### Versements des livreurs (comptant / Mobile Money)
+Migration `20261020000000_versements_mobile_money.sql` : `fonds.ref` (référence de transaction, unique par société, insensible à la casse) et `fonds.direct` (payé directement sur le compte d'ANGEL'S GROUP : non détenu par le livreur, exclu de son solde), `app.est_mobile`, `livraison_action` (Mobile Money : référence obligatoire, 4 caractères minimum, jamais réutilisable), `reversement` (+ `p_ref`), `solde_livreurs`, table `versements_declares` et fonctions `declarer_versement` (livreur ; Mobile Money seulement ; montant ≤ restant dû − déclarations en attente) et `traiter_versement` (caissier / administrateur : valider crée le reversement avec la référence, rejeter exige un motif). Tests : `tests/test_versements.sql`, `tests/banc/e2e_versements*.js`.
