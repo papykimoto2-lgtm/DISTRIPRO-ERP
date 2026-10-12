@@ -445,7 +445,7 @@ function render(){render0();carteHook();refreshInstall();if(window.__shareReady)
 function render0(){
  if(!S&&!CL.on)return;
  if(!ME){$("#app").innerHTML=loginHTML();return}
- if(ME.role==="livreur"){$("#app").innerHTML=livreurHTML();syncGPS();initMaps();return}
+ if(ME.role==="livreur"){$("#app").innerHTML=livreurHTML();syncGPS();initMaps();setTimeout(offreCheck,0);return}
  const nav=NAV.filter(n=>n.r.includes(ME.role));if(!nav.find(n=>n.v===view))view=nav[0].v;
  $("#app").innerHTML=`<div class="shell"><aside><div class="brand">ANGEL'S GROUP<small>ERP · Livraisons V1</small></div>${clkBox()}${nav.map((n,k)=>(k===0||nav[k-1].g!==n.g?`<div class="gt">${n.g}</div>`:"")+`<a class="${n.v===view?"on":""}" data-act="nav" data-id="${n.v}">${n.i} ${n.l}</a>`).join("")}<div class="who">👤 ${esc(ME.nom)}<br><span style="opacity:.7">${ROLES[ME.role]}</span><div class="themes">${THEMES.map(([k,t,c])=>`<button type="button" class="${themeCur()===k?"on":""}" style="background:${c}" data-act="theme" data-id="${k}" title="${t}" aria-label="${t}"></button>`).join("")}</div><div style="margin:8px 0 2px">${instBox()}</div><a data-act="logout" style="padding:6px 0">⏏ Déconnexion</a></div></aside><main>${VIEWS[view]()}</main></div>`}
 
@@ -1360,12 +1360,12 @@ function sendPosNow(){if(!navigator.geolocation)return toast("Géolocalisation n
  navigator.geolocation.getCurrentPosition(p=>{if(CL.on){const lv=livreurOf(ME),en=S.livraisons.some(x=>x.livreur_id===lv.id&&x.statut==="en_cours");if(!en)return toast("Le suivi GPS n'est actif que pendant une course en cours","err");pushPos(p,true);toast("Position envoyée","ok");render();return}pushPos(p,true);toast("Position envoyée","ok");render()},e=>toast("Position impossible : "+e.message,"err"),{enableHighAccuracy:true,timeout:15000})}
 function livreurHTML(){
  const lv=livreurOf(ME);if(!lv)return`<div class="lv"><div class="card">Compte livreur non rattaché. <a data-act="logout" href="#">Déconnexion</a></div></div>`;
- const mine=S.livraisons.filter(l=>l.livreur_id===lv.id),todo=mine.filter(isActive).sort((a,b)=>(a.tournee_id?0:1)-(b.tournee_id?0:1)||(a.ordre||99)-(b.ordre||99)||new Date(a.affectee_at)-new Date(b.affectee_at)),today=new Date().toDateString(),done=mine.filter(l=>["livree","echouee"].includes(l.statut)&&new Date(l.fin_at).toDateString()===today);
+ const mine=S.livraisons.filter(l=>l.livreur_id===lv.id),todo=(()=>{const L=mine.filter(isActive),P=propositionItineraire(lv),rk={};P.stops.forEach(s=>rk[s.l.id]=s.n);return L.sort((a,b)=>(a.statut==="affectee"?0:1)-(b.statut==="affectee"?0:1)||((rk[a.id]||999)-(rk[b.id]||999))||(a.tournee_id?0:1)-(b.tournee_id?0:1)||(a.ordre||99)-(b.ordre||99)||new Date(a.affectee_at)-new Date(b.affectee_at))})(),today=new Date().toDateString(),done=mine.filter(l=>["livree","echouee"].includes(l.statut)&&new Date(l.fin_at).toDateString()===today);
  const aEnc=todo.reduce((a,l)=>a+l.montant_attendu,0),det=soldeLiv(lv.id);
  return`<div class="lv"><div class="lvh"><div class="between"><div><b style="font-size:17px">${esc(lv.nom)}</b><br><span style="opacity:.75" class="sm">${lv.statut==="disponible"?"🟢 Disponible":"🔴 Indisponible"}</span><br><span class="sm" style="opacity:.85">${avisMoy(lv.id).n?"★ "+avisMoy(lv.id).m.toFixed(1)+" · "+avisMoy(lv.id).n+" avis clients":"Pas encore d'avis"}</span><br><span class="sm clk" data-k="td" style="opacity:.75">${new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})+" · "+clkT().slice(0,5)}</span></div><div class="flex"><button class="btn sm ghost" data-act="myStatus">Statut</button><button class="btn sm ghost" data-act="logout">⏏</button></div></div><div style="margin-top:8px">${instBox()}</div>
  <div class="grid" style="margin-top:10px;grid-template-columns:repeat(3,1fr)"><div><div style="font-size:20px;font-weight:800">${todo.length}</div><div class="sm" style="opacity:.75">à faire</div></div><div><div style="font-size:20px;font-weight:800">${done.filter(l=>l.statut==="livree").length}</div><div class="sm" style="opacity:.75">livrées aujourd'hui</div></div><div><div style="font-size:20px;font-weight:800">${fcfa(det)}</div><div class="sm" style="opacity:.75">à reverser</div></div></div></div>
- ${aEnc?`<div class="al warn">Montants à encaisser sur vos courses : <b>${fcfa(aEnc)}</b></div>`:""}
- ${versementPanel(lv)}
+ ${offreBandeau()}${aEnc?`<div class="al warn">Montants à encaisser sur vos courses : <b>${fcfa(aEnc)}</b></div>`:""}
+ ${carteItineraire(lv)}${versementPanel(lv)}
  ${(S.collectes||[]).filter(c=>c.livreur_id===lv.id&&["planifiee","acceptee","en_route"].includes(c.statut)).map(collecteCard).join("")}
  ${todo.length?todo.map(missionCard).join(""):'<div class="card mu">Aucune mission pour le moment. Les nouvelles missions apparaissent ici.</div>'}
  <div class="flex" style="margin:8px 0"><button class="btn ghost" data-act="myInc">⚠ Signaler un incident</button><button class="btn ghost" data-act="sendPos">📍 Envoyer ma position</button></div>
@@ -1379,7 +1379,8 @@ function missionCard(l){
  if(l.statut==="acceptee")btn=!l.collecte_at?`<div class="row"><button class="btn" data-act="lPrise" data-id="${l.id}">📦 Colis pris en charge</button></div><div class="row"><button class="btn er" data-act="lRef" data-id="${l.id}">✖ Impossible</button></div>`:`<div class="row"><button class="btn ok" data-act="lGo" data-id="${l.id}">🏍 Démarrer la course</button></div>`;
  if(l.statut==="en_cours")btn=`<div class="row"><button class="btn ok" data-act="lConf" data-id="${l.id}">✔ Confirmer la livraison</button></div><div class="row"><button class="btn wa" data-act="lFail" data-id="${l.id}">Livraison impossible</button></div>`;
  const tr=l.tournee_id&&byId(S.tournees,l.tournee_id);
- return`<div class="mc ${c.priorite==="urgente"?"urg":""}">${tr?`<div class="sm" style="color:var(--b)"><b>🔁 Tournée ${tr.numero} · arrêt ${l.ordre}/${stopsOf(tr).length}</b></div>`:""}<div class="between"><b>${c.numero}</b><span>${c.priorite==="urgente"?badge("URGENT","er")+" ":""}${lb(l)}</span></div>
+ const rg=(()=>{const lv=livreurOf(ME);if(!lv||!["acceptee","en_cours"].includes(l.statut))return"";const P=propositionItineraire(lv);if(P.stops.length<2)return"";const s=P.stops.find(x=>x.l.id===l.id);return s?`<div class="sm" style="color:var(--b)"><b>🧭 Arrêt n°${s.n} sur ${P.stops.length} de votre itinéraire${s.leg!=null?" · "+kmTxt(s.leg)+" depuis l'arrêt précédent":""}</b></div>`:""})();
+ return`<div class="mc ${c.priorite==="urgente"?"urg":""}">${rg}${tr?`<div class="sm" style="color:var(--b)"><b>🔁 Tournée ${tr.numero} · arrêt ${l.ordre}/${stopsOf(tr).length}</b></div>`:""}<div class="between"><b>${c.numero}</b><span>${c.priorite==="urgente"?badge("URGENT","er")+" ":""}${lb(l)}</span></div>
  <div><b>${esc(cl.nom)}</b><br>📍 ${esc(a.zone)} · ${esc(a.quartier||"")}<br><span class="mu">${esc(a.repere||"")}</span>${a.instructions?`<br><i>${esc(a.instructions)}</i>`:""}${nPhotos(c)?`<br><button class="btn sm ghost" data-act="cmdPhotos" data-id="${c.id}">📷 Photos des articles (${nPhotos(c)})</button>`:""}</div>
  ${a.gps?`<div class="flex sm">${geoBadge(a)}<button class="btn sm ghost" data-act="lMap" data-id="${l.id}">${ui.mapOpen&&ui.mapOpen[l.id]?"Masquer la carte":"🗺 Voir sur la carte"}</button></div>${ui.mapOpen&&ui.mapOpen[l.id]?`<div class="mapbox" id="map_${l.id}" style="height:260px;border-radius:10px;overflow:hidden;background:#e8ebf5"></div>`:""}`:`<div class="al warn sm" style="margin:0">Adresse non géolocalisée. <a href="#" data-act="lAskGeo" data-id="${l.id}">Demander sa position au client</a></div>`}
  <div class="between pill"><span>${c.lignes.reduce((s,x)=>s+x.qte,0)} article(s)${l.nb_colis?" · "+l.nb_colis+" colis":""}</span><span class="amt">${l.montant_attendu>0?fcfa(l.montant_attendu):"Déjà payé"}</span></div>${c.paye_vendeur>0?`<div class="sm mu">💳 ${fcfa(c.paye_vendeur)} déjà payés chez le fournisseur — vous n'encaissez que le reste.</div>`:""}
@@ -1406,6 +1407,7 @@ const ACT={
 
  waOpen:()=>waOpen(),
  pTab:id=>{ui.ptab=id;document.querySelectorAll("#ptabs button").forEach(b=>b.classList.toggle("on",b.dataset.id===id));document.querySelectorAll("[data-pt]").forEach(d=>d.classList.toggle("hide",d.dataset.pt!==id))},
+ sonOn:()=>activerSonnerie(),itiPos:async()=>{const p=await localiser();if(!p)return toast("Position indisponible : autorisez la localisation","err");render()},
  cxNew:()=>modal("Nouvelle caisse",`<label>Nom de la caisse *<input name="n" required maxlength="60" placeholder="Caisse principale"></label><label>Compte<select name="c"><option value="571">571 — Caisse principale</option><option value="572">572 — Petite caisse / caisse annexe</option></select></label>`,{label:"Créer la caisse",cls:"ok",onSubmit:d=>cxRun(()=>cxCreerLocal(d.n,d.c),"caisse_creer",{p_nom:d.n,p_compte:d.c},"Caisse créée")}),
  cxOuvrir:id=>cxOuvrirForm(cxCaisse(id)),cxBon:id=>{const[i,t]=id.split("|");cxBonForm(cxCaisse(i),t)},cxCloture:id=>cxClotureForm(cxCaisse(id)),
  cxMotif:t=>{const f=document.querySelector('#mf input[name=motif]');if(f){f.value=t;f.focus()}},
@@ -2470,6 +2472,115 @@ function cxBrPrint(){const d=cxBrData();if(!d)return toast("Rien à imprimer","e
  ${d.s&&d.s.statut==="cloturee"?`<p>Fond réel compté à la clôture : <b>${fcfa(d.s.fond_cloture_reel)}</b> · Écart : <b>${fcfa(d.s.ecart)}</b>${d.s.justification?" ("+esc(d.s.justification)+")":""}</p>`:""}
  <table style="width:100%;margin-top:30px"><tr><td style="width:50%">Caissier(ère) : ${esc(d.s?d.s.ouverte_par_nom||"":"")}<br><br><br></td><td>Vérifié par (direction / comptabilité)<br><br><br></td></tr></table></div>`)}
 function cxBrCsv(){const d=cxBrData();if(!d)return toast("Rien à exporter","err");csvDown("brouillard-caisse",["Heure","N° bon","Motif","Entrée","Sortie","Solde"],[["","","Fond d'ouverture","","",d.open]].concat(d.rows.map(r=>[r.h,r.n,r.mo,r.e||"",r.s||"",r.r])))}
+
+/* ---------- Course proposée au livreur (sonnerie + fiche de l'offre) et itinéraire optimisé ----------
+   Quand une commande lui est affectée, le téléphone du livreur sonne et vibre, une notification s'affiche, et une fiche plein écran
+   montre le gain de la course, la zone, la distance depuis sa position et le détour sur son parcours. Il accepte ou décline avec un motif.
+   Il peut cumuler plusieurs courses : le logiciel calcule l'ordre de passage le plus court et ouvre l'itinéraire dans Maps. */
+const OFFRE_DELAI=60,KM_ROUTE=1.35,KMH_MOTO=18,MIN_ARRET=8;
+const OFFRE_MOTIFS=["Trop loin","Moto en panne ou plus de carburant","Déjà trop chargé","Je suis en pause / indisponible","Zone que je ne connais pas","Autre motif…"];
+const roadKm=(a,b)=>haversine(a,b)*KM_ROUTE;
+function gainTheorique(lv,c){if(!lv||!c)return 0;const f=c.frais||0;if(estExterne(lv))return Math.max(0,f-Math.round(f*(+lv.commission_pct||0)/100));const r=lv.remu||S.config.remu;return Math.round((r.type==="pct"?0:+r.fixe||0)+(r.type==="fixe"?0:(+r.pct||0)/100*f))}
+function posLivreur(lv){const p=S.pos&&S.pos[lv.id];if(p&&Date.now()-new Date(p.ts)<30*60000)return{lat:p.lat,lng:p.lng};return ui.moi&&Date.now()-ui.moi.t<15*60000?{lat:ui.moi.lat,lng:ui.moi.lng}:null}
+function localiser(){return new Promise(ok=>{if(!navigator.geolocation)return ok(null);navigator.geolocation.getCurrentPosition(p=>{ui.moi={lat:p.coords.latitude,lng:p.coords.longitude,t:Date.now()};ok(ui.moi)},()=>ok(null),{enableHighAccuracy:true,timeout:6000,maximumAge:60000})})}
+/* Ordre le plus court : plus proche voisin puis amélioration 2-opt (chemin ouvert) ; sans point de départ on essaie chaque arrêt comme premier. */
+function cheminKm(start,arr){let d=0,p=start;arr.forEach(x=>{if(p)d+=haversine(p,x.gps);p=x.gps});return d}
+function ameliorer(start,seq){let out=seq.slice(),imp=true,g=0;while(imp&&g++<60){imp=false;for(let i=0;i<out.length-1;i++)for(let j=i+1;j<out.length;j++){const c=out.slice(0,i).concat(out.slice(i,j+1).reverse(),out.slice(j+1));if(cheminKm(start,c)<cheminKm(start,out)-1e-9){out=c;imp=true}}}return out}
+/* Jusqu'à 9 arrêts : ordre exactement optimal (programmation dynamique de Held-Karp) ; au-delà : plus proche voisin + 2-opt. */
+function exact(start,items){const n=items.length,D=(i,j)=>haversine(items[i].gps,items[j].gps),INF=1e18,N=1<<n,dp=Array.from({length:N},()=>new Array(n).fill(INF)),pr=Array.from({length:N},()=>new Array(n).fill(-1));
+ for(let i=0;i<n;i++)dp[1<<i][i]=start?haversine(start,items[i].gps):0;
+ for(let m=1;m<N;m++)for(let l=0;l<n;l++){const c=dp[m][l];if(c>=INF||!(m>>l&1))continue;for(let k=0;k<n;k++){if(m>>k&1)continue;const nm=m|1<<k,v=c+D(l,k);if(v<dp[nm][k]){dp[nm][k]=v;pr[nm][k]=l}}}
+ let bl=0,bv=INF;for(let l=0;l<n;l++)if(dp[N-1][l]<bv){bv=dp[N-1][l];bl=l}
+ const out=[];let m=N-1,l=bl;while(l>=0){out.push(items[l]);const p=pr[m][l];m&=~(1<<l);l=p}return out.reverse()}
+function plusCourt(start,items){if(items.length<2)return items.slice();if(items.length<=9)return exact(start,items);
+ const nn=(s,rest)=>{const out=[];let cur=s;rest=rest.slice();while(rest.length){let bi=0,bd=1e9;rest.forEach((x,i)=>{const d=haversine(cur,x.gps);if(d<bd){bd=d;bi=i}});const x=rest.splice(bi,1)[0];out.push(x);cur=x.gps}return out};
+ if(start)return ameliorer(start,nn(start,items));
+ let best=null,bl=1e18;items.forEach((f,i)=>{const rest=items.filter((_,k)=>k!==i),seq=ameliorer(f.gps,[f].concat(nn(f.gps,rest)).slice(1));const full=[f].concat(seq),L=cheminKm(null,full);if(L<bl){bl=L;best=full}});return best}
+function propositionItineraire(lv,extra){
+ const act=S.livraisons.filter(l=>l.livreur_id===lv.id&&["acceptee","en_cours"].includes(l.statut)).concat(extra||[]);
+ const items=act.map(l=>({l,c:cmd(l.commande_id),gps:cmd(l.commande_id).adr.gps})),av=items.filter(x=>x.gps),sans=items.filter(x=>!x.gps).sort((a,b)=>(a.c.adr.zone||"").localeCompare(b.c.adr.zone||""));
+ const start=posLivreur(lv),ord=plusCourt(start,av),seq=ord.concat(sans);let cur=start,cumKm=0,cumMin=0;
+ const stops=seq.map((x,i)=>{let leg=null;if(x.gps&&cur){leg=roadKm(cur,x.gps);cumKm+=leg;cumMin+=leg/KMH_MOTO*60}cumMin+=MIN_ARRET;if(x.gps)cur=x.gps;return{l:x.l,c:x.c,n:i+1,leg,km:cumKm,min:cumMin,gps:x.gps}});
+ return{stops,km:cumKm,min:cumMin,start,sans:sans.length,naif:(()=>{const o=av.slice().sort((a,b)=>new Date(a.l.affectee_at)-new Date(b.l.affectee_at));let c=start,k=0;o.forEach(x=>{if(c)k+=roadKm(c,x.gps);c=x.gps});return k})()}}
+const hhmm=min=>new Date(Date.now()+min*60000).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+const kmTxt=k=>k<1?Math.round(k*1000)+" m":k.toFixed(1).replace(".",",")+" km";
+function lienMaps(P){const pts=P.stops.map(s=>s.gps?`${s.gps.lat},${s.gps.lng}`:encodeURIComponent([s.c.adr.quartier,s.c.adr.zone,"Abidjan"].filter(Boolean).join(", ")));if(!pts.length)return"";
+ const dest=pts[pts.length-1],way=pts.slice(0,-1).slice(0,9).join("|");return"https://www.google.com/maps/dir/?api=1"+(P.start?`&origin=${P.start.lat},${P.start.lng}`:"")+`&destination=${dest}`+(way?`&waypoints=${way}`:"")+"&travelmode=two-wheeler"}
+function carteItineraire(lv){const P=propositionItineraire(lv);if(!P.stops.length)return"";if(P.stops.length<2)return"";
+ const gain=P.naif&&P.naif>P.km+0.05?` · <b style="color:var(--ok)">${kmTxt(P.naif-P.km)} de moins</b> que l'ordre d'arrivée des commandes`:"";
+ return`<div class="card" style="margin:0 0 12px;border:2px solid var(--b)"><div class="between"><b>🧭 Itinéraire conseillé</b><span class="sm mu">${P.stops.length} arrêts</span></div>
+ <div class="sm" style="margin:4px 0 8px">≈ <b>${kmTxt(P.km)}</b> · ≈ <b>${fmtDur(P.min)}</b> (arrêts compris) · fin vers <b>${hhmm(P.min)}</b>${gain}</div>
+ ${P.stops.map(s=>`<div class="between sm" style="padding:5px 0;border-top:1px solid var(--bd)"><span><b style="display:inline-block;min-width:22px;text-align:center;background:var(--b);color:#fff;border-radius:50%">${s.n}</b> ${esc(cli(s.c.client_id).nom)} · ${esc(s.c.adr.quartier||s.c.adr.zone)}</span><span class="mu">${s.leg!=null?kmTxt(s.leg)+" · ":""}~${hhmm(s.min)}</span></div>`).join("")}
+ ${P.sans?`<div class="sm mu" style="margin-top:6px">${P.sans} adresse(s) sans position GPS : placées à la fin, groupées par zone.</div>`:""}${P.start?"":`<div class="sm mu" style="margin-top:6px">Position inconnue : l'ordre est calculé entre les arrêts. Touchez « 📍 Ma position » pour partir de là où vous êtes.</div>`}
+ <div class="row" style="margin-top:8px"><a class="btn ok" style="text-align:center;text-decoration:none" target="_blank" rel="noopener" href="${esc(lienMaps(P))}">🧭 Ouvrir dans Maps</a><button class="btn ghost" data-act="itiPos">📍 Ma position</button></div></div>`}
+/* Sonnerie, vibration, notification */
+const SON={ctx:null,iv:null,vib:null,stop:null};
+function sonUnlock(){try{if(!SON.ctx){const AC=window.AudioContext||window.webkitAudioContext;if(AC)SON.ctx=new AC()}if(SON.ctx&&SON.ctx.state==="suspended")SON.ctx.resume()}catch(e){}}
+document.addEventListener("pointerdown",sonUnlock,{passive:true});
+function bip(f,t0,d){const c=SON.ctx;if(!c)return;const o=c.createOscillator(),g=c.createGain();o.type="sine";o.frequency.value=f;o.connect(g);g.connect(c.destination);const t=c.currentTime+t0;g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.5,t+0.02);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.start(t);o.stop(t+d+0.05)}
+function sonnerie(on){clearInterval(SON.iv);clearInterval(SON.vib);clearTimeout(SON.stop);SON.iv=SON.vib=SON.stop=null;
+ if(!on){try{navigator.vibrate&&navigator.vibrate(0)}catch(e){}return}
+ sonUnlock();const ring=()=>{bip(880,0,.18);bip(660,.22,.18);bip(880,.6,.18);bip(660,.82,.18);window.__ring=(window.__ring||0)+1};ring();SON.iv=setInterval(ring,1800);
+ const vib=()=>{try{navigator.vibrate&&navigator.vibrate([500,200,500,200,900])}catch(e){}};vib();SON.vib=setInterval(vib,3200);SON.stop=setTimeout(()=>sonnerie(false),OFFRE_DELAI*1000)}
+function notifOffre(titre,corps,tag){if(!("Notification" in window)||Notification.permission!=="granted")return;
+ const o={body:corps,tag,renotify:true,requireInteraction:true,vibrate:[400,150,400,150,800],icon:"icons/icon-192.png",badge:"icons/icon-192.png"};
+ try{if(navigator.serviceWorker&&navigator.serviceWorker.ready&&/^https?:$/.test(location.protocol))navigator.serviceWorker.ready.then(r=>r.showNotification(titre,o)).catch(()=>new Notification(titre,o));else new Notification(titre,o)}catch(e){}}
+function activerSonnerie(){sonUnlock();try{localStorage.setItem("angels_son","1")}catch(e){}
+ const fin=()=>{bip(880,0,.18);bip(660,.22,.18);toast("Sonnerie activée : votre téléphone sonnera à chaque nouvelle course","ok");render()};
+ if("Notification" in window&&Notification.permission==="default")Notification.requestPermission().then(fin,fin);else fin()}
+const sonActif=()=>{try{return localStorage.getItem("angels_son")==="1"}catch(e){return false}};
+/* Fiche de l'offre */
+function offresVues(lv){try{return JSON.parse(localStorage.getItem("angels_offres_"+lv.id)||"[]")}catch(e){return[]}}
+function offreMarquer(lv,id){try{const v=offresVues(lv).concat(id).slice(-80);localStorage.setItem("angels_offres_"+lv.id,JSON.stringify(v))}catch(e){}}
+async function offreCheck(){
+ if(window.__SANS_OFFRE||!ME||ME.role!=="livreur"||!S||!S.livraisons)return;   // __SANS_OFFRE : réservé aux tests automatisés
+const lv=livreurOf(ME);if(!lv)return;
+ if(document.getElementById("offre")){return}
+ const vues=offresVues(lv),pend=S.livraisons.filter(l=>l.livreur_id===lv.id&&l.statut==="affectee"&&!vues.includes(l.id)).sort((a,b)=>new Date(a.affectee_at)-new Date(b.affectee_at));
+ if(!pend.length)return;const l=pend[0];offreMarquer(lv,l.id);
+ let me=posLivreur(lv);if(!me)me=await localiser();
+ offreAfficher(l,lv,me,pend.length-1)}
+function offreAfficher(l,lv,me,reste){
+ const c=cmd(l.commande_id),a=c.adr,cl=cli(c.client_id),z=zone(a.zone),gain=gainTheorique(lv,c);
+ let dist="",detour="";
+ if(a.gps&&me){const k=roadKm(me,a.gps);dist=`<b>${kmTxt(k)}</b> · environ <b>${Math.max(1,Math.round(k/KMH_MOTO*60))} min</b> depuis votre position`}
+ else dist=a.gps?'<span class="mu">Position inconnue : activez la localisation pour voir la distance</span>':`<span class="mu">Adresse sans position GPS · délai habituel de la zone : ${z?z.delai_min:"—"} min</span>`;
+ const autres=S.livraisons.filter(x=>x.livreur_id===lv.id&&["acceptee","en_cours"].includes(x.statut));
+ if(autres.length&&a.gps){const P0=propositionItineraire(lv),P1=propositionItineraire(lv,[l]);if(P0.stops.length&&P1.km>=P0.km)detour=`<div class="pill" style="margin-top:8px">🧭 Sur votre itinéraire actuel (${autres.length} course(s) en cours) : <b>+${kmTxt(P1.km-P0.km)}</b> de détour</div>`}
+ const nb=c.lignes.reduce((s,x)=>s+x.qte,0);
+ const el=document.createElement("div");el.id="offre";el.dataset.lid=l.id;
+ el.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(10,20,40,.88);display:flex;align-items:flex-end;justify-content:center;padding:0";
+ el.innerHTML=`<div style="background:var(--card,#fff);color:var(--tx,#111);width:100%;max-width:520px;border-radius:22px 22px 0 0;padding:18px 18px 22px;box-shadow:0 -10px 40px rgba(0,0,0,.4)">
+  <div class="between"><b style="font-size:18px">🏍️ Nouvelle course !</b><span id="offre_t" class="badge wa">${OFFRE_DELAI} s</span></div>
+  ${reste>0?`<div class="sm mu">+ ${reste} autre(s) course(s) en attente</div>`:""}${c.priorite==="urgente"?`<div style="margin-top:6px">${badge("URGENT","er")}</div>`:""}
+  <div style="text-align:center;margin:12px 0 4px"><div class="sm mu">Vous gagnez</div><div style="font-size:38px;font-weight:900;color:var(--ok)">${gain>0?fcfa(gain):"—"}</div><div class="sm mu">frais de livraison ${fcfa(c.frais||0)}${estExterne(lv)?` · commission d'ANGEL'S ${lv.commission_pct||0} % déduite`:""}</div></div>
+  <div class="pill" style="margin-top:6px">📍 <b>${esc(a.zone)}</b>${a.quartier?" · "+esc(a.quartier):""}${a.repere?`<br><span class="mu">${esc(a.repere)}</span>`:""}</div>
+  <div class="pill" style="margin-top:8px">🛣️ ${dist}</div>${detour}
+  <div class="between pill" style="margin-top:8px"><span>${nb} article(s) · ${esc(cl.nom)}</span><b>${l.montant_attendu>0?"À encaisser "+fcfa(l.montant_attendu):"Déjà payé"}</b></div>
+  <div id="offre_b" style="display:flex;gap:10px;margin-top:14px"><button class="btn ok" style="flex:1;font-size:18px;padding:14px" id="offre_ok">✔ ACCEPTER</button><button class="btn er" style="flex:1;font-size:18px;padding:14px" id="offre_no">✖ DÉCLINER</button></div></div>`;
+ document.body.appendChild(el);
+ sonnerie(true);if(sonActif()||("Notification" in window&&Notification.permission==="granted"))notifOffre("🏍️ Nouvelle course : "+(gain>0?"+"+fcfa(gain):""),`${a.zone}${a.quartier?" · "+a.quartier:""} · ${a.gps&&me?kmTxt(roadKm(me,a.gps)):"distance inconnue"}`,"offre-"+l.id);
+ const t0=Date.now(),tm=setInterval(()=>{const s=Math.max(0,OFFRE_DELAI-Math.floor((Date.now()-t0)/1000)),e=document.getElementById("offre_t");if(!e){clearInterval(tm);return}e.textContent=s>0?s+" s":"Sonnerie arrêtée";if(s<=0){clearInterval(tm);sonnerie(false)}},500);
+ el.querySelector("#offre_ok").onclick=()=>offreRepondre(l.id,"accepter");
+ el.querySelector("#offre_no").onclick=()=>{sonnerie(false);const b=el.querySelector("#offre_b");
+  b.outerHTML=`<div id="offre_b"><div class="sm" style="margin:8px 0 6px"><b>Pourquoi déclinez-vous ?</b> (le superviseur en sera informé)</div>${OFFRE_MOTIFS.map(m=>`<button class="btn ghost" style="width:100%;margin-bottom:6px;text-align:left" data-m="${esc(m)}">${esc(m)}</button>`).join("")}<input id="offre_au" class="hide" placeholder="Précisez votre motif" maxlength="120"><button class="btn ghost sm" id="offre_back" style="margin-top:4px">← Retour</button></div>`;
+  el.querySelectorAll("[data-m]").forEach(x=>x.onclick=()=>{let m=x.dataset.m;const au=el.querySelector("#offre_au");if(/^Autre/.test(m)){if(au.classList.contains("hide")){au.classList.remove("hide");au.focus();return}m=au.value.trim();if(m.length<3)return toast("Précisez votre motif","err")}offreRepondre(l.id,"refuser",m)});
+  el.querySelector("#offre_back").onclick=()=>{el.remove();try{localStorage.setItem("angels_offres_"+lv.id,JSON.stringify(offresVues(lv).filter(x=>x!==l.id)))}catch(e){}offreCheck()}}}
+async function offreRepondre(id,action,motif){
+ sonnerie(false);const el=document.getElementById("offre");if(el)el.remove();
+ try{if(CL.on){const r=await CL.rpc("livraison_action",{p_lid:id,p_action:action,p:action==="refuser"?{motif}:{}});if(r&&r.ok===false)throw new Error(r.erreur||"Refusé");await refresh()}
+  else{const l=byId(S.livraisons,id);if(action==="accepter"){if(!accepter(l))throw new Error("Cette course n'est plus disponible")}else if(!refuser(l,motif))throw new Error("Cette course n'est plus disponible");save()}
+  toast(action==="accepter"?"Course acceptée : bonne route !":"Course déclinée : le superviseur a été informé",action==="accepter"?"ok":"");render()}
+ catch(e){toast(fixErr(e),"err");try{if(CL.on)await refresh()}catch(x){}render()}
+ setTimeout(offreCheck,300)}
+function offreBandeau(){if(sonActif()&&(!("Notification" in window)||Notification.permission!=="default"))return"";
+ return`<div class="al warn" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span>🔔 Activez la sonnerie pour que votre téléphone sonne à chaque nouvelle course.</span><button class="btn sm ok" data-act="sonOn">Activer la sonnerie</button></div>`}
+/* Détection des nouvelles courses : toutes les 10 s en ligne, et à chaque affichage */
+let _offP=false;
+setInterval(async()=>{if(!ME||ME.role!=="livreur"||document.getElementById("offre")||_offP||document.hidden&&false)return;
+ if(!CL.on)return offreCheck();
+ _offP=true;try{const lv=livreurOf(ME);if(!lv)return;const vues=offresVues(lv),r=await CL.sb.from("livraisons").select("id").eq("livreur_id",lv.id).eq("statut","affectee");   // requête légère : le rechargement complet n'a lieu que s'il y a une nouvelle offre
+  if(!r.error&&(r.data||[]).some(x=>!vues.includes(x.id))){await refresh();await offreCheck()}}catch(e){}finally{_offP=false}},6000);
 
 /* ---------- Démarrage ---------- */
 const _ptok=(location.hash.match(/^#portail=(.+)$/)||[])[1],_stok=(location.hash.match(/^#suivi=(.+)$/)||[])[1],_ctok=(location.hash.match(/^#commande=(.+)$/)||[])[1];

@@ -2,7 +2,7 @@ const { chromium } = require('/opt/node-tools/node_modules/playwright');
 let ok=0,ko=0;const chk=(n,c,x)=>{c?ok++:ko++;console.log((c?'✔':'✘')+' '+n+(c?'':'  → '+(typeof x==='string'?x:JSON.stringify(x))))};
 (async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});
 const ctx=await b.newContext({viewport:{width:1280,height:950}});const pg=await ctx.newPage();const er=[];pg.on('pageerror',e=>er.push(e.message));pg.on('dialog',d=>d.accept());
-await pg.goto('file:///home/user/DISTRIPRO-ERP/index.html');await pg.waitForTimeout(300);
+await pg.addInitScript(()=>{window.__SANS_OFFRE=true});await pg.goto('file:///home/user/DISTRIPRO-ERP/index.html');await pg.waitForTimeout(300);
 const as=async i=>{await pg.evaluate(()=>{ME=null;sessionStorage.clear();render()});await pg.click(`.pcard >> nth=${i}`);await pg.waitForTimeout(300)};
 const T=()=>pg.innerText('body');
 await as(0);chk('alerte « à collecter » au tableau de bord',/à collecter chez le vendeur/.test(await T()));

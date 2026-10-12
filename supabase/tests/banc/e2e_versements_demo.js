@@ -2,7 +2,7 @@ const { chromium } = require('/opt/node-tools/node_modules/playwright');
 let ok=0,ko=0;const chk=(n,c,x)=>{c?ok++:ko++;console.log((c?'✔':'✘')+' '+n+(c?'':'  → '+(typeof x==='string'?x:JSON.stringify(x))))};
 (async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});
 const ctx=await b.newContext({viewport:{width:1280,height:950},acceptDownloads:true});const pg=await ctx.newPage();const er=[];pg.on('pageerror',e=>er.push(e.message));pg.on('dialog',d=>d.accept());
-await pg.goto('file:///home/user/DISTRIPRO-ERP/index.html');await pg.waitForTimeout(300);
+await pg.addInitScript(()=>{window.__SANS_OFFRE=true});await pg.goto('file:///home/user/DISTRIPRO-ERP/index.html');await pg.waitForTimeout(300);
 const T=()=>pg.innerText('body');
 // deux livraisons prêtes pour le livreur 1 (en cours)
 const L=await pg.evaluate(()=>{ME=S.users.find(u=>u.role==='admin');const lv=S.livreurs[0];const out=[];

@@ -1,5 +1,5 @@
 /* Service worker : l'application s'ouvre même sans réseau (coque en cache) ; les données (Supabase) ne sont jamais mises en cache. */
-const V = "angels-v2";
+const V = "angels-v3";
 const COQUE = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png", "icons/apple-touch-icon.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(V).then(c => c.addAll(COQUE)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
@@ -28,4 +28,17 @@ self.addEventListener("fetch", e => {
     return;
   }
   e.respondWith(caches.match(r).then(m => m || fetch(r).then(res => { const cp = res.clone(); caches.open(V).then(c => c.put(r, cp)); return res; })));
+});
+
+/* Alertes de course : un clic sur la notification rouvre l'application ; « push » est prêt pour l'envoi serveur (Web Push) */
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(cs => {
+    for (const c of cs) { if ("focus" in c) return c.focus(); }
+    return self.clients.openWindow("./");
+  }));
+});
+self.addEventListener("push", e => {
+  let d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { titre: "Nouvelle course", corps: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(d.titre || "🏍️ Nouvelle course", { body: d.corps || "Ouvrez l'application pour répondre.", tag: d.tag || "course", renotify: true, requireInteraction: true, vibrate: [400, 150, 400, 150, 800], icon: "icons/icon-192.png", badge: "icons/icon-192.png" }));
 });
