@@ -110,7 +110,8 @@ aside .themes{margin:6px 0 2px}aside .themes button{width:18px;height:18px;borde
 .mkd{font-size:24px;line-height:24px;transform:translate(-50%,-100%);filter:drop-shadow(0 1px 2px #0006)}
 .lgd{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--mu);margin:6px 0 10px}.lgd span{display:inline-flex;gap:5px;align-items:center}
 @media(max-width:900px){.cm{grid-template-columns:1fr}.cmside{max-height:260px;min-height:0}#cm_map{height:60vh}}
-.cnt{width:90px;text-align:right}.ecp{color:var(--ok);font-weight:700}.ecn{color:var(--er);font-weight:700}tr.tot td{font-weight:800;background:var(--bbg)}
+.cnt{width:90px;text-align:right}.wph{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}.wthumb{position:relative;display:inline-flex;flex-direction:column;gap:3px}.wthumb img{width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--bd)}.wthumb button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:0;background:var(--er);color:#fff;font-size:11px;cursor:pointer;line-height:20px;padding:0}
+.wl{width:100%;border-collapse:collapse;margin:8px 0}.wl th{text-align:left;font-size:12px;color:var(--mu)}.wl td{padding:3px 4px}.wl input{width:100%}.wl .wtot{white-space:nowrap}.wcard{border-left:4px solid var(--b)}.ecp{color:var(--ok);font-weight:700}.ecn{color:var(--er);font-weight:700}tr.tot td{font-weight:800;background:var(--bbg)}
 .kpi{transition:.15s}.kpi:hover{box-shadow:0 4px 14px rgba(15,37,112,.12);transform:translateY(-1px)}
 @media(max-width:760px){.login.hero{grid-template-columns:1fr}.hero-l{padding:28px 22px;min-height:0}.hero-l h1{font-size:23px}.hero-r{padding:22px 16px}.pcards{grid-template-columns:1fr}}
 
@@ -194,6 +195,7 @@ const NAV=[
 /* ---------- Accès aux données ---------- */
 const byId=(a,id)=>a.find(x=>x.id===id);
 const cmd=id=>byId(S.commandes,id),cli=id=>byId(S.clients,id),liv=id=>byId(S.livreurs,id),prod=id=>byId(S.produits,id),moto=id=>byId(S.motos,id),usr=id=>byId(S.users,id);
+const nPhotos=c=>c.photos?c.photos.length:(c.nphotos||0);
 const lname=l=>l.produit_id?((prod(l.produit_id)||{}).nom||"?"):(l.desig||"Article");
 const vend=()=>ME&&S.vendeurs.find(v=>v.user_id===ME.id);
 const vendOf=id=>S.vendeurs.find(v=>v.id===id);
@@ -399,7 +401,7 @@ function loginHTMLLocal(){
  <div style="margin-top:14px"><div class="mu sm" style="margin-bottom:6px">Couleur du logiciel</div>${themeDots()}</div><div style="margin-top:14px">${instBox()}</div><div class="mu sm" style="margin-top:12px">💡 Ouvrez un second onglet pour jouer le livreur pendant que vous supervisez.</div></div></div>`}
 
 /* ---------- Gabarit ---------- */
-function render(){render0();carteHook();refreshInstall()}
+function render(){render0();carteHook();refreshInstall();if(window.__shareReady)window.__shareReady.then(()=>{shareHook()});else shareHook()}
 function render0(){
  if(!S&&!CL.on)return;
  if(!ME){$("#app").innerHTML=loginHTML();return}
@@ -412,6 +414,17 @@ function render0(){
    ============================================================ */
 const VIEWS={};
 
+/* Partage depuis WhatsApp (Web Share Target) : le service worker garde le message partagé, la page l'ouvre dans la saisie WhatsApp */
+async function sharePending(){
+ try{const c=await caches.open("angels-partage"),m=await c.match(new URL("__partage/meta",location.href));if(!m)return;const meta=await m.json(),files=[];
+  for(const k of meta.files||[]){const r=await c.match(new URL("__partage/"+k,location.href));if(r){const b=await r.blob();files.push(new File([b],decodeURIComponent(r.headers.get("X-Name")||k),{type:b.type}))}}
+  await c.delete(new URL("__partage/meta",location.href));for(const k of meta.files||[])await c.delete(new URL("__partage/"+k,location.href));
+  window.__share={text:meta.text||"",files}}catch(e){}
+ try{history.replaceState({},"",location.pathname+location.hash)}catch(e){}}
+function shareHook(){const sh=window.__share;if(!sh||!ME)return;window.__share=null;
+ if(ME.role!=="vendeur"){toast("Le partage depuis WhatsApp est réservé aux comptes vendeurs partenaires","err");return}
+ setTimeout(()=>waOpen(sh),60)}
+if(/[?&]partage=1/.test(location.search))window.__shareReady=sharePending();
 /* ---------- Application installable (PWA) ---------- */
 let IPROMPT=null;
 const isStandalone=()=>(window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone===true;
@@ -426,6 +439,176 @@ function refreshInstall(){
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();IPROMPT=e;refreshInstall()});
 window.addEventListener("appinstalled",()=>{IPROMPT=null;refreshInstall();try{toast("Application installée ✔","ok")}catch(e){}});
 if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+/* ---------- Saisie depuis WhatsApp : l'application remplit les commandes à partir des messages ---------- */
+const noAcc=t=>String(t||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+const RX_TEL=/(?:\+|00)?\s*(?:225)?[\s.\-()]*(0[1-9](?:[\s.\-]?\d{2}){4})(?!\d)/g;
+const QUARTIERS={cocody:"Cocody",angre:"Cocody",riviera:"Cocody","deux plateaux":"Cocody","2 plateaux":"Cocody",danga:"Cocody",blockhauss:"Cocody",attoban:"Cocody",
+ yopougon:"Yopougon",yop:"Yopougon",niangon:"Yopougon",sicogi:"Yopougon",selmer:"Yopougon",maroc:"Yopougon",banco:"Yopougon",
+ abobo:"Abobo",anonkoua:"Abobo",avocatier:"Abobo",sagbe:"Abobo",pk18:"Abobo",marcory:"Marcory",bietry:"Marcory","zone 4":"Marcory",anoumabo:"Marcory",
+ treichville:"Treichville",arras:"Treichville",koumassi:"Koumassi",remblais:"Koumassi",soweto:"Koumassi","port-bouet":"Port-Bouët","port bouet":"Port-Bouët",vridi:"Port-Bouët",gonzagueville:"Port-Bouët",plateau:"Plateau"};
+function waTel(t){RX_TEL.lastIndex=0;const m=RX_TEL.exec(String(t||""));return m?m[1].replace(/\D/g,""):""}
+function waNum(s,suf){s=String(s).trim();let v;if(/^\d{1,3}(?:[ . ]\d{3})+$/.test(s))v=+s.replace(/[ . ]/g,"");else v=+s.replace(/\s/g,"").replace(",",".");if(/^k/i.test((suf||"").trim()))v*=1000;return v}
+const WA_FILL=/\b(?:article|produit|designation|commande|je veux|je prends|je voudrais|je souhaite|j'aimerais|svp|stp|s'il vous plait|bonjour|bonsoir|salut|merci|prix|pu|qte|quantite|unite|total|au total|les \d+|chacune?|piece|c'est|cest|ca fait|ça fait|il fait|parfait|ok|d'accord|daccord|plus|avec|livraison|ensemble)\b/gi;
+function waItem(line){
+ let t=String(line).replace(/[’‘]/g,"'").replace(RX_TEL," ").replace(/https?:\S+/g," "),keep=[];
+ t=t.replace(/(\d+(?:[.,]\d+)?)\s?(kg|g|l|cl|ml|litres?|m|cm|mm|go|gb|tb|mah|w|pouces?|ans?|mois|%)(?![a-zA-Z])/gi,m=>{keep.push(m);return"§"+(keep.length-1)+"§"});
+ const toks=[...t.matchAll(/(\d{1,3}(?:[ . ]\d{3})+|\d+(?:[.,]\d+)?)(\s?(?:k|f|fcfa|cfa|frs?|francs?)(?![a-zA-Z]))?/gi)].map(m=>({idx:m.index,len:m[0].length,val:waNum(m[1],m[2]),suf:!!m[2],raw:m[0]}));
+ if(!toks.length)return null;
+ const units="pieces?|pcs?|pc|sacs?|cartons?|paires?|unites?|boites?|packs?|bouteilles?|lots?|douzaines?";
+ const info=toks.map(k=>{const b=noAcc(t.slice(0,k.idx)).trimEnd(),a=noAcc(t.slice(k.idx+k.len)).trimStart();
+  const qty=!k.suf&&Number.isInteger(k.val)&&k.val>=1&&k.val<=999&&(/[x×*]$/.test(b)||/^(x|×)(?![a-z])/.test(a)||new RegExp("^("+units+")\\b").test(a)||/(?:qte|quantite)\s*[:=]?\s*$/.test(b)||(b===""&&k.val<=99&&/^[a-z§]/.test(a)));
+  const price=k.suf||k.val>=100||/(?:prix|pu|p\.u|montant|tarif)\s*[:=]?\s*$/.test(b);return Object.assign(k,{qty,price:price&&!(qty&&!k.suf&&k.val<100)})});
+ let pr=info.find(k=>k.suf&&k.price)||[...info].reverse().find(k=>k.price&&!k.qty)||[...info].reverse().find(k=>k.price);
+ const ql=info.find(k=>k.qty&&k!==pr);if(!pr&&!ql)return null;
+ let qte=ql?ql.val:1,pu=pr?pr.val:NaN;
+ if(pr&&ql&&/\b(total|les \d+|au total|ensemble)\b/.test(noAcc(line))&&qte>0)pu=Math.round(pu/qte);
+ let d=t;[pr,ql].filter(Boolean).sort((a,b)=>b.idx-a.idx).forEach(k=>{d=d.slice(0,k.idx)+" "+d.slice(k.idx+k.len)});
+ d=d.replace(/§(\d+)§/g,(m,i)=>keep[+i]).replace(WA_FILL," ").replace(/\b(x|×)\b/gi," ").replace(/[=:–@*|]/g," ").replace(/\b(?:fcfa|cfa|frs?|francs?)\b/gi," ");
+ d=d.replace(/\s+/g," ").replace(/^[\s,.\-–—]+|[\s,.\-–—]+$/g,"");d=d.replace(/\bcomme (?:sur |dans )?(?:la |l'|cette |ce )?(?:photo|image|capture|video|vidéo|ci[- ]dessus|ci[- ]dessous)\b.*$/i,"");for(let i=0;i<4;i++)d=d.replace(/^(?:à|a|de|du|des|d'|l'|la|le|les|un|une|pour|x|×)(?:\s+|(?<=')(?=\S))|\s+(?:à|a|de|du|des|d'|pour|x|×)$/gi,"").replace(/^[\s,.\-–—]+|[\s,.\-–—]+$/g,"").trim();
+ if(!d||d.length<2||/^\d+$/.test(d))return null;
+ return{desig:d.charAt(0).toUpperCase()+d.slice(1),qte,pu,qx:!!ql,px:!!pr}}
+const WA_LBL=[["nom",/^(?:nom(?: du client| complet)?|client(?:e)?|nom et prenoms?|destinataire)\s*[:\-]\s*(.+)$/],["tel",/^(?:tel|telephone|contact|whatsapp|numero|num)\b\s*[:\-]?\s*(.+)$/],["zone",/^(?:zone|commune|ville)\s*[:\-]\s*(.+)$/],
+ ["quartier",/^(?:quartier|lieu(?: de livraison)?|adresse|livraison(?: a)?|localisation|endroit)\s*[:\-]\s*(.+)$/],["repere",/^(?:repere|point de repere|pres de|a cote de|devant|derriere|face(?: a)?)\b\s*[:\-]?\s*(.+)$/],
+ ["pay",/^(?:paiement|payement|reglement)\s*[:\-]\s*(.+)$/],["note",/^(?:note|remarque|observation|obs|info)\s*[:\-]\s*(.+)$/],["article",/^(?:article|produit|designation|commande)\s*[:\-]\s*(.+)$/],["prix",/^(?:prix|pu|montant|tarif)\s*[:\-]\s*(.+)$/],["qte",/^(?:qte|quantite|nombre)\s*[:\-]\s*(\d+)/]];
+const WA_HELLO=/^(?:bonjour|bonsoir|bsr|bjr|salut|slt|merci|ok|oui|non|d'accord|daccord|svp|stp|cc|coucou|c'est|voici|voila|je|j'|il|elle)\b/;
+function waSim(a,b){const tk=x=>noAcc(x).split(/[^a-z0-9]+/).filter(w=>w.length>=4).map(w=>w.replace(/s$/,""));const A=tk(a),B=tk(b);return A.some(w=>B.includes(w))}
+function waMerge(L){const out=[];L.forEach(it=>{const k=out.findIndex(o=>waSim(o.desig,it.desig));if(k<0)return out.push(Object.assign({},it));const o=out[k];if(it.qx)o.qte=it.qte;if(it.px&&!isNaN(it.pu))o.pu=it.pu;if(it.desig.split(/\s+/).length>o.desig.split(/\s+/).length&&!isNaN(it.pu))o.desig=it.desig;o.qx=o.qx||it.qx;o.px=o.px||it.px});return out}
+function waWarn(d){d.warn=[];if(!d.tel)d.warn.push("téléphone manquant");if(!d.lignes.length)d.warn.push("aucun article détecté");if(d.lignes.some(l=>isNaN(l.pu)))d.warn.push("prix à saisir");if(!d.zone)d.warn.push("zone à choisir");if(!d.quartier&&!d.repere)d.warn.push("quartier à préciser");return d}
+function waParseBlock(text,zones,merge){
+ const d={nom:"",tel:"",zone:"",quartier:"",repere:"",lignes:[],pay:"livraison",obs:"",photos:[],src:text,warn:[]};let pend=null;const obs=[];
+ String(text).split(/\n+/).map(s=>s.replace(/[‎‏‪-‮]/g,"").trim()).filter(Boolean).forEach(line=>{
+  let lead=0;{const mm=/^(?:svp|stp|merci|ok|oui|alors|donc|bon|voila|voici|et)[\s,:\-!]+/i.exec(noAcc(line));if(mm&&noAcc(line).length>mm[0].length)lead=mm[0].length}
+  const n=noAcc(line).slice(lead);if(lead)line=line.slice(lead);let done=false;
+  for(const[k,rx]of WA_LBL){const m=rx.exec(n);if(!m)continue;const val=line.slice(m.index+m[0].length-m[1].length).trim();done=true;
+   if(k==="nom")d.nom=d.nom||val.replace(RX_TEL," ").trim();else if(k==="tel")d.tel=d.tel||waTel(val);else if(k==="zone")d.zone=d.zone||val;else if(k==="quartier")d.quartier=d.quartier||val;else if(k==="repere")d.repere=d.repere||val;
+   else if(k==="pay")d.pay=/paye|recu|regle/.test(noAcc(val))&&!/livraison|cash/.test(noAcc(val))?"paye":"livraison";else if(k==="note")obs.push(val);
+   else if(k==="article"){const it=waItem(val)||{desig:val,qte:1,pu:NaN};pend=it;d.lignes.push(it)}
+   else if(k==="prix"){const mm=val.match(/(\d[\d ]*[.,]?\d*)\s*(k)?/i);if(mm&&pend)pend.pu=waNum(mm[1].trim(),mm[2])}
+   else if(k==="qte"){if(pend)pend.qte=+m[1]}
+   break}
+  if(done)return;
+  const tel=waTel(line);if(tel&&!d.tel)d.tel=tel;
+  const it=waItem(line);if(it){d.lignes.push(it);pend=it;return}
+  if(tel&&noAcc(line.replace(RX_TEL," ")).replace(/[^a-z]/g,"").length<2)return;
+  if(!d.nom&&!tel&&line.split(/\s+/).length<=4&&!/\d/.test(line)&&!WA_HELLO.test(n)&&/^[A-Za-zÀ-ÿ' .-]+$/.test(line)&&!Object.keys(QUARTIERS).some(q=>n.includes(q)))return void(d.nom=line);
+  if(tel&&!d.nom){const rest=line.replace(RX_TEL," ").replace(/\s+/g," ").trim();if(rest&&rest.split(/\s+/).length<=5&&!/\d/.test(rest)&&!WA_HELLO.test(noAcc(rest))){d.nom=rest;return}}
+  obs.push(line)});
+ const all=noAcc(text),zn=(zones||[]).map(z=>z.nom);
+ if(d.zone){const z=zn.find(x=>noAcc(x)===noAcc(d.zone))||zn.find(x=>noAcc(d.zone).includes(noAcc(x)));if(z)d.zone=z;else{if(!d.quartier)d.quartier=d.zone;d.zone=""}}
+ if(!d.zone){for(const z of zn)if(all.includes(noAcc(z))){d.zone=z;break}}
+ if(!d.zone||!d.quartier){for(const[q,z]of Object.entries(QUARTIERS)){const re=new RegExp("(^|[^a-z0-9])"+q.replace(/-/g,"[- ]")+"([^a-z0-9]|$)");if(!re.test(all))continue;
+   if(!d.zone&&zn.includes(z))d.zone=z;
+   if(!d.quartier){const ln=String(text).split(/\n/).find(l=>re.test(noAcc(l))&&!waItem(l));if(ln){const nl=noAcc(ln),p=nl.search(re),k=p+(/^[^a-z0-9]/.test(nl.charAt(p))?1:0);d.quartier=ln.slice(k).replace(RX_TEL," ").replace(/[,;(].*$/,"").replace(/\s+/g," ").trim().slice(0,50)}}
+   break}}
+ if(/\b(deja paye|paye d'avance|paiement recu|deja regle|virement recu)\b/.test(all))d.pay="paye";
+ d.obs=merge?"":obs.join(" · ").slice(0,200);if(merge)d.lignes=waMerge(d.lignes);
+ return waWarn(d)}
+function waBlocks(text){
+ const raw=String(text).replace(/\r/g,"").split(/\n\s*\n+|\n\s*[-=_*]{3,}\s*\n/).map(s=>s.trim()).filter(Boolean);if(raw.length<=1)return raw;
+ const groups=[];raw.forEach(b=>{const hasTel=!!waTel(b),g=groups[groups.length-1];if(g&&!(hasTel&&g.tel))g.t.push(b),g.tel=g.tel||hasTel;else groups.push({t:[b],tel:hasTel})});
+ if(!groups.some(g=>g.tel)&&raw.every(b=>b.split("\n").some(l=>waItem(l))))return raw;
+ return groups.map(g=>g.t.join("\n"))}
+function waParseExport(text){
+ const rx=/^[‎‏]?\[?(\d{1,2}[\/.]\d{1,2}[\/.]\d{2,4}),?\s+(\d{1,2}[:.]\d{2}(?::\d{2})?(?:\s?[APap]\.?[Mm]\.?)?)\]?\s*(?:-\s*)?([^:\n]+?):\s([\s\S]*)$/;
+ const msgs=[];let hits=0;String(text).replace(/\r/g,"").split("\n").forEach(l=>{const m=rx.exec(l);if(m){hits++;msgs.push({ts:m[1]+" "+m[2],from:m[3].replace(/[‎‏‪-‮]/g,"").trim(),text:m[4]})}else if(msgs.length&&!/^[‎‏]?\[?\d{1,2}[\/.]\d{1,2}[\/.]\d{2,4}/.test(l))msgs[msgs.length-1].text+="\n"+l});
+ return hits>=2?msgs:null}
+function waAttach(txt){const out=[];String(txt).replace(/([\w\-. ()]+\.(?:jpe?g|png|webp))\s*\((?:fichier joint|file attached)\)|<(?:attached|joint)\s*:\s*([^>]+\.(?:jpe?g|png|webp))>/gi,(m,a,b)=>{out.push((a||b).trim())});return out}
+const waAttachClean=t=>String(t).replace(/([\w\-. ()]+\.(?:jpe?g|png|webp))\s*\((?:fichier joint|file attached)\)|<(?:attached|joint)\s*:\s*[^>]+>|<(?:m[eé]dias? omis|media omitted)>|image absente|‎?image omitted/gi," ").trim();
+function waDraftsFromText(text,files,split){
+ const zones=S.config.zones,exp=waParseExport(text);let drafts=[];
+ if(exp){const people=[...new Set(exp.map(m=>m.from))],isPh=n=>!!waTel(n)&&noAcc(n).replace(/[^a-z]/g,"").length===0;
+  const one=!split&&people.length<=2,cust=one?[people.find(isPh)||people.find(p=>!/^(vous|you|moi|me)$/i.test(p))||people[0]]:people.filter(p=>!/^(vous|you|moi|me)$/i.test(p));
+  cust.forEach(c=>{const mine=one?exp:exp.filter(m=>m.from===c),t=mine.map(m=>waAttachClean(m.text)).filter(Boolean).join("\n"),d=waParseBlock(t,zones,true);
+   if(isPh(c)&&!d.tel)d.tel=waTel(c);if(!isPh(c))d.nom=c;d.client=c;d.src=t;waWarn(d);
+   mine.filter(m=>one||m.from===c).forEach(m=>waAttach(m.text).forEach(n=>{if(files&&files[n])d._imgs=(d._imgs||[]).concat([files[n]])}));if(d.tel||d.lignes.length||d._imgs)drafts.push(d)})}
+ else drafts=waBlocks(text).map(b=>waParseBlock(b,zones));
+ return drafts}
+async function unzipBuf(buf){
+ const dv=new DataView(buf),u8=new Uint8Array(buf);let e=u8.length-22;while(e>=0&&dv.getUint32(e,true)!==0x06054b50)e--;if(e<0)throw new Error("Archive illisible");
+ const n=dv.getUint16(e+10,true);let p=dv.getUint32(e+16,true);const out={};
+ for(let i=0;i<n;i++){if(dv.getUint32(p,true)!==0x02014b50)break;const meth=dv.getUint16(p+10,true),cs=dv.getUint32(p+20,true),nl=dv.getUint16(p+28,true),el=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true),off=dv.getUint32(p+42,true),name=new TextDecoder().decode(u8.subarray(p+46,p+46+nl));p+=46+nl+el+cl;
+  const lnl=dv.getUint16(off+26,true),lel=dv.getUint16(off+28,true),st=off+30+lnl+lel,raw=u8.subarray(st,st+cs);
+  if(meth===0)out[name]=raw;else{const ds=new DecompressionStream("deflate-raw"),w=ds.writable.getWriter();w.write(raw);w.close();out[name]=new Uint8Array(await new Response(ds.readable).arrayBuffer())}}
+ return out}
+const WA={drafts:[],imgs:[],stage:1,mid:0};
+const waOn=()=>WA.mid&&ui.mid===WA.mid&&document.getElementById("wa_body");
+async function waAddImages(files){let n=0;for(const f of files){if(!/^image\//.test(f.type))continue;try{WA.imgs.push(await imgResize(f,900,.72,250000));n++}catch(e){toast(e.message,"err")}}return n}
+async function waLoadFile(f){
+ const name=f.name.toLowerCase();
+ if(/\.zip$/.test(name)){const z=await unzipBuf(await f.arrayBuffer()),txtName=Object.keys(z).find(k=>/\.txt$/i.test(k));if(!txtName)throw new Error("Aucun fichier de discussion (.txt) dans l'archive");
+  const files={};for(const k of Object.keys(z)){if(/\.(jpe?g|png|webp)$/i.test(k)){try{files[k.split("/").pop()]=await imgResize(new Blob([z[k]],{type:"image/"+(/png$/i.test(k)?"png":"jpeg")}),900,.72,250000)}catch(e){}}}
+  return{text:new TextDecoder().decode(z[txtName]),files}}
+ if(/^image\//.test(f.type)){await waAddImages([f]);return{text:"",files:null}}
+ return{text:await f.text(),files:null}}
+function waLine(i,j,l){return`<tr><td><input data-wl="${i}:${j}:desig" value="${esc(l.desig)}" placeholder="Article"></td><td><input class="cnt" type="number" min="1" data-wl="${i}:${j}:qte" value="${l.qte}" style="width:62px"></td><td><input class="cnt" type="number" min="0" data-wl="${i}:${j}:pu" value="${isNaN(l.pu)?"":l.pu}" placeholder="prix" style="width:96px"></td><td class="wtot" data-wt="${i}:${j}">${isNaN(l.pu)?"—":fcfa(l.qte*l.pu)}</td><td><button type="button" class="btn sm ghost" data-act="waDelLine" data-id="${i}:${j}">✕</button></td></tr>`}
+function waCard(d,i){
+ const v=vend(),fr=(zone(d.zone)||{}).frais||0,pr=d.lignes.reduce((t,l)=>t+(isNaN(l.pu)?0:l.qte*l.pu),0),w=d.tel?String(d.tel).replace(/\D/g,""):"";
+ return`<div class="card wcard" style="margin:0 0 12px"><div class="between"><b>Commande ${i+1}</b>${d.warn.length?`<span>${d.warn.map(x=>badge(x,"wa")).join(" ")}</span>`:badge("Prêt","ok")}<button type="button" class="btn sm er" data-act="waDelDraft" data-id="${i}">Retirer</button></div>
+ <div class="g3"><label>Nom du client<input data-wf="${i}:nom" value="${esc(d.nom)}"></label><label>Téléphone / WhatsApp<input data-wf="${i}:tel" value="${esc(d.tel)}" inputmode="tel"></label><label>Zone<select data-wf="${i}:zone"><option value="">— choisir —</option>${opts(S.config.zones.map(z=>z.nom),d.zone)}</select></label></div>
+ <div class="g2"><label>Quartier / adresse<input data-wf="${i}:quartier" value="${esc(d.quartier)}"></label><label>Point de repère<input data-wf="${i}:repere" value="${esc(d.repere)}"></label></div>
+ <table class="wl"><tr><th>Article</th><th>Qté</th><th>Prix unit.</th><th>Total</th><th></th></tr>${d.lignes.map((l,j)=>waLine(i,j,l)).join("")}</table>
+ <button type="button" class="btn sm ghost" data-act="waAddLine" data-id="${i}">+ Ajouter un article</button>
+ <div class="wph">${d.photos.map((p,k)=>`<span class="wthumb"><img alt="" src="${p}"><button type="button" data-act="waDelPhoto" data-id="${i}:${k}" title="Retirer">✕</button></span>`).join("")}<label class="btn sm ghost" style="margin:0;cursor:pointer">🖼 Ajouter une capture<input type="file" accept="image/*" multiple data-wph="${i}" style="display:none"></label></div>
+ <div class="g2"><label>Paiement<select data-wf="${i}:pay"><option value="livraison" ${d.pay==="livraison"?"selected":""}>Le client paie tout à la livraison</option><option value="paye" ${d.pay==="paye"?"selected":""}>Articles déjà payés au vendeur</option></select></label><label>Note pour le livreur<input data-wf="${i}:obs" value="${esc(d.obs)}"></label></div>
+ <div class="sm" id="wsum_${i}">Articles <b>${fcfa(pr)}</b> + livraison <b>${fcfa(fr)}</b> = <b>${fcfa(pr+fr)}</b>${w?` · <a target="_blank" rel="noopener" href="https://wa.me/${w.length===10?"225"+w:w}">💬 ouvrir la discussion</a>`:""}</div>
+ <details class="sm mu"><summary>Message d'origine</summary><pre style="white-space:pre-wrap;margin:6px 0 0">${esc(d.src)}</pre></details></div>`}
+function waRender(){
+ const el=document.getElementById("wa_body");if(!el)return;const btn=document.querySelector("#mf .mf .btn:not(.ghost)");
+ if(WA.stage===1){
+  el.innerHTML=`<div class="sm mu">Collez la conversation ou le message du client, importez l'export WhatsApp, ajoutez les captures d'écran de l'article. L'application remplit les commandes ; vous vérifiez puis vous créez.</div>
+  <textarea id="wa_txt" rows="9" placeholder="Exemple :&#10;Mme Konan 07 07 12 34 56&#10;Angré 8e tranche, près de la pharmacie&#10;2 robes wax 15000&#10;1 sac à main 12000" style="margin-top:8px">${esc(WA.raw||"")}</textarea>
+  <div class="flex" style="margin:8px 0"><button type="button" class="btn ghost" data-act="waPaste">📋 Coller depuis le presse-papiers</button><label class="btn ghost" style="margin:0;cursor:pointer">📁 Export WhatsApp (.txt ou .zip)<input type="file" id="wa_file" accept=".txt,.zip,text/plain,application/zip" style="display:none"></label><label class="btn ghost" style="margin:0;cursor:pointer">🖼 Captures d'écran<input type="file" id="wa_img" accept="image/*" multiple style="display:none"></label></div>
+  <div class="wph">${WA.imgs.map((p,k)=>`<span class="wthumb"><img alt="" src="${p}"><button type="button" data-act="waDelImg" data-id="${k}" title="Retirer">✕</button></span>`).join("")}</div>
+  <div class="sm mu">Astuces : sur téléphone, partagez directement depuis WhatsApp vers l'application installée. Sur ordinateur, vous pouvez coller une capture d'écran avec Ctrl+V. Plusieurs clients à la suite ? Séparez-les par une ligne vide.</div>`;
+  if(btn)btn.textContent="Analyser le message";
+  $("#wa_txt").oninput=e=>{WA.raw=e.target.value};
+  $("#wa_file").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const r=await waLoadFile(f);if(r.text){WA.raw=(WA.raw?WA.raw+"\n\n":"")+r.text;WA.files=Object.assign(WA.files||{},r.files||{})}waRender();if(r.text)toast("Discussion importée : cliquez sur « Analyser »","ok")}catch(x){toast(fixErr(x),"err")}};
+  $("#wa_img").onchange=async e=>{await waAddImages([...e.target.files]);waRender()};return}
+ const un=WA.imgs.length;
+ el.innerHTML=`<div class="pill"><b>${WA.drafts.length}</b> commande(s) détectée(s) — vérifiez chaque fiche, corrigez si besoin, puis créez. <a href="#" data-act="waBack">← Modifier le message</a>${WA.exp?` · <a href="#" data-act="waSplit">${WA.split?"Regrouper en une seule commande":"Plusieurs clients dans cette discussion ? Une commande par personne"}</a>`:""}</div>
+ ${un?`<div class="card" style="margin:0 0 12px"><b>Captures non attribuées</b><div class="wph">${WA.imgs.map((p,k)=>`<span class="wthumb"><img alt="" src="${p}">${WA.drafts.length===1?"":`<select data-wass="${k}" style="width:auto;font-size:11px"><option value="">Attribuer à…</option>${WA.drafts.map((d,i)=>`<option value="${i}">${esc(d.nom||d.tel||"Commande "+(i+1))}</option>`).join("")}</select>`}</span>`).join("")}</div></div>`:""}
+ ${WA.drafts.map(waCard).join("")||'<div class="al warn">Aucune commande détectée. Revenez au message et vérifiez-le.</div>'}`;
+ if(btn)btn.textContent="Créer "+(WA.drafts.length>1?"les "+WA.drafts.length+" commandes":"la commande");
+ el.querySelectorAll("[data-wass]").forEach(s=>s.onchange=()=>{if(s.value==="")return;WA.drafts[+s.value].photos.push(WA.imgs.splice(+s.dataset.wass,1)[0]);waRender()});
+ el.querySelectorAll("[data-wph]").forEach(s=>s.onchange=async()=>{const i=+s.dataset.wph,before=WA.imgs.length;await waAddImages([...s.files]);WA.drafts[i].photos.push(...WA.imgs.splice(before));waRender()})}
+function waSum(i){const d=WA.drafts[i],fr=(zone(d.zone)||{}).frais||0,pr=d.lignes.reduce((t,l)=>t+(isNaN(l.pu)?0:l.qte*l.pu),0),e=document.getElementById("wsum_"+i);if(e){const a=e.querySelector("a");e.innerHTML=`Articles <b>${fcfa(pr)}</b> + livraison <b>${fcfa(fr)}</b> = <b>${fcfa(pr+fr)}</b>`+(a?" · "+a.outerHTML:"")}}
+document.addEventListener("input",e=>{if(!waOn())return;const t=e.target;
+ if(t.dataset.wf){const[i,f]=t.dataset.wf.split(":"),d=WA.drafts[+i];if(!d)return;d[f]=t.value;d.warn=d.warn.filter(x=>!(f==="zone"&&/zone/.test(x))&&!(f==="tel"&&/téléphone/.test(x))&&!(/quartier/.test(x)&&(f==="quartier"||f==="repere")&&t.value));if(f==="zone")waSum(+i)}
+ else if(t.dataset.wl){const[i,j,f]=t.dataset.wl.split(":"),l=WA.drafts[+i]&&WA.drafts[+i].lignes[+j];if(!l)return;l[f]=f==="desig"?t.value:(t.value===""?NaN:+t.value);const c=document.querySelector(`[data-wt="${i}:${j}"]`);if(c)c.textContent=isNaN(l.pu)?"—":fcfa(l.qte*l.pu);waSum(+i)}});
+document.addEventListener("change",e=>{if(waOn()&&e.target.dataset&&e.target.dataset.wf&&/:zone$|:pay$/.test(e.target.dataset.wf)){const i=+e.target.dataset.wf.split(":")[0];waSum(i)}});
+document.addEventListener("paste",async e=>{if(!waOn())return;const fs=[...(e.clipboardData&&e.clipboardData.files||[])].filter(f=>/^image\//.test(f.type));if(fs.length){e.preventDefault();await waAddImages(fs);if(WA.stage===1)waRender();else{waRender()}toast(fs.length+" capture(s) ajoutée(s)","ok")}});
+function waAnalyze(){
+ const t=(WA.raw||"").trim();if(!t&&!WA.imgs.length)return toast("Collez un message ou ajoutez une capture","err");
+ WA.exp=!!waParseExport(t);let dr=t?waDraftsFromText(t,WA.files,WA.split):[];
+ if(!dr.length&&WA.imgs.length){dr=[waParseBlock("",S.config.zones)];dr[0].warn=["à compléter à partir de la capture"]}
+ dr.forEach(d=>{if(d._imgs){d.photos.push(...d._imgs);delete d._imgs}});
+ if(dr.length===1&&WA.imgs.length){dr[0].photos.push(...WA.imgs);WA.imgs=[]}
+ WA.drafts=dr;WA.stage=2;waRender()}
+function waValid(d){const m=[];if(!(d.tel||d.nom.trim()))m.push("nom ou téléphone");if(!d.zone)m.push("zone");if(!(d.quartier.trim()||d.repere.trim()))m.push("quartier");
+ if(!d.lignes.length||d.lignes.some(l=>!l.desig.trim()||!(l.qte>0)||isNaN(l.pu)||l.pu<0))m.push("articles (désignation, quantité, prix)");return m}
+async function waCreate(){
+ if(WA.stage===1){waAnalyze();return false}
+ const v=vend();if(!v)return toast("Compte vendeur non rattaché","err"),false;let ok=0;const rest=[],errs=[];
+ for(const d of WA.drafts){const m=waValid(d);if(m.length){rest.push(d);errs.push((d.nom||d.tel||"Commande")+" : "+m.join(", "));continue}
+  const o={nom:d.nom.trim()||"Client WhatsApp "+d.tel,tel:d.tel||"",zone:d.zone,quartier:d.quartier.trim(),repere:d.repere.trim(),ins:"",lignes:d.lignes.map(l=>({desig:l.desig.trim(),qte:l.qte,pu:l.pu})),pay:d.pay,obs:d.obs};
+  try{
+   if(CL.on){const r=await CL.rpc("vendeur_deposer_commande",{p:{client:{nom:o.nom,tel:o.tel},adresse:{zone:o.zone,quartier:o.quartier,repere:o.repere,instructions:""},lignes:o.lignes,pay:o.pay,obs:o.obs}});for(const p of d.photos)await CL.rpc("ajouter_photo_commande",{p_commande:r.id,p_fichier:p})}
+   else{const c=creerCmdVendeur(v,o);if(d.photos.length)c.photos=d.photos.slice();audit("Saisie WhatsApp",c.numero)}
+   ok++}catch(e){rest.push(d);errs.push((d.nom||d.tel)+" : "+fixErr(e))}}
+ if(CL.on)await refresh().catch(()=>{});else save();
+ WA.drafts=rest;
+ if(rest.length){waRender();toast((ok?ok+" créée(s) — ":"")+errs.join(" | "),"err");render();return false}
+ toast(ok+" commande(s) déposée(s). ANGEL'S GROUP va les confirmer.","ok");render();return true}
+function waOpen(pre){
+ WA.drafts=[];WA.imgs=[];WA.stage=1;WA.split=false;WA.exp=false;WA.raw=(pre&&pre.text)||"";WA.files=null;
+ modal("💬 Saisie depuis WhatsApp",'<div id="wa_body"></div>',{wide:true,label:"Analyser le message",focus:false,onSubmit:waCreate});WA.mid=ui.mid;
+ if(pre&&pre.files&&pre.files.length)(async()=>{for(const f of pre.files){try{const r=await waLoadFile(f);if(r.text){WA.raw=(WA.raw?WA.raw+"\n\n":"")+r.text;WA.files=Object.assign(WA.files||{},r.files||{})}}catch(x){toast(fixErr(x),"err")}}if(waOn()&&WA.stage===1)waRender()})();
+ waRender()}
+/* Photos jointes aux commandes */
+async function photosOf(c){if(c.photos)return c.photos;if(!CL.on)return[];const rows=await CL.chk(CL.sb.from("commande_photos").select("id,fichier").eq("commande_id",c.id).order("id"));return rows.map(r=>r.fichier)}
+function photoGallery(c){photosOf(c).then(L=>{if(!L.length)return toast("Aucune photo sur cette commande","err");ui.ph=L;
+ modal("Photos — "+c.numero,`<div class="wph">${L.map((p,k)=>`<img alt="" src="${p}" data-act="photoZoom" data-id="${k}" style="max-width:48%;border-radius:8px;cursor:zoom-in">`).join("")}</div>`,{label:"Fermer",onSubmit:()=>true,focus:false})}).catch(e=>toast(fixErr(e),"err"))}
+
 /* ---------- Journal des mouvements, inventaire, états périodiques ---------- */
 const MVT_L={stock_initial:"Stock initial",entree:"Entrée",sortie_commande:"Sortie (commande)",annulation:"Annulation (retour au stock)",retour_stock:"Retour en stock",ajustement:"Ajustement",inventaire:"Inventaire"};
 const MVT_K={stock_initial:"ok",entree:"ok",sortie_commande:"er",annulation:"ok",retour_stock:"ok",ajustement:"wa",inventaire:"wa"};
@@ -720,6 +903,7 @@ function cmdDetail(id){
   if(can("admin","commercial","caissier","superviseur")&&paye(c)>0)b.push(`<button class="btn ghost" data-act="docRecu" data-id="${c.id}">🧾 Reçu de paiement</button>`);
   if(fac&&can("admin","commercial","caissier"))b.push(`<button class="btn ghost" data-act="docAvoir" data-id="${fac.id}">↩ Avoir</button>`);
   if(can("admin","superviseur","commercial","preparateur","caissier")&&["prete","affectee","en_cours","livree","echouee","retour_cours","retour_recu"].includes(c.statut))b.push(`<button class="btn ghost" data-act="printBL" data-id="${c.id}">🖨 Bon de livraison${docsOf(c.id,"bl")[0]?" "+docsOf(c.id,"bl")[0].numero:""}</button>`)}
+ if(nPhotos(c))b.push(`<button class="btn ghost" data-act="cmdPhotos" data-id="${c.id}">📷 Photos jointes (${nPhotos(c)})</button>`);
  if(can("admin"))b.push(`<button class="btn ghost" data-act="forceStatut" data-id="${c.id}">Correction exceptionnelle</button>`);
  modal(c.numero+" — "+cl.nom,`<div class="flex">${sb(c)}${c.priorite==="urgente"?badge("URGENT","er"):""}${badge(c.canal,"mu")}</div>
  <div class="pill"><b>Destination</b> : ${esc(a.libelle||"")} · ${esc(a.zone)} ${esc(a.quartier||"")}<br>Repère : ${esc(a.repere||"—")}${a.instructions?"<br>Instructions : "+esc(a.instructions):""}<br>Tél. client : <a href="tel:${esc(cl.tel)}">${esc(cl.tel)}</a><br>${geoBadge(a)}${can("admin","superviseur","commercial")?geoBtns(cl.id,a.id):can("vendeur")?`<div class="flex noprint" style="margin-top:6px"><button type="button" class="btn sm ghost" data-act="geoLink" data-id="${cl.id}|${a.id}">🔗 Lien portail client (position)</button></div>`:""}</div>
@@ -942,7 +1126,7 @@ function missionCard(l){
  if(l.statut==="en_cours")btn=`<div class="row"><button class="btn ok" data-act="lConf" data-id="${l.id}">✔ Confirmer la livraison</button></div><div class="row"><button class="btn wa" data-act="lFail" data-id="${l.id}">Livraison impossible</button></div>`;
  const tr=l.tournee_id&&byId(S.tournees,l.tournee_id);
  return`<div class="mc ${c.priorite==="urgente"?"urg":""}">${tr?`<div class="sm" style="color:var(--b)"><b>🔁 Tournée ${tr.numero} · arrêt ${l.ordre}/${stopsOf(tr).length}</b></div>`:""}<div class="between"><b>${c.numero}</b><span>${c.priorite==="urgente"?badge("URGENT","er")+" ":""}${lb(l)}</span></div>
- <div><b>${esc(cl.nom)}</b><br>📍 ${esc(a.zone)} · ${esc(a.quartier||"")}<br><span class="mu">${esc(a.repere||"")}</span>${a.instructions?`<br><i>${esc(a.instructions)}</i>`:""}</div>
+ <div><b>${esc(cl.nom)}</b><br>📍 ${esc(a.zone)} · ${esc(a.quartier||"")}<br><span class="mu">${esc(a.repere||"")}</span>${a.instructions?`<br><i>${esc(a.instructions)}</i>`:""}${nPhotos(c)?`<br><button class="btn sm ghost" data-act="cmdPhotos" data-id="${c.id}">📷 Photos des articles (${nPhotos(c)})</button>`:""}</div>
  ${a.gps?`<div class="flex sm">${geoBadge(a)}<button class="btn sm ghost" data-act="lMap" data-id="${l.id}">${ui.mapOpen&&ui.mapOpen[l.id]?"Masquer la carte":"🗺 Voir sur la carte"}</button></div>${ui.mapOpen&&ui.mapOpen[l.id]?`<div class="mapbox" id="map_${l.id}" style="height:260px;border-radius:10px;overflow:hidden;background:#e8ebf5"></div>`:""}`:`<div class="al warn sm" style="margin:0">Adresse non géolocalisée. <a href="#" data-act="lAskGeo" data-id="${l.id}">Demander sa position au client</a></div>`}
  <div class="between pill"><span>${c.lignes.reduce((s,x)=>s+x.qte,0)} article(s)${l.nb_colis?" · "+l.nb_colis+" colis":""}</span><span class="amt">${l.montant_attendu>0?fcfa(l.montant_attendu):"Déjà payé"}</span></div>
  ${c.obs?`<div class="sm">📝 ${esc(c.obs)}</div>`:""}
@@ -959,6 +1143,18 @@ const ACT={
  nav:id=>{view=id;render()},
  dossier:id=>dossierForm(liv(id)),dosDel:k=>{if(ui.dos){ui.dos[k]=null;slotSet(k,null)}},
  theme:k=>{setTheme(k);render()},
+ waOpen:()=>waOpen(),
+ waPaste:async()=>{try{const t=await navigator.clipboard.readText();if(!t)return toast("Le presse-papiers est vide","err");WA.raw=(WA.raw?WA.raw+"\n\n":"")+t;waRender()}catch(e){toast("Collez avec Ctrl+V dans la zone de texte (le navigateur refuse l'accès direct)","err");const x=document.getElementById("wa_txt");if(x)x.focus()}},
+ waSplit:()=>{WA.split=!WA.split;WA.imgs=WA.imgs.concat(...WA.drafts.map(d=>d.photos));WA.drafts=[];waAnalyze()},
+ waBack:()=>{WA.stage=1;WA.imgs=WA.imgs.concat(...WA.drafts.map(d=>d.photos));WA.drafts=[];waRender()},
+ waDelDraft:i=>{const d=WA.drafts.splice(+i,1)[0];if(d)WA.imgs.push(...d.photos);waRender()},
+ waAddLine:i=>{WA.drafts[+i].lignes.push({desig:"",qte:1,pu:NaN});waRender()},
+ waDelLine:id=>{const[i,j]=id.split(":");WA.drafts[+i].lignes.splice(+j,1);waRender()},
+ waDelPhoto:id=>{const[i,k]=id.split(":");WA.imgs.push(...WA.drafts[+i].photos.splice(+k,1));waRender()},
+ waDelImg:k=>{WA.imgs.splice(+k,1);waRender()},
+ photoZoom:k=>{const src=(ui.ph||[])[+k];if(src)modal("Photo",`<img alt="" src="${src}" style="max-width:100%;border-radius:8px">`,{label:"Fermer",onSubmit:()=>true,focus:false})},
+ cmdPhotos:id=>photoGallery(cmd(id)),
+
  newEntree:entreeForm,
  jrCsv:()=>{const r=journalExportRows();csvDown("journal_stock",["Date","Code","Produit","Type","Quantité","Stock après","Référence","Par"],r.map(m=>[new Date(m.ts).toLocaleString("fr-FR"),m.code,m.nom,MVT_L[m.type]||m.type,m.qte,m.solde,m.ref||"",m.par_nom||""]))},
  jrPrint:()=>{const r=perRange("j"),rows=journalExportRows();rapport("Journal des mouvements",rptHead("Journal des mouvements de stock","Du "+fdj(r.du)+" au "+fdj(r.au))+`<table><tr><th>Date</th><th>Produit</th><th>Type</th><th class="n">Qté</th><th class="n">Stock après</th><th>Référence</th><th>Par</th></tr>${rows.map(m=>`<tr><td>${fdt(m.ts)}</td><td>${esc(m.code)} ${esc(m.nom)}</td><td>${esc(MVT_L[m.type]||m.type)}</td><td class="n">${sgn(m.qte)}</td><td class="n">${m.solde}</td><td>${esc(m.ref||"")}</td><td>${esc(m.par_nom||"")}</td></tr>`).join("")}</table>`)},
@@ -1352,7 +1548,7 @@ function creerCmdVendeur(v,d){
 VIEWS.mesCmd=()=>{
  const v=vend();if(!v)return'<div class="card">Compte vendeur non rattaché à une fiche vendeur. Contactez ANGEL\'S GROUP.</div>';
  const mine=S.commandes.filter(c=>c.vendeur_id===v.id),d=vendDue(v),n=f=>mine.filter(f).length;
- return`<div class="between"><h1>Mes commandes à livrer</h1><div class="flex"><button class="btn" data-act="newVCmd">➕ Nouvelle commande</button><button class="btn ghost" data-act="vImport">⬆ Importer un fichier CSV</button></div></div>
+ return`<div class="between"><h1>Mes commandes à livrer</h1><div class="flex"><button class="btn" data-act="waOpen">💬 Saisie depuis WhatsApp</button><button class="btn ghost" data-act="newVCmd">➕ Nouvelle commande</button><button class="btn ghost" data-act="vImport">⬆ Importer un fichier CSV</button></div></div>
  <p class="mu">Bienvenue <b>${esc(v.nom)}</b>. Déposez ici les commandes de vos clients : ANGEL'S GROUP confirme, prépare et livre à moto, puis vous règle le prix de vos articles.</p>
  <div class="grid">${kpi("À confirmer",n(c=>c.statut==="attente"),"w")}${kpi("En cours",n(c=>["confirmee","preparation","prete","affectee","en_cours"].includes(c.statut)))}${kpi("Livrées",n(c=>c.statut==="livree"),"o")}${kpi("Échecs / retours",n(c=>["echouee","retour_cours","retour_recu"].includes(c.statut)),"e")}${kpi("Reste à recevoir",fcfa(d.restant),"o")}</div>
  <h2>Mes commandes</h2>${tbl(["Commande","Client / destination","Total client","Statut",""],mine.map(c=>`<tr><td><b>${c.numero}</b><br><span class="mu sm">${fdt(c.date)}</span></td><td>${esc(cli(c.client_id).nom)}<br><span class="mu sm">${esc(c.adr.zone)} · ${esc(c.adr.quartier||"")}</span></td><td>${fcfa(c.total)}<br><span class="mu sm">${c.vendeur_encaisse?"produits déjà payés":"à encaisser "+fcfa(soldeCmd(c))}</span></td><td>${sb(c)}</td><td><button class="btn sm ghost" data-act="cmdDetail" data-id="${c.id}">Ouvrir</button></td></tr>`),"Aucune commande pour le moment")}`};
@@ -1573,6 +1769,7 @@ async function hydrate(){
  Object.assign(N.pos,CL.pos);
  CL.vd={};dues.forEach(d=>CL.vd[d.vendeur_id]={acquis:+d.acquis,regle:+d.regle,restant:+d.restant,attente:+d.attente,elig:[]});
  elig.forEach(e=>{(CL.vd[e.vendeur_id]=CL.vd[e.vendeur_id]||{acquis:0,regle:0,restant:0,attente:0,elig:[]}).elig.push({commande_id:e.commande_id,net:+e.net,livree_le:e.livree_le})});
+ try{const ph=await CL.chk(CL.sb.from("commande_photos").select("id,commande_id").range(0,4999));const cnt={};ph.forEach(x=>cnt[x.commande_id]=(cnt[x.commande_id]||0)+1);N.commandes.forEach(c=>{if(cnt[c.id])c.nphotos=cnt[c.id]})}catch(e){}
  try{const [iv,il]=await Promise.all([fetchAll("inventaires"),fetchAll("inventaire_lignes")]);const g=grp(il,"inventaire_id");N.inventaires=iv.map(i=>Object.assign({},i,{lignes:(g[i.id]||[]).map(l=>({produit_id:l.produit_id,theorique:l.theorique,compte:l.compte,note:l.note}))}))}catch(e){N.inventaires=[]}
  try{N.avis=(await fetchAll("avis_livraison","livraison_id")).map(a=>({livraison_id:a.livraison_id,livreur_id:a.livreur_id,note:a.note,commentaire:a.commentaire,ts:a.cree_le}))}catch(e){N.avis=[]}
  try{const [dd,ff]=await Promise.all([fetchAll("livreur_dossiers","livreur_id"),CL.sb.from("livreur_fichiers").select("livreur_id,kind,miniature").range(0,999)]);

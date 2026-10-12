@@ -72,3 +72,6 @@ Migration `20261014000000_suivi_client.sql` : `suivi_liens` (un jeton de 256 bit
 
 ### Journal, inventaire, états périodiques
 Migration `20261015000000_inventaire_etats.sql` : colonne `produits.cout`, `recevoir_stock` (entrée avec référence obligatoire), `inventaires` / `inventaire_lignes` (un seul inventaire ouvert, figé une fois validé ou annulé), `ouvrir_inventaire`, `saisir_comptage`, `valider_inventaire` (administrateur ; tout compté ; écart contre le stock relevé à l'ouverture ; mouvement `inventaire` par écart), `annuler_inventaire`, `journal_stock` (avec stock après chaque mouvement) et `etat_stock` (ouverture, entrées, sorties, retours, ajustements, inventaire, clôture par produit). Tests : `tests/test_inventaire.sql`, `tests/banc/e2e_inventaire*.js`.
+
+### Photos de commande (saisie WhatsApp)
+Migration `20261016000000_photos_commandes.sql` : `commande_photos` (JPEG/PNG 300 Ko max, 8 par commande), `ajouter_photo_commande` / `retirer_photo_commande` (équipe commerciale ou vendeur propriétaire ; commande non terminée), lecture par l'équipe, le préparateur, le vendeur propriétaire et le livreur de la mission. Tests : `tests/test_photos.sql`, `tests/banc/e2e_whatsapp*.js`, `e2e_partage.js`.

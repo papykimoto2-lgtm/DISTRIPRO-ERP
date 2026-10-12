@@ -1,0 +1,28 @@
+const { chromium } = require('/opt/node-tools/node_modules/playwright');const fs=require('fs');const {execSync}=require('child_process');
+const ANON=fs.readFileSync('/tmp/pgr/anon.key','utf8').trim();
+const sql=q=>execSync(`psql -h 127.0.0.1 -p 54330 -U postgres -d t -At -c "${q}"`).toString().trim();
+let ok=0,ko=0;const chk=(n,c,x)=>{c?ok++:ko++;console.log((c?'✔':'✘')+' '+n+(c?'':'  → '+(typeof x==='string'?x:JSON.stringify(x))))};
+(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});
+async function sess(u){const ctx=await b.newContext({viewport:{width:1280,height:950}});await ctx.addInitScript(k=>{window.ANGELS_CLOUD={url:'http://127.0.0.1:3011',key:k}},ANON);
+ await ctx.route('https://cdn.jsdelivr.net/npm/@supabase/**',r=>r.fulfill({path:'/tmp/pgr/sbjs/package/dist/umd/supabase.js',contentType:'application/javascript'}));
+ const pg=await ctx.newPage();pg.errs=[];pg.on('pageerror',e=>pg.errs.push(e.message));pg.on('dialog',d=>d.accept());
+ await pg.goto('file:///home/user/DISTRIPRO-ERP/index.html');await pg.waitForSelector('#lf');await pg.fill('input[name=ident]',u);await pg.fill('input[name=pwd]','pwd'+u);await pg.click('#lf button');
+ await pg.waitForFunction(()=>typeof ME!=='undefined'&&ME&&S.users.length>0,null,{timeout:8000});
+ await pg.evaluate(()=>{window.__t=[];const o=window.toast;window.toast=(m,k)=>{if(k==='err')__t.push(m);return o(m,k)}});return pg}
+const ay=await sess('aya');
+const n0=+sql("select count(*) from public.commandes where vendeur_id='00000000-0000-0000-0000-0000000000b1'");
+await ay.click('button:has-text("Saisie depuis WhatsApp")');await ay.waitForSelector('#wa_txt');
+await ay.fill('#wa_txt',"Mme Konan 07 07 12 34 56\nAngré 8e tranche, près de la pharmacie\n2 robes wax 15000f\n1 sac à main 12.000 f");
+await ay.setInputFiles('#wa_img','/tmp/claude-0/t/id.png');await ay.waitForTimeout(500);
+await ay.click('#mf .mf .btn:not(.ghost)');await ay.waitForSelector('.wcard');
+await ay.click('#mf .mf .btn:not(.ghost)');await ay.waitForTimeout(2500);
+chk('commande créée côté serveur',+sql("select count(*) from public.commandes where vendeur_id='00000000-0000-0000-0000-0000000000b1'")===n0+1,await ay.evaluate(()=>__t));
+chk('2 lignes + photo en base',sql("select count(*) from public.commande_lignes l join public.commandes c on c.id=l.commande_id where c.vendeur_id='00000000-0000-0000-0000-0000000000b1' and l.desig in ('Robes wax','Sac à main')")==='2'&&+sql("select count(*) from public.commande_photos")>=1);
+const cid=sql("select id from public.commandes where vendeur_id='00000000-0000-0000-0000-0000000000b1' order by numero desc limit 1");
+chk('le vendeur voit le nombre de photos',await ay.evaluate(id=>nPhotos(cmd(id))===1,cid));
+await ay.evaluate(id=>photoGallery(cmd(id)),cid);await ay.waitForTimeout(1200);chk('galerie : image relue depuis le serveur',(await ay.$$('.wph img')).length===1);
+const ad=await sess('admin');
+await ad.evaluate(id=>{view='commandes';render();cmdDetail(id)},cid);await ad.waitForTimeout(500);chk('l\'administrateur voit « Photos jointes (1) »',await ad.isVisible('button:has-text("Photos jointes (1)")'));
+await ad.evaluate(id=>photoGallery(cmd(id)),cid);await ad.waitForTimeout(1200);chk('et peut ouvrir la galerie',(await ad.$$('.wph img')).length===1);
+const ri=await sess('rival');chk('le vendeur concurrent ne voit rien',await ri.evaluate(async()=>{const {data}=await CL.sb.from('commande_photos').select('id');return data.length===0}));
+console.log('erreurs JS',ay.errs,ad.errs);console.log(ok+' ok / '+ko+' échecs');await b.close()})().catch(e=>{console.error('CRASH',e.message.slice(0,300));process.exit(1)});
