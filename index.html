@@ -1405,6 +1405,7 @@ const ACT={
  colCancel:id=>ask("Annuler la collecte","Motif de l'annulation (obligatoire)",m=>colDo(id,"annuler",{motif:m},"Collecte annulée"),{cls:"er"}),
 
  waOpen:()=>waOpen(),
+ pTab:id=>{ui.ptab=id;document.querySelectorAll("#ptabs button").forEach(b=>b.classList.toggle("on",b.dataset.id===id));document.querySelectorAll("[data-pt]").forEach(d=>d.classList.toggle("hide",d.dataset.pt!==id))},
  cxNew:()=>modal("Nouvelle caisse",`<label>Nom de la caisse *<input name="n" required maxlength="60" placeholder="Caisse principale"></label><label>Compte<select name="c"><option value="571">571 — Caisse principale</option><option value="572">572 — Petite caisse / caisse annexe</option></select></label>`,{label:"Créer la caisse",cls:"ok",onSubmit:d=>cxRun(()=>cxCreerLocal(d.n,d.c),"caisse_creer",{p_nom:d.n,p_compte:d.c},"Caisse créée")}),
  cxOuvrir:id=>cxOuvrirForm(cxCaisse(id)),cxBon:id=>{const[i,t]=id.split("|");cxBonForm(cxCaisse(i),t)},cxCloture:id=>cxClotureForm(cxCaisse(id)),
  cxMotif:t=>{const f=document.querySelector('#mf input[name=motif]');if(f){f.value=t;f.focus()}},
@@ -2148,7 +2149,13 @@ Object.assign(CL,{
  vendImport(orders){let n=0;return CL.go(async()=>{for(const o of orders){await CL.rpc("vendeur_deposer_commande",{p:{client:{nom:o.nom,tel:o.tel},adresse:{zone:o.zone,quartier:o.quartier,repere:o.repere,instructions:o.ins},lignes:o.lignes.map(l=>({desig:l.desig,qte:l.qte,pu:l.pu})),pay:o.pay,paye_vendeur:o.paye_vendeur,obs:o.obs}});n++}},()=>n+" commande(s) déposée(s)").then(ok=>{if(!ok&&n)toast(n+" commande(s) déjà déposée(s) avant l'erreur : ne les importez pas deux fois","err");return ok})}
 });
 /* Le tableau de paramètres n'offre ni export ni réinitialisation en mode connecté (les données sont sur le serveur). */
-VIEWS.params=()=>{let h=VIEWS.params0();if(CL.on){const i=h.indexOf("<h2>Données</h2>");if(i>=0)h=h.slice(0,i)}return h};
+/* Paramètres rangés par onglets (tout reste dans la page : « Enregistrer » enregistre l'ensemble, changer d'onglet ne perd rien) */
+const PTABS=[["zones","🗺️ Zones & tarifs",["Zones de livraison"]],["liv","🏍️ Livreurs & GPS",["Rémunération par défaut & GPS","Dossiers des livreurs","Étiquettes colis (QR code)"]],["listes","📝 Listes",["Listes paramétrables"]],["ste","🏢 Société & documents",["Société et documents"]],["pay","💳 Paiements",["Paiements et versements"]],["notif","💬 Notifications",["Notifications aux clients"]],["data","💾 Données",["Données"]]];
+VIEWS.params=()=>{let h=VIEWS.params0();if(CL.on){const i=h.indexOf("<h2>Données</h2>");if(i>=0)h=h.slice(0,i)}
+ const k=h.indexOf("<h2>"),head=k>=0?h.slice(0,k):h,secs=k>=0?h.slice(k).split(/(?=<h2>)/):[],by={};
+ secs.forEach(x=>{const t=((/^<h2>(.*?)<\/h2>/.exec(x)||[])[1]||"").replace(/&amp;/g,"&"),tab=(PTABS.find(p=>p[2].includes(t))||PTABS[3])[0];(by[tab]=by[tab]||[]).push(x)});
+ const tabsV=PTABS.filter(p=>by[p[0]]);let cur=ui.ptab&&by[ui.ptab]?ui.ptab:tabsV[0][0];
+ return head+`<div class="tabs" id="ptabs">${tabsV.map(p=>`<button type="button" class="${p[0]===cur?"on":""}" data-act="pTab" data-id="${p[0]}">${p[1]}</button>`).join("")}</div><div class="flex" style="justify-content:flex-end;margin:-4px 0 8px;gap:10px;align-items:center"><span class="sm mu">« Enregistrer » conserve les réglages de tous les onglets.</span><button type="button" class="btn" id="psave" data-act="saveParams">💾 Enregistrer les paramètres</button></div>`+tabsV.map(p=>`<div data-pt="${p[0]}" class="${p[0]===cur?"":"hide"}">${by[p[0]].join("")}</div>`).join("")};
 function geoLinkModal(cid,aid,ref){
  if(!CL.on)return geoLinkModal0(cid,aid,ref);
  return CL.rpc("creer_lien_portail",{p_adresse:aid,p_ref:ref||null}).then(t=>{ui.cloudLink=location.href.split("#")[0].split("?")[0]+"#portail="+t;try{geoLinkModal0(cid,aid,ref)}finally{ui.cloudLink=null}}).catch(e=>toast(fixErr(e),"err"))}

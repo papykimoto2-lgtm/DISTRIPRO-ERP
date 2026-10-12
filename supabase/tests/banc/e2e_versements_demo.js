@@ -47,6 +47,6 @@ await pg.click('#mf .mf .btn:not(.ghost)');await pg.waitForTimeout(200);chk('san
 // 6. états + export + paramètres
 await pg.evaluate(()=>{ME=S.users.find(u=>u.role==='admin');view="etats";ui.ep="a";render()});await pg.waitForTimeout(200);t=await T();chk('états : versements et encaissements Mobile Money',/dont versements par Mobile Money/.test(t)&&/Paiements clients directs sur le compte/.test(t));
 await pg.evaluate(()=>{view="finance";render()});const [dl]=await Promise.all([pg.waitForEvent('download'),pg.click('button:has-text("Paiements Mobile Money (CSV)")')]);chk('export CSV des paiements Mobile Money',/paiements_mobile_money_/.test(dl.suggestedFilename()));
-await pg.evaluate(()=>{view="params";render()});await pg.fill('#p_momo',"Wave : 07 11 22 33 44\nMoov Money : 01 55 66 77 88");await pg.evaluate(()=>ACT.saveParams());await pg.waitForTimeout(200);
+await pg.evaluate(()=>{view="params";render();ACT.pTab("pay")});await pg.fill('#p_momo',"Wave : 07 11 22 33 44\nMoov Money : 01 55 66 77 88");await pg.evaluate(()=>ACT.saveParams());await pg.waitForTimeout(200);
 chk('comptes Mobile Money enregistrés',await pg.evaluate(()=>S.config.momo_comptes.length===2&&/Moov/.test(S.config.momo_comptes[1])));
 console.log('erreurs JS',er);console.log(ok+' ok / '+ko+' échecs');await b.close()})();

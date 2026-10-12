@@ -30,6 +30,6 @@ chk('affectation bloquée si dossier incomplet / acceptée si complet',r.c&&r.bl
 // expiration
 await pg.evaluate(()=>{S.livreurs[1].dossier.permis_expire="2020-01-01"});chk('permis expiré détecté',await pg.evaluate(()=>dossierEtat(S.livreurs[1]).manques.some(m=>/permis expiré/.test(m))));
 // params
-await pg.evaluate(()=>{ME=S.users[0];view="params";render()});chk('case dans Paramètres',await pg.isVisible('#p_do'));
+await pg.evaluate(()=>{ME=S.users[0];view="params";render();ACT.pTab("liv")});chk('case dans Paramètres',await pg.isVisible('#p_do'));
 // rôle livreur ne voit pas la page
 console.log('erreurs JS',er);console.log(`${ok} ok / ${ko} échecs`);await b.close()})();
