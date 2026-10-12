@@ -56,6 +56,14 @@ La session est propre à chaque onglet : ouvrez deux onglets (superviseur + livr
 - Le vendeur ne voit ni le code de confirmation, ni les notes internes, ni les livreurs ; il peut annuler tant que la commande n'est pas préparée, et envoyer à son client le lien du portail de position.
 - **Limite :** comme le reste, l'isolation entre vendeurs n'est appliquée que dans l'interface tant qu'il n'y a pas de backend. Pour de vrais vendeurs externes sur Internet, le backend (Supabase + règles d'accès) est indispensable ; l'inscription en libre-service reste à construire.
 
+## Collecte des colis chez le vendeur
+Une fois les commandes d'un vendeur confirmées, ANGEL'S GROUP passe récupérer les colis chez lui :
+1. **Superviseur / administrateur** : *Centre de livraison → Collectes chez les vendeurs* liste, par vendeur, les commandes confirmées à collecter. **🚚 Planifier la collecte** : choix des commandes, du livreur, du créneau de passage et de l'adresse de collecte (mémorisée sur la fiche du vendeur). Un tableau suit les collectes (réaffecter, annuler avec motif, imprimer le **bon de collecte**). Alertes sur le tableau de bord : commandes à collecter, collecte non réalisée, créneau dépassé.
+2. **Vendeur** : *Mes commandes → Collecte de mes colis* : son adresse de collecte (modifiable), le créneau, le prénom du livreur et un **code à 4 chiffres à remettre au livreur contre les colis** (le livreur ne le voit pas, comme le code de livraison du client).
+3. **Livreur** : une carte *Collecte* (vendeur, téléphone, adresse, articles par commande, itinéraire) : **Accepter**, **Je pars**, puis **Colis collectés** : code du vendeur (5 essais) et nombre de colis pris pour chaque commande ; ou **Impossible** avec motif (le superviseur réaffecte).
+4. **Préparateur / administrateur** : **📦 Collectes à réceptionner** (page Commandes) : comptage des colis arrivés au dépôt ; les commandes complètes passent automatiquement en **préparation**, celles avec écart restent « confirmées » pour traitement avec le vendeur.
+Tant qu'une commande est dans une collecte en cours, le bouton « Marchandise reçue » est remplacé par le suivi de la collecte (une commande déposée directement au dépôt reste possible sans collecte).
+
 ## Saisie des commandes depuis WhatsApp (vendeurs partenaires)
 Le fournisseur ne retape plus rien : bouton **💬 Saisie depuis WhatsApp** dans *Mes commandes*.
 1. **Coller** le message du client (ou une conversation), ou **importer l'export WhatsApp** (*Exporter la discussion* → fichier **.txt** ou **.zip** avec médias), ou **partager directement depuis WhatsApp** vers l'application installée (Android : Partager → ANGEL'S GROUP) ; **captures d'écran** de l'article : ajout, glisser, ou **Ctrl+V**.

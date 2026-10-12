@@ -340,7 +340,9 @@ function seed(){
  {const vu=mkU("Aya Boutique en ligne","vendeur","5555");const V={id:uid("v"),user_id:vu.id,nom:"Aya Boutique en ligne",tel:"0707555555",commission_pct:5};S.vendeurs.push(V);
   creerCmdVendeur(V,{nom:"Mme Konan",tel:"0505777777",zone:"Abobo",quartier:"Anonkoua",repere:"Face à l'église",ins:"",lignes:[{desig:"Robe wax",qte:1,pu:15000},{desig:"Foulard",qte:2,pu:3000}],pay:"livraison",obs:""});
   const vo=creerCmdVendeur(V,{nom:"Cliente Fatou",tel:"0505444444",zone:"Cocody",quartier:"Angré",repere:"Château d'eau",ins:"",lignes:[{desig:"Sac à main",qte:2,pu:12000}],pay:"livraison",obs:""});
-  setStatut(vo,"confirmee");toPrete(vo);const lv=affecter(vo,L1.id,"");accepter(lv);priseEnCharge(lv,1);demarrer(lv);confirmer(lv,{code:lv.code,montant:vo.total,mode:"Espèces",recu_par:"Fatou"})}
+  setStatut(vo,"confirmee");toPrete(vo);const lv=affecter(vo,L1.id,"");accepter(lv);priseEnCharge(lv,1);demarrer(lv);confirmer(lv,{code:lv.code,montant:vo.total,mode:"Espèces",recu_par:"Fatou"});
+   V.adresse_collecte={zone:"Cocody",quartier:"Angré 8e tranche",repere:"Face au château d'eau"};S.collectes=[];
+   const vc=creerCmdVendeur(V,{nom:"M. Diallo",tel:"0505888888",zone:"Marcory",quartier:"Biétry",repere:"Près du marché",ins:"",lignes:[{desig:"Pagnes (lot de 3)",qte:2,pu:9000},{desig:"Sandales",qte:1,pu:7500}],pay:"livraison",obs:""});setStatut(vc,"confirmee")}
  {const t=new Date().toISOString();[[L1,5.3525,-3.9745],[L3,5.3350,-4.0700]].forEach(([l,la,ln])=>{if(!S.pos[l.id])S.pos[l.id]={lat:la,lng:ln,acc:15,ts:t,livraison_id:null}})}
  S.inventaires=S.inventaires||[];
  {const bk=d=>new Date(Date.now()-d*864e5).toISOString(),mv=(p,q,t,r,d,par)=>{p.stock+=q;S.stock_mvts.push({id:uid("m"),ts:bk(d),produit_id:p.id,type:t,qte:q,ref:r,par:par||"Responsable commercial"})};
@@ -609,6 +611,125 @@ async function photosOf(c){if(c.photos)return c.photos;if(!CL.on)return[];const 
 function photoGallery(c){photosOf(c).then(L=>{if(!L.length)return toast("Aucune photo sur cette commande","err");ui.ph=L;
  modal("Photos — "+c.numero,`<div class="wph">${L.map((p,k)=>`<img alt="" src="${p}" data-act="photoZoom" data-id="${k}" style="max-width:48%;border-radius:8px;cursor:zoom-in">`).join("")}</div>`,{label:"Fermer",onSubmit:()=>true,focus:false})}).catch(e=>toast(fixErr(e),"err"))}
 
+/* ---------- Collecte des colis chez les vendeurs (après confirmation de leurs commandes) ---------- */
+const COL_L={planifiee:"Planifiée",acceptee:"Acceptée",en_route:"En route",collectee:"Collectée · vers le dépôt",recue:"Réceptionnée",echouee:"Non réalisée",annulee:"Annulée"};
+const COL_K={planifiee:"wa",acceptee:"",en_route:"",collectee:"wa",recue:"ok",echouee:"er",annulee:"mu"};
+const colOpen=c=>["planifiee","acceptee","en_route","collectee"].includes(c.statut);
+const colOf=cid=>(S.collectes||[]).find(c=>colOpen(c)&&c.lignes.some(l=>l.commande_id===cid));
+const aCollecter=vid=>S.commandes.filter(c=>c.vendeur_id===vid&&c.statut==="confirmee"&&!colOf(c.id));
+const colAdrTxt=a=>a&&(a.zone||a.quartier||a.repere)?[a.zone,a.quartier,a.repere].filter(Boolean).join(" · "):"adresse non renseignée";
+const colBadge=c=>badge(COL_L[c.statut]||c.statut,COL_K[c.statut]||"");
+const dtLocal=t=>{const d=new Date(t);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+"T"+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")};
+const colVend=c=>c.vendeur_nom||(vendOf(c.vendeur_id)||{}).nom||"Vendeur";
+const colTel=c=>c.vendeur_tel||(vendOf(c.vendeur_id)||{}).tel||"";
+const colLiv=c=>c.livreur_prenom||((liv(c.livreur_id)||{}).nom||"").split(" ")[0]||"—";
+function colLocal(id,action,p){
+ const c=(S.collectes||[]).find(x=>x.id===id);if(!c)throw new Error("Collecte introuvable");p=p||{};
+ const lv=ME.role==="livreur"?livreurOf(ME):null,mine=lv&&c.livreur_id===lv.id;
+ if(["accepter","refuser","partir","collecter","echec"].includes(action)&&!mine)throw new Error("Accès refusé pour votre profil");
+ if(action==="accepter"){if(c.statut!=="planifiee")throw new Error("Cette collecte ne peut plus être acceptée");c.statut="acceptee";c.accept_at=now()}
+ else if(action==="refuser"||action==="echec"){if(!["planifiee","acceptee","en_route"].includes(c.statut))throw new Error("Collecte déjà terminée");if(!(p.motif||"").trim())throw new Error("Motif obligatoire");c.statut="echouee";c.motif=p.motif.trim();audit("Collecte non réalisée",c.numero+" — "+c.motif)}
+ else if(action==="partir"){if(c.statut!=="acceptee")throw new Error("Acceptez d'abord la collecte");c.statut="en_route";c.depart_at=now()}
+ else if(action==="collecter"){
+  if(!["acceptee","en_route"].includes(c.statut))throw new Error("Cette collecte n'est pas en cours");if(c.essais_code>=5)throw new Error("Trop d'essais de code : contactez le superviseur");
+  if(String(p.code||"").trim()!==c.code){c.essais_code=(c.essais_code||0)+1;return{ok:false,erreur:"Code du vendeur incorrect",essais_restants:5-c.essais_code}}
+  let tot=0;c.lignes.forEach(l=>{const n=Math.max(0,Math.floor(+((p.colis||{})[l.commande_id])||0));l.colis_collectes=n;tot+=n});if(!tot)throw new Error("Indiquez le nombre de colis pris pour au moins une commande");
+  c.statut="collectee";c.collecte_at=now();audit("Colis collectés",c.numero+" — "+tot+" colis")}
+ else if(action==="recevoir"){
+  if(!can("admin","preparateur"))throw new Error("Accès refusé pour votre profil");if(c.statut!=="collectee")throw new Error("Cette collecte n'est pas arrivée au dépôt");
+  c.lignes.forEach(l=>{const n=Math.max(0,Math.floor(+((p.recus||{})[l.commande_id])));l.colis_recus=isNaN(n)?(l.colis_collectes||0):n;const o=cmd(l.commande_id);
+   if((l.colis_collectes||0)>0&&l.colis_recus>=l.colis_collectes&&o&&o.statut==="confirmee")setStatut(o,"preparation","Marchandise reçue — collecte "+c.numero)});
+  c.statut="recue";c.recue_at=now();c.recue_par_nom=ME.nom;audit("Collecte réceptionnée",c.numero)}
+ else if(action==="reaffecter"){
+  if(!can("admin","superviseur"))throw new Error("Accès refusé pour votre profil");if(!["planifiee","acceptee","echouee"].includes(c.statut))throw new Error("Cette collecte ne peut plus être réaffectée");
+  const l=liv(p.livreur);if(!l)throw new Error("Livreur introuvable");if(S.config.dossier_obligatoire&&!dossierEtat(l).ok)throw new Error("Dossier du livreur incomplet ou expiré : mission impossible");
+  c.livreur_id=l.id;c.livreur_prenom=l.nom.split(" ")[0];c.statut="planifiee";c.motif=null;c.accept_at=null;c.essais_code=0;if(p.creneau)c.creneau=p.creneau;audit("Collecte réaffectée",c.numero)}
+ else if(action==="annuler"){
+  if(!can("admin","superviseur"))throw new Error("Accès refusé pour votre profil");if(["recue","annulee"].includes(c.statut))throw new Error("Collecte déjà clôturée");if(!(p.motif||"").trim())throw new Error("Motif obligatoire");
+  c.statut="annulee";c.motif=p.motif.trim();audit("Collecte annulée",c.numero+" — "+c.motif)}
+ else throw new Error("Action inconnue");
+ return{ok:true}}
+function colPlanLocal(a){
+ const v=vendOf(a.vendeur_id),l=liv(a.livreur);if(!v||!l)throw new Error("Vendeur ou livreur introuvable");
+ if(S.config.dossier_obligatoire&&!dossierEtat(l).ok)throw new Error("Dossier du livreur incomplet ou expiré : mission impossible");
+ if(!a.commandes.length)throw new Error("Sélectionnez au moins une commande");
+ a.commandes.forEach(id=>{const c=cmd(id);if(!c||c.vendeur_id!==v.id)throw new Error("Commande étrangère à ce vendeur");if(c.statut!=="confirmee")throw new Error("Commande "+c.numero+" : elle doit être « confirmée »");if(colOf(id))throw new Error("Commande "+c.numero+" : une collecte est déjà en cours")});
+ if(a.adresse)v.adresse_collecte=a.adresse;if(!v.adresse_collecte)throw new Error("Adresse de collecte du vendeur non renseignée");
+ const y=new Date().getFullYear(),n=(S.collectes||[]).filter(c=>c.numero.startsWith("COL-"+y)).length+1;
+ const col={id:uid("col"),numero:"COL-"+y+"-"+String(n).padStart(4,"0"),vendeur_id:v.id,vendeur_nom:v.nom,vendeur_tel:v.tel,livreur_id:l.id,livreur_prenom:l.nom.split(" ")[0],statut:"planifiee",creneau:a.creneau,note:a.note||"",adresse:Object.assign({},v.adresse_collecte),essais_code:0,cree_le:now(),cree_par_nom:ME.nom,
+  code:String(Math.floor(Math.random()*10000)).padStart(4,"0"),lignes:a.commandes.map(id=>{const c=cmd(id);return{commande_id:id,numero:c.numero,resume:c.lignes.map(x=>x.qte+"× "+lname(x)).join(", "),colis_collectes:null,colis_recus:null}})};
+ S.collectes=S.collectes||[];S.collectes.push(col);audit("Collecte planifiée",col.numero+" — "+v.nom);return col}
+async function colDo(id,action,p,msg){
+ try{let r;if(CL.on){r=await CL.rpc("collecte_action",{p_collecte:id,p_action:action,p:p||{}});await refresh()}else{r=colLocal(id,action,p);save()}
+  if(r&&r.ok===false){render();toast(r.erreur+(r.essais_restants!=null?" ("+r.essais_restants+" essai(s) restant(s))":""),"err");return false}
+  if(msg)toast(msg,"ok");render();return true}catch(e){toast(fixErr(e),"err");return false}}
+function colPlanForm(vid){
+ const v=vendOf(vid),L=aCollecter(vid),a=v.adresse_collecte||{};if(!L.length)return toast("Aucune commande confirmée à collecter chez ce vendeur","err");
+ modal("Planifier la collecte — "+v.nom,`<div class="sm mu">ANGEL'S GROUP passe chercher les colis chez le vendeur. Le vendeur voit un code à 4 chiffres dans son espace : il ne le remet au livreur que contre les colis.</div>
+ <div class="sec">Commandes à collecter</div>${L.map(c=>`<label style="display:flex;gap:8px;align-items:flex-start;font-size:14px;margin:4px 0"><input type="checkbox" name="c_${c.id}" checked style="width:auto;margin-top:3px"><span><b>${esc(c.numero)}</b> — ${esc(c.lignes.map(l=>l.qte+"× "+lname(l)).join(", "))}</span></label>`).join("")}
+ <div class="g2"><label>Livreur<select name="l">${S.livreurs.map(l=>{const n=S.livraisons.filter(x=>x.livreur_id===l.id&&isActive(x)).length,k=S.collectes&&S.collectes.filter(x=>x.livreur_id===l.id&&colOpen(x)).length;return`<option value="${l.id}">${esc(l.nom)} — ${l.statut==="disponible"?"disponible":"indisponible"}, ${n} course(s), ${k||0} collecte(s)</option>`}).join("")}</select></label><label>Créneau de passage<input type="datetime-local" name="cr" value="${dtLocal(Date.now()+3600e3)}" required></label></div>
+ <div class="sec">Adresse de collecte</div><div class="g3"><label>Zone<select name="z">${opts(S.config.zones.map(z=>z.nom),a.zone||"")}</select></label><label>Quartier<input name="q" value="${esc(a.quartier||"")}"></label><label>Point de repère<input name="r" value="${esc(a.repere||"")}"></label></div>
+ <label>Note pour le livreur (facultatif)<input name="n" placeholder="ex. passer avant 16 h, demander Mme Aya"></label>`,
+ {wide:true,label:"Planifier la collecte",onSubmit:d=>{
+  const ids=L.filter(c=>d["c_"+c.id]).map(c=>c.id);if(!ids.length)return toast("Sélectionnez au moins une commande","err"),false;
+  if(!d.z||!(d.q.trim()||d.r.trim()))return toast("Indiquez la zone et le quartier ou un repère de collecte","err"),false;
+  const adr={zone:d.z,quartier:d.q.trim(),repere:d.r.trim()},cr=new Date(d.cr).toISOString();
+  if(CL.on)return CL.go(async()=>{CL.last=await CL.rpc("planifier_collecte",{p_vendeur:vid,p_commandes:ids,p_livreur:d.l,p_creneau:cr,p_note:d.n||null,p_adresse:adr})},()=>"Collecte "+CL.last.numero+" planifiée");
+  try{const c=colPlanLocal({vendeur_id:vid,commandes:ids,livreur:d.l,creneau:cr,note:d.n,adresse:adr});save();toast("Collecte "+c.numero+" planifiée","ok");render()}catch(e){toast(fixErr(e),"err");return false}}})}
+function colRecvForm(id){
+ const c=S.collectes.find(x=>x.id===id);
+ modal("Réceptionner la collecte "+c.numero,`<div class="pill">Collecte chez <b>${esc(colVend(c))}</b> par ${esc(colLiv(c))}. Comptez les colis déposés au dépôt : les commandes complètes passent en préparation.</div>
+ ${tbl(["Commande","Articles","Colis collectés","Colis reçus"],c.lignes.map(l=>`<tr><td><b>${esc(l.numero)}</b></td><td class="sm">${esc(l.resume||"")}</td><td>${l.colis_collectes||0}</td><td><input class="cnt" type="number" min="0" name="r_${l.commande_id}" value="${l.colis_collectes||0}"></td></tr>`))}
+ <div class="sm mu">Un compte inférieur à celui du livreur laisse la commande « confirmée » : traitez l'écart avec le vendeur.</div>`,
+ {wide:true,label:"Valider la réception",cls:"ok",onSubmit:d=>{const recus={};c.lignes.forEach(l=>recus[l.commande_id]=Math.max(0,Math.floor(+d["r_"+l.commande_id])||0));return colDo(id,"recevoir",{recus},"Collecte réceptionnée")}})}
+function colCollectForm(id){
+ const c=S.collectes.find(x=>x.id===id);
+ modal("Colis collectés — "+c.numero,`<div class="pill">Chez <b>${esc(colVend(c))}</b></div>
+ <label>Code remis par le vendeur<input name="code" inputmode="numeric" maxlength="4" required autocomplete="off" style="font-size:22px;letter-spacing:6px;text-align:center"></label>
+ <div class="sec">Colis pris, commande par commande</div>${c.lignes.map(l=>`<label>${esc(l.numero)} <span class="mu sm">${esc(l.resume||"")}</span><input class="cnt" type="number" min="0" name="k_${l.commande_id}" value="1" style="width:100px"></label>`).join("")}
+ <div class="sm mu">Vérifiez les articles avec le vendeur. 0 colis = commande non remise (elle reste en attente).</div>`,
+ {label:"Valider la collecte",cls:"ok",onSubmit:d=>{const colis={};c.lignes.forEach(l=>colis[l.commande_id]=Math.max(0,Math.floor(+d["k_"+l.commande_id])||0));return colDo(id,"collecter",{code:d.code,colis},"Colis collectés — direction le dépôt")}})}
+function colReassForm(id){
+ const c=S.collectes.find(x=>x.id===id);
+ modal("Réaffecter la collecte "+c.numero,`<label>Livreur<select name="l">${S.livreurs.map(l=>`<option value="${l.id}" ${l.id===c.livreur_id?"selected":""}>${esc(l.nom)}</option>`).join("")}</select></label><label>Nouveau créneau<input type="datetime-local" name="cr" value="${dtLocal(c.creneau||Date.now()+3600e3)}"></label>`,
+ {label:"Réaffecter",onSubmit:d=>colDo(id,"reaffecter",{livreur:d.l,creneau:new Date(d.cr).toISOString()},"Collecte réaffectée")})}
+function colPrint(id){
+ const c=S.collectes.find(x=>x.id===id);rapport("Bon de collecte "+c.numero,rptHead("Bon de collecte "+c.numero,"Vendeur : "+colVend(c)+" · "+colAdrTxt(c.adresse))+
+ `<table><tr><th>Commande</th><th>Articles</th><th class="n">Colis remis</th><th class="n">Colis reçus au dépôt</th></tr>${c.lignes.map(l=>`<tr><td>${esc(l.numero)}</td><td>${esc(l.resume||"")}</td><td class="n">${l.colis_collectes==null?"":l.colis_collectes}</td><td class="n">${l.colis_recus==null?"":l.colis_recus}</td></tr>`).join("")}</table>
+ <p>Livreur : <b>${esc(colLiv(c))}</b> · Créneau : ${c.creneau?fdt(c.creneau):"—"} · Statut : ${esc(COL_L[c.statut]||c.statut)}${c.collecte_at?" · collecté le "+fdt(c.collecte_at):""}${c.recue_at?" · réceptionné le "+fdt(c.recue_at)+" par "+esc(c.recue_par_nom||""):""}</p>
+ <p style="margin-top:26px">Remis par le vendeur : ____________________ &nbsp;&nbsp; Reçu par le livreur : ____________________ &nbsp;&nbsp; Réceptionné au dépôt par : ____________________</p>`)}
+function collectesSection(){
+ const pend=S.vendeurs.map(v=>({v,L:aCollecter(v.id)})).filter(x=>x.L.length),all=(S.collectes||[]).slice().sort((a,b)=>new Date(b.cree_le)-new Date(a.cree_le)).filter(c=>colOpen(c)||c.statut==="echouee"||Date.now()-new Date(c.cree_le)<3*864e5);
+ return`<h2>Collectes chez les vendeurs</h2>
+ ${tbl(["Vendeur","Commandes confirmées à collecter","Adresse de collecte",""],pend.map(x=>`<tr><td><b>${esc(x.v.nom)}</b><br><span class="sm mu">${esc(x.v.tel||"")}</span></td><td class="sm">${x.L.map(c=>esc(c.numero)).join(", ")} <span class="mu">(${x.L.length})</span></td><td class="sm">${esc(colAdrTxt(x.v.adresse_collecte))}</td><td><button class="btn sm" data-act="colPlan" data-id="${x.v.id}">🚚 Planifier la collecte</button></td></tr>`),"Aucune commande de vendeur en attente de collecte")}
+ ${all.length?tbl(["Collecte","Vendeur · adresse","Livreur","Créneau","Statut","Commandes",""],all.map(c=>`<tr><td><b>${esc(c.numero)}</b></td><td>${esc(colVend(c))}<br><span class="sm mu">${esc(colAdrTxt(c.adresse))}</span></td><td>${esc(colLiv(c))}</td><td>${c.creneau?fdt(c.creneau):"—"}</td><td>${colBadge(c)}${c.motif&&["echouee","annulee"].includes(c.statut)?`<br><span class="sm mu">${esc(c.motif)}</span>`:""}</td><td class="sm">${c.lignes.map(l=>esc(l.numero)+(l.colis_collectes!=null?" ("+l.colis_collectes+" colis)":"")).join(", ")}</td><td>${["planifiee","acceptee","echouee"].includes(c.statut)?`<button class="btn sm ghost" data-act="colReass" data-id="${c.id}">Réaffecter</button> `:""}${colOpen(c)||c.statut==="echouee"?`<button class="btn sm er" data-act="colCancel" data-id="${c.id}">Annuler</button> `:""}<button class="btn sm ghost" data-act="colPrint" data-id="${c.id}">🖨 Bon</button></td></tr>`),""):""}`}
+function colRecvSection(){
+ const L=(S.collectes||[]).filter(c=>c.statut==="collectee");if(!L.length)return"";
+ return`<div class="card" style="margin-bottom:12px;border-left:4px solid var(--b)"><b>📦 Collectes à réceptionner (${L.length})</b>${L.map(c=>`<div class="between" style="margin-top:8px"><span><b>${esc(c.numero)}</b> — ${esc(colVend(c))} · ${c.lignes.reduce((t,l)=>t+(l.colis_collectes||0),0)} colis · par ${esc(colLiv(c))}</span><button class="btn sm ok" data-act="colRecv" data-id="${c.id}">Réceptionner</button></div>`).join("")}</div>`}
+function collecteCard(c){
+ const a=c.adresse||{},dest=a.lat?`${a.lat},${a.lng}`:encodeURIComponent([a.quartier,a.zone,"Abidjan"].filter(Boolean).join(", ")),tel=colTel(c);let btn="";
+ if(c.statut==="planifiee")btn=`<div class="row"><button class="btn ok" data-act="colAcc" data-id="${c.id}">✔ Accepter</button><button class="btn er" data-act="colRef" data-id="${c.id}">✖ Impossible</button></div>`;
+ if(c.statut==="acceptee")btn=`<div class="row"><button class="btn" data-act="colGo" data-id="${c.id}">🏍️ Je pars chez le vendeur</button></div><div class="row"><button class="btn er" data-act="colRef" data-id="${c.id}">✖ Impossible</button></div>`;
+ if(c.statut==="en_route")btn=`<div class="row"><button class="btn ok" data-act="colCollect" data-id="${c.id}">📦 Colis collectés</button></div><div class="row"><button class="btn wa" data-act="colRef" data-id="${c.id}">Vendeur absent / impossible</button></div>`;
+ return`<div class="mc"><div class="between"><b>📦 Collecte ${esc(c.numero)}</b><span>${colBadge(c)}</span></div>
+ <div><b>${esc(colVend(c))}</b>${tel?` · <a href="tel:${esc(tel)}">📞 ${esc(tel)}</a>`:""}<br>📍 ${esc(colAdrTxt(a))}${c.creneau?`<br>🕒 Passage prévu : ${fdt(c.creneau)}`:""}${c.note?`<br><i>${esc(c.note)}</i>`:""}</div>
+ <div class="sm">${c.lignes.map(l=>`<div>• <b>${esc(l.numero)}</b> : ${esc(l.resume||"")}</div>`).join("")}</div>
+ <div class="flex sm"><a class="btn sm ghost" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${dest}">🗺 Itinéraire</a></div>${btn}</div>`}
+function vendCollectes(v){
+ const mine=(S.collectes||[]).filter(c=>c.vendeur_id===v.id).sort((a,b)=>new Date(b.cree_le)-new Date(a.cree_le)),open=mine.filter(colOpen),att=aCollecter(v.id).length;
+ return`<h2>Collecte de mes colis</h2>
+ <div class="card" style="margin:0 0 10px"><div class="between"><span><b>Mon adresse de collecte</b><br><span class="sm ${v.adresse_collecte?"":"mu"}">${esc(colAdrTxt(v.adresse_collecte))}</span></span><button class="btn sm ${v.adresse_collecte?"ghost":""}" data-act="vAdr">${v.adresse_collecte?"Modifier":"Renseigner mon adresse"}</button></div>${v.adresse_collecte?"":'<div class="al warn sm" style="margin-top:8px">Renseignez-la : ANGEL\'S GROUP en a besoin pour passer chercher vos colis.</div>'}</div>
+ ${att?`<div class="al sm">📦 <b>${att}</b> commande(s) confirmée(s) : ANGEL'S GROUP va planifier le passage d'un livreur pour récupérer les colis.</div>`:""}
+ ${open.map(c=>`<div class="card" style="margin:0 0 10px;border-left:4px solid var(--b)"><div class="between"><b>${esc(c.numero)}</b>${colBadge(c)}</div><div class="sm">Passage ${c.creneau?"prévu : <b>"+fdt(c.creneau)+"</b>":"à planifier"} · livreur : <b>${esc(colLiv(c))}</b><br>Commandes : ${c.lignes.map(l=>esc(l.numero)).join(", ")}</div>
+  ${["planifiee","acceptee","en_route"].includes(c.statut)&&c.code?`<div class="pill" style="margin-top:8px">🔐 Code à remettre au livreur <b>contre les colis</b> : <b style="font-size:26px;letter-spacing:6px">${esc(c.code)}</b><br><span class="sm mu">Ne le donnez pas avant d'avoir remis les colis.</span></div>`:""}
+  ${c.statut==="collectee"?'<div class="sm mu" style="margin-top:6px">Colis remis au livreur, en route vers le dépôt.</div>':""}</div>`).join("")}
+ ${!open.length&&!att?'<div class="mu sm">Aucune collecte en cours.</div>':""}`}
+function vAdrForm(){
+ const v=vend(),a=v.adresse_collecte||{};
+ modal("Mon adresse de collecte",`<div class="sm mu">Là où le livreur viendra chercher vos colis.</div><div class="g3"><label>Zone<select name="z">${opts(S.config.zones.map(z=>z.nom),a.zone||"")}</select></label><label>Quartier<input name="q" value="${esc(a.quartier||"")}"></label><label>Point de repère<input name="r" value="${esc(a.repere||"")}"></label></div>`,
+ {label:"Enregistrer",onSubmit:d=>{if(!d.z||!(d.q.trim()||d.r.trim()))return toast("Indiquez la zone et le quartier ou un repère","err"),false;const adr={zone:d.z,quartier:d.q.trim(),repere:d.r.trim()};
+  if(CL.on)return CL.go(()=>CL.rpc("maj_adresse_collecte",{p:adr}),"Adresse enregistrée");v.adresse_collecte=adr;audit("Adresse de collecte mise à jour",v.nom);save();render();toast("Adresse enregistrée","ok")}})}
+
 /* ---------- Journal des mouvements, inventaire, états périodiques ---------- */
 const MVT_L={stock_initial:"Stock initial",entree:"Entrée",sortie_commande:"Sortie (commande)",annulation:"Annulation (retour au stock)",retour_stock:"Retour en stock",ajustement:"Ajustement",inventaire:"Inventaire"};
 const MVT_K={stock_initial:"ok",entree:"ok",sortie_commande:"er",annulation:"ok",retour_stock:"ok",ajustement:"wa",inventaire:"wa"};
@@ -763,6 +884,8 @@ function alertes(){
   if(l.statut==="en_cours"){const f=fraicheur(S.pos[l.livreur_id]);if(f.k!=="ok")a.push({k:"",m:`GPS ${f.k==="mu"?"absent":"non récent"} pour ${lv.nom} (${c.numero}). Cela ne prouve pas une faute : réseau, batterie ou téléphone possibles.`})}});
  const ne=S.commandes.filter(c=>c.statut==="prete"&&!c.colis).length;if(ne&&S.config.etiq_scan)a.push({k:"",m:`${ne} commande(s) prête(s) sans étiquettes colis : imprimez-les avant la remise au livreur`});
  if(ME&&["admin","superviseur"].includes(ME.role))S.livreurs.forEach(l=>{const e=dossierEtat(l);if(!e.ok)a.push({k:S.config.dossier_obligatoire?"err":"warn",m:`Dossier de ${l.nom} incomplet : ${e.manques.slice(0,3).join(", ")}${e.manques.length>3?"…":""}${S.config.dossier_obligatoire?" — affectation bloquée":""}`});else if(e.bientot.length)a.push({k:"warn",m:`${l.nom} : échéance proche pour ${e.bientot.join(" et ")} (moins de 30 jours)`})});
+ if(ME&&["admin","superviseur"].includes(ME.role)){const nc=S.vendeurs.reduce((t,v)=>t+aCollecter(v.id).length,0);if(nc)a.push({k:"warn",m:`${nc} commande(s) de vendeurs confirmée(s) à collecter chez le vendeur (Centre de livraison → Collectes)`});(S.collectes||[]).forEach(c=>{if(c.statut==="echouee")a.push({k:"err",m:`Collecte ${c.numero} non réalisée (${c.motif||"motif non précisé"}) : à réaffecter`});else if(c.statut==="planifiee"&&c.creneau&&Date.now()-new Date(c.creneau)>15*60000)a.push({k:"warn",m:`Collecte ${c.numero} : créneau dépassé, livreur sans réponse`})})}
+ if(ME&&["admin","preparateur"].includes(ME.role)){const nr=(S.collectes||[]).filter(c=>c.statut==="collectee").length;if(nr)a.push({k:"",m:`${nr} collecte(s) arrivée(s) à réceptionner au dépôt`})}
  const nn=S.notifs.filter(n=>n.statut==="a_envoyer").length;if(nn)a.push({k:"",m:`${nn} message(s) client à envoyer (menu Notifications)`});
  const ec=S.livraisons.filter(l=>l.ecart_statut==="a_valider").length;if(ec)a.push({k:"err",m:`${ec} écart(s) d'encaissement à valider`});
  const nv=S.commandes.filter(c=>c.vendeur_id&&c.statut==="attente").length;if(nv)a.push({k:"warn",m:`${nv} commande(s) de vendeurs partenaires à confirmer`});
@@ -831,7 +954,7 @@ VIEWS.commandes=()=>{
  const q=(ui.q||"").toLowerCase(),fs=ui.fs||"",rows=S.commandes.filter(c=>(!fs||c.statut===fs)&&(!q||(c.numero+cli(c.client_id).nom+c.adr.zone).toLowerCase().includes(q))).slice(0,200).map(c=>{
   const l=activeLiv(c.id)||livsOf(c.id).slice(-1)[0];
   return`<tr><td><b>${c.numero}</b><br><span class="mu sm">${fdt(c.date)}</span></td><td>${esc(cli(c.client_id).nom)}<br><span class="mu sm">${esc(c.adr.zone)} · ${esc(c.adr.quartier||"")}</span>${c.vendeur_id?`<br>${badge("🏪 "+(vendOf(c.vendeur_id)||{nom:"?"}).nom,"mu")}`:""}</td><td>${fcfa(c.total)}<br><span class="mu sm">solde ${fcfa(soldeCmd(c))}</span></td><td>${sb(c)}${c.priorite==="urgente"?" "+badge("URGENT","er"):""}</td><td>${l?esc(liv(l.livreur_id).nom):"—"}</td><td><button class="btn sm ghost" data-act="cmdDetail" data-id="${c.id}">Ouvrir</button></td></tr>`});
- return`<div class="between"><h1>Commandes</h1><div class="flex"><button class="btn ghost" data-act="scanCmd">📷 Scanner une étiquette</button>${can("admin","commercial","superviseur")?'<button class="btn" data-act="newCmd">➕ Nouvelle commande</button>':""}</div></div>
+ return`${can("admin","preparateur")?colRecvSection():""}<div class="between"><h1>Commandes</h1><div class="flex"><button class="btn ghost" data-act="scanCmd">📷 Scanner une étiquette</button>${can("admin","commercial","superviseur")?'<button class="btn" data-act="newCmd">➕ Nouvelle commande</button>':""}</div></div>
  <div class="flex" style="margin-bottom:10px"><input data-f="q" placeholder="Rechercher (n°, client, zone) puis Entrée" value="${esc(ui.q||"")}" style="max-width:320px"><select data-f="fs" style="width:auto"><option value="">Tous les statuts</option>${opts(Object.entries(ST).map(e=>({v:e[0],t:e[1]})),fs)}</select></div>
  ${tbl(["Commande","Client / destination","Total","Statut","Livreur",""],rows,"Aucune commande")}`};
 
@@ -890,7 +1013,7 @@ function cmdDetail(id){
  const c=cmd(id),cl=cli(c.client_id),a=c.adr,ls=livsOf(c.id),act=activeLiv(c.id);
  const b=[];
  if(can("admin","commercial","superviseur")&&["brouillon","attente"].includes(c.statut))b.push(`<button class="btn ok" data-act="cmdConfirm" data-id="${c.id}">Confirmer</button>`);
- if(can("admin","preparateur")){if(c.statut==="confirmee")b.push(`<button class="btn" data-act="cmdPrep" data-id="${c.id}">${c.vendeur_id?"Marchandise reçue — démarrer la préparation":"Démarrer la préparation"}</button>`);if(c.statut==="preparation")b.push(`<button class="btn ok" data-act="cmdPrete" data-id="${c.id}">Marquer prête</button>`)}
+ if(can("admin","preparateur")){if(c.statut==="confirmee"&&colOf(c.id))b.push(`<button class="btn ghost" disabled>📦 Collecte ${esc(colOf(c.id).numero)} — ${esc(COL_L[colOf(c.id).statut])}</button>`);else if(c.statut==="confirmee")b.push(`<button class="btn" data-act="cmdPrep" data-id="${c.id}">${c.vendeur_id?"Marchandise reçue — démarrer la préparation":"Démarrer la préparation"}</button>`);if(c.statut==="preparation")b.push(`<button class="btn ok" data-act="cmdPrete" data-id="${c.id}">Marquer prête</button>`)}
  if(can("admin","superviseur")){if(c.statut==="prete")b.push(`<button class="btn" data-act="assign" data-id="${c.id}">Affecter un livreur</button>`);
   if(act)b.push(`<button class="btn wa" data-act="assign" data-id="${c.id}">Réaffecter</button>`);
   if(c.statut==="echouee")b.push(`<button class="btn" data-act="reprog" data-id="${c.id}">Reprogrammer</button><button class="btn wa" data-act="orgRetour" data-id="${c.id}">Organiser le retour</button>`);
@@ -937,6 +1060,7 @@ VIEWS.livraisons=()=>{
  const iframe=sel?`<div class="card"><div class="between"><b>Dernière position de ${esc(liv(ui.mapLiv).nom)}</b>${badge(fraicheur(sel).t,fraicheur(sel).k)}</div><iframe style="width:100%;height:280px;border:0;margin-top:8px;border-radius:8px" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=${sel.lng-0.012},${sel.lat-0.01},${sel.lng+0.012},${sel.lat+0.01}&layer=mapnik&marker=${sel.lat},${sel.lng}"></iframe><div class="sm mu">Carte OpenStreetMap (connexion Internet requise). Précision ±${Math.round(sel.acc||0)} m. <a target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=${sel.lat}&mlon=${sel.lng}#map=16/${sel.lat}/${sel.lng}">Ouvrir en grand</a></div></div>`:"";
  const ecarts=S.livraisons.filter(l=>l.ecart_statut==="a_valider");
  return`<h1>Centre de livraison</h1>
+ ${collectesSection()}
  <div class="between"><h2>À affecter (${prete.length})</h2>${prete.length>1?`<button class="btn sm" data-act="newTour">🔁 Créer une tournée</button>`:""}</div>${tbl(["Commande","Destination","À encaisser","Priorité",""],prete.map(c=>`<tr><td><b>${c.numero}</b><br><span class="sm mu">${esc(cli(c.client_id).nom)}</span></td><td>${esc(c.adr.zone)} ${esc(c.adr.quartier||"")}</td><td>${fcfa(soldeCmd(c))}</td><td>${c.priorite==="urgente"?badge("URGENT","er"):badge(c.priorite,"mu")}</td><td><button class="btn sm" data-act="assign" data-id="${c.id}">Affecter</button></td></tr>`),"Aucune commande en attente d'affectation")}
  <div class="between"><h2>Courses actives (${act.length})</h2><div class="flex"><select data-f="fz" style="width:auto"><option value="">Toutes zones</option>${opts(S.config.zones.map(z=>z.nom),fz)}</select><select data-f="fl" style="width:auto"><option value="">Tous livreurs</option>${opts(S.livreurs.map(l=>({v:l.id,t:l.nom})),fl)}</select></div></div>
  ${tbl(["Commande","Livreur","Statut","Destination","Position GPS","Délai",""],act.map(l=>{const c=cmd(l.commande_id),z=zone(c.adr.zone),f=fraicheur(S.pos[l.livreur_id]),min=Math.round((Date.now()-new Date(l.affectee_at))/60000),lim=z?z.delai_min:60;
@@ -1113,6 +1237,7 @@ function livreurHTML(){
  return`<div class="lv"><div class="lvh"><div class="between"><div><b style="font-size:17px">${esc(lv.nom)}</b><br><span style="opacity:.75" class="sm">${lv.statut==="disponible"?"🟢 Disponible":"🔴 Indisponible"}</span><br><span class="sm" style="opacity:.85">${avisMoy(lv.id).n?"★ "+avisMoy(lv.id).m.toFixed(1)+" · "+avisMoy(lv.id).n+" avis clients":"Pas encore d'avis"}</span><br><span class="sm clk" data-k="td" style="opacity:.75">${new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})+" · "+clkT().slice(0,5)}</span></div><div class="flex"><button class="btn sm ghost" data-act="myStatus">Statut</button><button class="btn sm ghost" data-act="logout">⏏</button></div></div><div style="margin-top:8px">${instBox()}</div>
  <div class="grid" style="margin-top:10px;grid-template-columns:repeat(3,1fr)"><div><div style="font-size:20px;font-weight:800">${todo.length}</div><div class="sm" style="opacity:.75">à faire</div></div><div><div style="font-size:20px;font-weight:800">${done.filter(l=>l.statut==="livree").length}</div><div class="sm" style="opacity:.75">livrées aujourd'hui</div></div><div><div style="font-size:20px;font-weight:800">${fcfa(det)}</div><div class="sm" style="opacity:.75">à reverser</div></div></div></div>
  ${aEnc?`<div class="al warn">Montants à encaisser sur vos courses : <b>${fcfa(aEnc)}</b></div>`:""}
+ ${(S.collectes||[]).filter(c=>c.livreur_id===lv.id&&["planifiee","acceptee","en_route"].includes(c.statut)).map(collecteCard).join("")}
  ${todo.length?todo.map(missionCard).join(""):'<div class="card mu">Aucune mission pour le moment. Les nouvelles missions apparaissent ici.</div>'}
  <div class="flex" style="margin:8px 0"><button class="btn ghost" data-act="myInc">⚠ Signaler un incident</button><button class="btn ghost" data-act="sendPos">📍 Envoyer ma position</button></div>
  ${S.pos[lv.id]?`<div class="sm mu">Dernière position partagée : ${fraicheur(S.pos[lv.id]).t}</div>`:""}
@@ -1143,6 +1268,11 @@ const ACT={
  nav:id=>{view=id;render()},
  dossier:id=>dossierForm(liv(id)),dosDel:k=>{if(ui.dos){ui.dos[k]=null;slotSet(k,null)}},
  theme:k=>{setTheme(k);render()},
+ colPlan:colPlanForm,colRecv:colRecvForm,colCollect:colCollectForm,colReass:colReassForm,colPrint:colPrint,vAdr:vAdrForm,
+ colAcc:id=>colDo(id,"accepter",{},"Collecte acceptée"),colGo:id=>colDo(id,"partir",{},"Bonne route !"),
+ colRef:id=>ask("Collecte impossible","Motif (obligatoire)",m=>colDo(id,"refuser",{motif:m},"Le superviseur a été informé"),{cls:"er"}),
+ colCancel:id=>ask("Annuler la collecte","Motif de l'annulation (obligatoire)",m=>colDo(id,"annuler",{motif:m},"Collecte annulée"),{cls:"er"}),
+
  waOpen:()=>waOpen(),
  waPaste:async()=>{try{const t=await navigator.clipboard.readText();if(!t)return toast("Le presse-papiers est vide","err");WA.raw=(WA.raw?WA.raw+"\n\n":"")+t;waRender()}catch(e){toast("Collez avec Ctrl+V dans la zone de texte (le navigateur refuse l'accès direct)","err");const x=document.getElementById("wa_txt");if(x)x.focus()}},
  waSplit:()=>{WA.split=!WA.split;WA.imgs=WA.imgs.concat(...WA.drafts.map(d=>d.photos));WA.drafts=[];waAnalyze()},
@@ -1307,7 +1437,7 @@ function ensureConfig(){
  if(c.mention_legale==null)c.mention_legale="Document de gestion. Si l'entreprise est assujettie à la facturation normalisée électronique, la facture réglementaire doit être émise via le dispositif officiel.";
  if(c.signature_seuil==null)c.signature_seuil=100000;
  if(c.dossier_obligatoire==null)c.dossier_obligatoire=false;if(c.etiq_scan==null)c.etiq_scan=true;if(c.etiq_montant==null)c.etiq_montant=false;if(c.etiq_tel==null)c.etiq_tel=false;
- S.docs=S.docs||[];S.avis=S.avis||[];S.inventaires=S.inventaires||[];S.notifs=S.notifs||[];S.seq=S.seq||{cmd:0,inc:0};S.seq.doc=S.seq.doc||{}}
+ S.docs=S.docs||[];S.avis=S.avis||[];S.inventaires=S.inventaires||[];S.collectes=S.collectes||[];S.notifs=S.notifs||[];S.seq=S.seq||{cmd:0,inc:0};S.seq.doc=S.seq.doc||{}}
 const fillTpl=(t,v)=>String(t).replace(/\{(\w+)\}/g,(_,k)=>v[k]!=null?v[k]:"");
 function notifier(c,to,note){
  const cfg=S.config;if(!cfg.notif||cfg.notif[to]!==true||!cfg.tpl[to])return;
@@ -1551,6 +1681,7 @@ VIEWS.mesCmd=()=>{
  return`<div class="between"><h1>Mes commandes à livrer</h1><div class="flex"><button class="btn" data-act="waOpen">💬 Saisie depuis WhatsApp</button><button class="btn ghost" data-act="newVCmd">➕ Nouvelle commande</button><button class="btn ghost" data-act="vImport">⬆ Importer un fichier CSV</button></div></div>
  <p class="mu">Bienvenue <b>${esc(v.nom)}</b>. Déposez ici les commandes de vos clients : ANGEL'S GROUP confirme, prépare et livre à moto, puis vous règle le prix de vos articles.</p>
  <div class="grid">${kpi("À confirmer",n(c=>c.statut==="attente"),"w")}${kpi("En cours",n(c=>["confirmee","preparation","prete","affectee","en_cours"].includes(c.statut)))}${kpi("Livrées",n(c=>c.statut==="livree"),"o")}${kpi("Échecs / retours",n(c=>["echouee","retour_cours","retour_recu"].includes(c.statut)),"e")}${kpi("Reste à recevoir",fcfa(d.restant),"o")}</div>
+ ${vendCollectes(v)}
  <h2>Mes commandes</h2>${tbl(["Commande","Client / destination","Total client","Statut",""],mine.map(c=>`<tr><td><b>${c.numero}</b><br><span class="mu sm">${fdt(c.date)}</span></td><td>${esc(cli(c.client_id).nom)}<br><span class="mu sm">${esc(c.adr.zone)} · ${esc(c.adr.quartier||"")}</span></td><td>${fcfa(c.total)}<br><span class="mu sm">${c.vendeur_encaisse?"produits déjà payés":"à encaisser "+fcfa(soldeCmd(c))}</span></td><td>${sb(c)}</td><td><button class="btn sm ghost" data-act="cmdDetail" data-id="${c.id}">Ouvrir</button></td></tr>`),"Aucune commande pour le moment")}`};
 VIEWS.mesReg=()=>{
  const v=vend();if(!v)return'<div class="card">Compte vendeur non rattaché.</div>';const d=vendDue(v);
@@ -1770,6 +1901,7 @@ async function hydrate(){
  CL.vd={};dues.forEach(d=>CL.vd[d.vendeur_id]={acquis:+d.acquis,regle:+d.regle,restant:+d.restant,attente:+d.attente,elig:[]});
  elig.forEach(e=>{(CL.vd[e.vendeur_id]=CL.vd[e.vendeur_id]||{acquis:0,regle:0,restant:0,attente:0,elig:[]}).elig.push({commande_id:e.commande_id,net:+e.net,livree_le:e.livree_le})});
  try{const ph=await CL.chk(CL.sb.from("commande_photos").select("id,commande_id").range(0,4999));const cnt={};ph.forEach(x=>cnt[x.commande_id]=(cnt[x.commande_id]||0)+1);N.commandes.forEach(c=>{if(cnt[c.id])c.nphotos=cnt[c.id]})}catch(e){}
+ try{const [cl,cc,cd]=await Promise.all([fetchAll("collectes"),fetchAll("collecte_commandes","commande_id"),fetchAll("collecte_codes","collecte_id")]);const g=grp(cc,"collecte_id"),codes=Object.fromEntries(cd.map(x=>[x.collecte_id,x.code]));N.collectes=cl.map(c=>Object.assign({},c,{code:codes[c.id],lignes:(g[c.id]||[]).map(l=>({commande_id:l.commande_id,numero:l.numero,resume:l.resume,colis_collectes:l.colis_collectes,colis_recus:l.colis_recus}))}))}catch(e){N.collectes=[]}
  try{const [iv,il]=await Promise.all([fetchAll("inventaires"),fetchAll("inventaire_lignes")]);const g=grp(il,"inventaire_id");N.inventaires=iv.map(i=>Object.assign({},i,{lignes:(g[i.id]||[]).map(l=>({produit_id:l.produit_id,theorique:l.theorique,compte:l.compte,note:l.note}))}))}catch(e){N.inventaires=[]}
  try{N.avis=(await fetchAll("avis_livraison","livraison_id")).map(a=>({livraison_id:a.livraison_id,livreur_id:a.livreur_id,note:a.note,commentaire:a.commentaire,ts:a.cree_le}))}catch(e){N.avis=[]}
  try{const [dd,ff]=await Promise.all([fetchAll("livreur_dossiers","livreur_id"),CL.sb.from("livreur_fichiers").select("livreur_id,kind,miniature").range(0,999)]);

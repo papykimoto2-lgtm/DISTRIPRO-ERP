@@ -12,7 +12,7 @@ const reg=await pg.evaluate(async()=>{const r=await navigator.serviceWorker.read
 await pg.reload();await pg.waitForTimeout(800);
 await ctx.setOffline(true);await pg.reload();await pg.waitForTimeout(1000);
 chk('ouverture hors connexion',/Essayez sans rien installer/.test(await pg.innerText('body')));
-await pg.click('.pcard >> nth=0');await pg.waitForTimeout(300);chk('démo utilisable hors connexion',/Bonjour/.test(await pg.innerText('body')));
+await pg.click('.pcard >> nth=0');await pg.waitForTimeout(300);chk('démo utilisable hors connexion',/Bonjour|Bon après-midi|Bonsoir/.test(await pg.innerText('body')));
 await ctx.setOffline(false);
 // invite d'installation (simulée)
 await pg.evaluate(()=>{ME=null;render()});await pg.waitForTimeout(200);

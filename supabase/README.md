@@ -75,3 +75,6 @@ Migration `20261015000000_inventaire_etats.sql` : colonne `produits.cout`, `rece
 
 ### Photos de commande (saisie WhatsApp)
 Migration `20261016000000_photos_commandes.sql` : `commande_photos` (JPEG/PNG 300 Ko max, 8 par commande), `ajouter_photo_commande` / `retirer_photo_commande` (équipe commerciale ou vendeur propriétaire ; commande non terminée), lecture par l'équipe, le préparateur, le vendeur propriétaire et le livreur de la mission. Tests : `tests/test_photos.sql`, `tests/banc/e2e_whatsapp*.js`, `e2e_partage.js`.
+
+### Collectes chez les vendeurs
+Migration `20261017000000_collectes.sql` : `vendeurs.adresse_collecte`, `collectes` (planifiée → acceptée → en route → collectée → réceptionnée ; non réalisée / annulée), `collecte_codes` (code lisible par le vendeur et le superviseur, jamais par le livreur), `collecte_commandes` (colis collectés / reçus, résumé des articles). Fonctions : `maj_adresse_collecte`, `planifier_collecte` (administrateur, superviseur ; commandes confirmées du vendeur, pas déjà en collecte ; dossier du livreur contrôlé si l'option est active), `collecte_action` (accepter, refuser, partir, collecter avec code et 5 essais, recevoir par le préparateur ou l'administrateur — les commandes complètes passent en préparation —, reaffecter, annuler, echec). Tests : `tests/test_collectes.sql`, `tests/banc/e2e_collectes*.js`.
