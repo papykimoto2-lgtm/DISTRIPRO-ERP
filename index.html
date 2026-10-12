@@ -110,6 +110,7 @@ aside .themes{margin:6px 0 2px}aside .themes button{width:18px;height:18px;borde
 .mkd{font-size:24px;line-height:24px;transform:translate(-50%,-100%);filter:drop-shadow(0 1px 2px #0006)}
 .lgd{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--mu);margin:6px 0 10px}.lgd span{display:inline-flex;gap:5px;align-items:center}
 @media(max-width:900px){.cm{grid-template-columns:1fr}.cmside{max-height:260px;min-height:0}#cm_map{height:60vh}}
+.cnt{width:90px;text-align:right}.ecp{color:var(--ok);font-weight:700}.ecn{color:var(--er);font-weight:700}tr.tot td{font-weight:800;background:var(--bbg)}
 .kpi{transition:.15s}.kpi:hover{box-shadow:0 4px 14px rgba(15,37,112,.12);transform:translateY(-1px)}
 @media(max-width:760px){.login.hero{grid-template-columns:1fr}.hero-l{padding:28px 22px;min-height:0}.hero-l h1{font-size:23px}.hero-r{padding:22px 16px}.pcards{grid-template-columns:1fr}}
 
@@ -176,6 +177,9 @@ const NAV=[
  {v:"notifs",l:"Notifications",i:"💬",r:["admin","superviseur","commercial"]},
  {v:"clients",l:"Clients",i:"👥",r:["admin","superviseur","commercial"]},
  {v:"produits",l:"Produits & stock",i:"📦",r:["admin","commercial","preparateur"]},
+ {v:"journal",l:"Journal des mouvements",i:"📒",r:["admin","direction","superviseur","commercial","preparateur"]},
+ {v:"inventaire",l:"Inventaire",i:"📋",r:["admin","direction","superviseur","commercial","preparateur"]},
+ {v:"etats",l:"États périodiques",i:"🧾",r:["admin","direction","superviseur","commercial","caissier"]},
  {v:"livreurs",l:"Livreurs & motos",i:"🛵",r:["admin","superviseur"]},
  {v:"finance",l:"Finance",i:"💰",r:["admin","direction","caissier"]},
  {v:"incidents",l:"Incidents & retours",i:"⚠️",r:["admin","superviseur","preparateur"]},
@@ -310,7 +314,7 @@ function seed(){
   exp=new Date(Date.now()+400*864e5).toISOString().slice(0,10);
   L1.dossier={piece_type:"cni",piece_numero:"SPECIMEN-0001",piece_expire:exp,permis_numero:"SPECIMEN-P-01",permis_categorie:"A",permis_expire:exp,adresse:"Cocody, Abidjan",contact_urgence_nom:"Famille Traoré",contact_urgence_tel:"0100000001",garant_nom:"",garant_tel:"",date_naissance:"1996-04-12",consent_le:now(),maj_le:now()};
   L1.fichiers={photo:{full:av(),mini:av()},piece_recto:{full:sp("CARTE D'IDENTITÉ — RECTO","#e8f0ff","#0f2570")},piece_verso:{full:sp("CARTE D'IDENTITÉ — VERSO","#e8f0ff","#0f2570")},permis:{full:sp("PERMIS DE CONDUIRE","#fff1d6","#7a4a00")}}}
- [["P-RIZ","Riz 25 kg",14500,40],["P-HUI","Huile végétale 5 L",6500,60],["P-SUC","Sucre 5 kg",3500,80],["P-SAV","Savon (carton)",8000,25],["P-EAU","Eau minérale (pack)",1800,120]].forEach(p=>S.produits.push({id:uid("p"),code:p[0],nom:p[1],prix:p[2],stock:p[3],seuil:10,actif:true}));
+ [["P-RIZ","Riz 25 kg",14500,40],["P-HUI","Huile végétale 5 L",6500,60],["P-SUC","Sucre 5 kg",3500,80],["P-SAV","Savon (carton)",8000,25],["P-EAU","Eau minérale (pack)",1800,120]].forEach(p=>S.produits.push({id:uid("p"),code:p[0],nom:p[1],prix:p[2],cout:Math.round(p[2]*.78/50)*50,stock:p[3],seuil:10,actif:true}));
  const addr=(lib,zn,q,rep,gps,ins)=>({id:uid("a"),libelle:lib,zone:zn,quartier:q,repere:rep,gps,instructions:ins||""});
  const mkC=(nom,tel,adrs)=>{adrs[0].defaut=true;const c={id:uid("cl"),nom,tel,tel2:"",adresses:adrs,note:""};S.clients.push(c);return c};
  const C1=mkC("Boutique Mariam","0505111111",[addr("Boutique","Cocody","Riviera 2","Face pharmacie",{lat:5.3600,lng:-3.9700},"Sonner 2 fois"),addr("Domicile","Marcory","Zone 4","Près du marché",null)]);
@@ -336,6 +340,13 @@ function seed(){
   const vo=creerCmdVendeur(V,{nom:"Cliente Fatou",tel:"0505444444",zone:"Cocody",quartier:"Angré",repere:"Château d'eau",ins:"",lignes:[{desig:"Sac à main",qte:2,pu:12000}],pay:"livraison",obs:""});
   setStatut(vo,"confirmee");toPrete(vo);const lv=affecter(vo,L1.id,"");accepter(lv);priseEnCharge(lv,1);demarrer(lv);confirmer(lv,{code:lv.code,montant:vo.total,mode:"Espèces",recu_par:"Fatou"})}
  {const t=new Date().toISOString();[[L1,5.3525,-3.9745],[L3,5.3350,-4.0700]].forEach(([l,la,ln])=>{if(!S.pos[l.id])S.pos[l.id]={lat:la,lng:ln,acc:15,ts:t,livraison_id:null}})}
+ S.inventaires=S.inventaires||[];
+ {const bk=d=>new Date(Date.now()-d*864e5).toISOString(),mv=(p,q,t,r,d,par)=>{p.stock+=q;S.stock_mvts.push({id:uid("m"),ts:bk(d),produit_id:p.id,type:t,qte:q,ref:r,par:par||"Responsable commercial"})};
+  S.produits.forEach((p,i)=>mv(p,[40,60,50,30,80][i%5],"entree","BL-FRN-"+(1001+i)+" — Grossiste Abidjan",26-i));
+  const rz=S.produits[0],sv=S.produits[3];mv(rz,-2,"inventaire","INV-2026-0001",10,"Administrateur");mv(sv,1,"inventaire","INV-2026-0001",10,"Administrateur");
+  S.inventaires.push({id:uid("iv"),numero:"INV-2026-0001",statut:"valide",note:"Inventaire de fin de mois",cree_le:bk(10.2),cree_par_nom:"Préparateur Moussa",clos_le:bk(10),clos_par_nom:"Administrateur",
+   lignes:S.produits.map(p=>({produit_id:p.id,theorique:p.stock-(p===rz?-2:p===sv?1:0),compte:p.stock,note:p===rz?"2 sacs éventrés":null}))});
+  const iv=S.inventaires[0];iv.lignes.forEach(l=>{const p=prod(l.produit_id);const d=(p===rz?-2:p===sv?1:0);l.compte=l.theorique+d})}
  S.avis=S.avis||[];S.livraisons.filter(l=>l.statut==="livree").forEach((l,i)=>S.avis.push({livraison_id:l.id,livreur_id:l.livreur_id,note:[5,4,5][i%3],commentaire:i===0?"Très rapide, merci !":null,ts:l.fin_at}));
  S.notifs=S.notifs.slice(-3);
  S.audit.push({ts:now(),user:"Système",role:"système",action:"Initialisation",detail:"Données de démonstration chargées"});
@@ -415,6 +426,106 @@ function refreshInstall(){
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();IPROMPT=e;refreshInstall()});
 window.addEventListener("appinstalled",()=>{IPROMPT=null;refreshInstall();try{toast("Application installée ✔","ok")}catch(e){}});
 if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+/* ---------- Journal des mouvements, inventaire, états périodiques ---------- */
+const MVT_L={stock_initial:"Stock initial",entree:"Entrée",sortie_commande:"Sortie (commande)",annulation:"Annulation (retour au stock)",retour_stock:"Retour en stock",ajustement:"Ajustement",inventaire:"Inventaire"};
+const MVT_K={stock_initial:"ok",entree:"ok",sortie_commande:"er",annulation:"ok",retour_stock:"ok",ajustement:"wa",inventaire:"wa"};
+const ymd=d=>{const x=new Date(d);return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0")};
+function perRange(pre){const k=ui[pre+"p"]||"30",t=new Date();let du,au=ymd(t);const back=n=>{const d=new Date(t);d.setDate(d.getDate()-n);return ymd(d)};
+ if(k==="0")du=au;else if(k==="7")du=back(6);else if(k==="30")du=back(29);else if(k==="m")du=ymd(new Date(t.getFullYear(),t.getMonth(),1));
+ else if(k==="mp"){du=ymd(new Date(t.getFullYear(),t.getMonth()-1,1));au=ymd(new Date(t.getFullYear(),t.getMonth(),0))}
+ else if(k==="t")du=ymd(new Date(t.getFullYear(),Math.floor(t.getMonth()/3)*3,1));else if(k==="a")du=t.getFullYear()+"-01-01";
+ else{du=ui[pre+"du"]||au;au=ui[pre+"au"]||au}
+ if(au<du)au=du;return{du,au,k}}
+const perSel2=pre=>{const r=perRange(pre);return`<select data-f="${pre}p" style="width:auto">${opts([{v:"0",t:"Aujourd'hui"},{v:"7",t:"7 derniers jours"},{v:"30",t:"30 derniers jours"},{v:"m",t:"Ce mois"},{v:"mp",t:"Mois dernier"},{v:"t",t:"Ce trimestre"},{v:"a",t:"Cette année"},{v:"c",t:"Dates précises…"}],r.k)}</select>${r.k==="c"?`<input type="date" data-f="${pre}du" value="${r.du}" style="width:auto"><input type="date" data-f="${pre}au" value="${r.au}" style="width:auto">`:""}`};
+const fdj=d=>new Date(d+"T12:00:00").toLocaleDateString("fr-FR");
+const DC={};
+function cachedRpc(key,fn){const e=DC[key];if(e&&e.rows)return e.rows;if(e&&e.err)return{err:e.err};if(!e){DC[key]={};fn().then(r=>{DC[key]={rows:r||[]};render()}).catch(x=>{DC[key]={err:fixErr(x)};render()})}return null}
+function dcClear(){Object.keys(DC).forEach(k=>delete DC[k])}
+function csvDown(name,head,rows){const q=v=>{v=v==null?"":String(v);return/[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+ const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+[head,...rows].map(r=>r.map(q).join(";")).join("\r\n")],{type:"text/csv;charset=utf-8"}));a.download=name+"_"+ymd(new Date())+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+const RPT_CSS="body{font:12px system-ui,Segoe UI,sans-serif;color:#111;margin:18px}h1{font-size:18px;margin:0}h2{font-size:14px;margin:16px 0 6px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:4px 6px;text-align:left}th{background:#eee}td.n,th.n{text-align:right}tr.tot td{font-weight:700;background:#f3f3f3}.sub{color:#555;margin:2px 0 10px}.blank{height:22px}@media print{@page{margin:12mm}}";
+function rapport(title,body){modal(title,`<iframe id="docf" style="width:100%;height:540px;border:1px solid var(--bd);border-radius:8px;background:#fff" srcdoc="${esc(`<!doctype html><meta charset=utf-8><style>${RPT_CSS}</style>${body}`)}"></iframe><div class="flex noprint"><button type="button" class="btn" data-act="printFrame">🖨 Imprimer / enregistrer en PDF</button></div>`,{wide:true,focus:false})}
+const rptHead=(t,sub)=>`<h1>${esc(S.config.org||"ANGEL'S GROUP")} — ${esc(t)}</h1><div class="sub">${esc(sub)} · édité le ${new Date().toLocaleString("fr-FR")} par ${esc(ME.nom)}</div>`;
+const sgn=n=>(n>0?"+":"")+n;
+
+function journalLocal(du,au,pid,type){
+ const by={};S.stock_mvts.map((m,i)=>({m,i})).sort((a,b)=>new Date(a.m.ts)-new Date(b.m.ts)||a.i-b.i).forEach(x=>(by[x.m.produit_id]=by[x.m.produit_id]||[]).push(x.m));
+ const rows=[];Object.entries(by).forEach(([id,list])=>{const p=prod(id);let after=p?p.stock:0;for(let i=list.length-1;i>=0;i--){const m=list[i];rows.push({id:m.id,ts:m.ts,produit_id:id,code:p?p.code:"?",nom:p?p.nom:"?",type:m.type,qte:m.qte,solde:after,ref:m.ref,par_nom:m.par});after-=m.qte}});
+ return rows.filter(r=>{const d=ymd(r.ts);return d>=du&&d<=au&&(!pid||r.produit_id===pid)&&(!type||r.type===type)}).sort((a,b)=>new Date(b.ts)-new Date(a.ts))}
+function etatStockLocal(du,au){
+ return S.produits.map(p=>{const ms=S.stock_mvts.filter(m=>m.produit_id===p.id),sum=f=>ms.filter(f).reduce((t,m)=>t+m.qte,0),inP=m=>{const d=ymd(m.ts);return d>=du&&d<=au};
+  return{produit_id:p.id,code:p.code,nom:p.nom,cout:p.cout||0,prix:p.prix,ouverture:p.stock-sum(m=>ymd(m.ts)>=du),entrees:sum(m=>inP(m)&&["entree","stock_initial"].includes(m.type)),sorties:sum(m=>inP(m)&&m.type==="sortie_commande"),
+   retours:sum(m=>inP(m)&&["annulation","retour_stock"].includes(m.type)),ajustements:sum(m=>inP(m)&&m.type==="ajustement"),inventaires:sum(m=>inP(m)&&m.type==="inventaire"),cloture:p.stock-sum(m=>ymd(m.ts)>au)}})}
+function journalRows(){const r=perRange("j"),k=["j",r.du,r.au,ui.jprod||"",ui.jtype||""].join("|");
+ return CL.on?cachedRpc(k,()=>CL.rpc("journal_stock",{p_du:r.du,p_au:r.au,p_produit:ui.jprod||null,p_type:ui.jtype||null,p_limite:5000})):journalLocal(r.du,r.au,ui.jprod||"",ui.jtype||"")}
+VIEWS.journal=()=>{
+ const r=perRange("j"),rows=journalRows();
+ const head=`<div class="between"><h1>Journal des mouvements de stock</h1><div class="flex">${perSel2("j")}<select data-f="jprod" style="width:auto"><option value="">Tous les produits</option>${opts(S.produits.map(p=>({v:p.id,t:p.code+" — "+p.nom})),ui.jprod||"")}</select><select data-f="jtype" style="width:auto"><option value="">Tous les types</option>${opts(Object.entries(MVT_L).map(([v,t])=>({v,t})),ui.jtype||"")}</select></div></div>`;
+ if(!rows)return head+'<div class="al">Chargement du journal…</div>';if(rows.err)return head+`<div class="al er">${esc(rows.err)}</div>`;
+ const ent=rows.filter(x=>x.qte>0).reduce((t,x)=>t+x.qte,0),sor=rows.filter(x=>x.qte<0).reduce((t,x)=>t+x.qte,0);
+ return head+`<div class="grid">${kpi("Mouvements",rows.length)}${kpi("Entrées (unités)","+"+ent,"o")}${kpi("Sorties (unités)",String(sor),"e")}${kpi("Solde de la période",sgn(ent+sor),ent+sor<0?"w":"")}</div>
+ <div class="flex noprint" style="margin:10px 0">${can("admin","commercial","preparateur")?'<button class="btn" data-act="newEntree">➕ Entrée de stock</button>':""}<button class="btn ghost" data-act="jrCsv">⬇ Exporter (CSV)</button><button class="btn ghost" data-act="jrPrint">🖨 Imprimer</button></div>
+ ${tbl(["Date","Produit","Type","Quantité","Stock après","Référence","Par"],rows.slice(0,500).map(m=>`<tr><td>${fdt(m.ts)}</td><td><b>${esc(m.code)}</b> ${esc(m.nom)}</td><td>${badge(MVT_L[m.type]||m.type,MVT_K[m.type]||"mu")}</td><td><b class="${m.qte>0?"ecp":"ecn"}">${sgn(m.qte)}</b></td><td>${m.solde}</td><td>${esc(m.ref||"")}</td><td>${esc(m.par_nom||"")}</td></tr>`))}
+ ${rows.length>500?`<p class="mu sm">Les 500 mouvements les plus récents sont affichés ; l'export contient les ${rows.length}.</p>`:""}
+ <p class="mu sm">Le journal est en ajout seul : un mouvement ne se modifie ni ne se supprime ; une erreur se corrige par un mouvement inverse. « Stock après » est le stock du produit juste après ce mouvement.</p>`};
+function entreeForm(){
+ modal("Entrée de stock",`<label>Produit<select name="p" required>${opts(S.produits.map(p=>({v:p.id,t:p.code+" — "+p.nom+" (stock "+p.stock+")"})))}</select></label>
+ <div class="g3"><label>Quantité reçue<input type="number" name="q" min="1" required></label><label>Coût d'achat unitaire (F, facultatif)<input type="number" name="c" min="0"></label><label>Référence de réception<input name="r" required placeholder="N° bon de livraison / facture"></label></div>
+ <div class="sm mu">Fournisseur, transporteur ou remarque : ajoutez-les à la référence. La référence est obligatoire pour la traçabilité.</div>`,
+ {label:"Enregistrer l'entrée",onSubmit:d=>{const q=+d.q;if(!(q>0))return toast("Quantité invalide","err"),false;if(!d.r.trim())return toast("Référence obligatoire","err"),false;
+  if(CL.on)return CL.go(()=>CL.rpc("recevoir_stock",{p_produit:d.p,p_qte:q,p_ref:d.r.trim(),p_cout:d.c===""?null:+d.c}),"Entrée enregistrée").then(x=>{dcClear();return x});
+  const p=prod(d.p);stockMvt(p,q,"entree",d.r.trim());if(d.c!=="")p.cout=+d.c;audit("Entrée de stock",p.nom+" +"+q+" — "+d.r.trim());save();render();toast("Entrée enregistrée","ok")}})}
+function journalExportRows(){const rows=journalRows();return rows&&!rows.err?rows:[]}
+
+/* ---- Inventaire ---- */
+const invOuvert=()=>(S.inventaires||[]).find(i=>i.statut==="ouvert");
+const invEcarts=i=>i.lignes.filter(l=>l.compte!=null&&l.compte!==l.theorique);
+const invValeur=i=>invEcarts(i).reduce((t,l)=>t+(l.compte-l.theorique)*((prod(l.produit_id)||{}).cout||0),0);
+VIEWS.inventaire=()=>{
+ const inv=invOuvert(),hist=(S.inventaires||[]).filter(i=>i.statut!=="ouvert").slice().sort((a,b)=>new Date(b.cree_le)-new Date(a.cree_le));
+ const canC=can("admin","commercial","preparateur");let h=`<div class="between"><h1>Inventaire physique</h1>${!inv&&canC?'<button class="btn" data-act="invOpen">➕ Ouvrir un inventaire</button>':""}</div>`;
+ if(inv){
+  const L=inv.lignes.slice().sort((a,b)=>((prod(a.produit_id)||{}).code||"").localeCompare((prod(b.produit_id)||{}).code||"")),done=L.filter(l=>l.compte!=null).length,show=ui.invth==="1";
+  h+=`<div class="card"><div class="between"><div><b>${esc(inv.numero)}</b> ${badge("En cours","wa")}<br><span class="sm mu">Ouvert le ${fdt(inv.cree_le)} par ${esc(inv.cree_par_nom||"")}${inv.note?" · "+esc(inv.note):""}</span></div>
+   <div class="flex noprint"><label style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" id="inv_th" style="width:auto" ${show?"checked":""}> Afficher le stock théorique</label><button class="btn ghost" data-act="invSheet">🖨 Fiche de comptage</button>${can("admin")?'<button class="btn ok" data-act="invValid">✔ Valider</button><button class="btn er" data-act="invCancel">Annuler</button>':""}</div></div>
+   <div class="pill" style="margin-top:8px">Progression : <b id="inv_prog">${done} / ${L.length}</b> produits comptés — la validation exige que tout soit compté</div>
+   <div class="sm mu" style="margin:6px 0">Comptez d'abord sans voir le stock théorique (comptage à l'aveugle) : c'est plus fiable. Saisissez la quantité réellement présente ; l'enregistrement est automatique.</div>
+   ${tbl(["Code","Produit",...(show?["Théorique"]:[]),"Compté",...(show?["Écart"]:[]),"Observation"],L.map(l=>{const p=prod(l.produit_id)||{code:"?",nom:"?"},e=l.compte==null?null:l.compte-l.theorique;
+     return`<tr><td>${esc(p.code)}</td><td>${esc(p.nom)}</td>${show?`<td>${l.theorique}</td>`:""}<td>${canC?`<input class="cnt" type="number" min="0" data-inv="${l.produit_id}" value="${l.compte==null?"":l.compte}">`:(l.compte==null?"—":l.compte)}</td>${show?`<td class="ec">${e==null?"—":`<span class="${e>0?"ecp":e<0?"ecn":""}">${e?sgn(e):"0"}</span>`}</td>`:""}<td>${canC?`<input data-invn="${l.produit_id}" value="${esc(l.note||"")}" placeholder="ex. carton abîmé" style="min-width:160px">`:esc(l.note||"")}</td></tr>`}))}</div>`}
+ h+=`<h2>Historique des inventaires</h2>`+tbl(["Numéro","Ouvert le","Statut","Écarts","Valeur de l'écart (au coût)","Clos par",""],hist.map(i=>`<tr><td><b>${esc(i.numero)}</b></td><td>${fdt(i.cree_le)}</td><td>${i.statut==="valide"?badge("Validé","ok"):badge("Annulé","er")}</td><td>${i.statut==="valide"?invEcarts(i).length:"—"}</td><td>${i.statut==="valide"?`<b class="${invValeur(i)<0?"ecn":invValeur(i)>0?"ecp":""}">${fcfa(invValeur(i))}</b>`:"—"}</td><td>${esc(i.clos_par_nom||"")}</td><td><button class="btn sm ghost" data-act="invView" data-id="${i.id}">Voir</button></td></tr>`));
+ return h+`<p class="mu sm">À la validation, chaque écart devient un mouvement « inventaire » au journal ; l'écart se calcule contre le stock du moment de l'ouverture, donc les ventes faites pendant le comptage restent valables. Un inventaire validé ne peut plus être modifié.</p>`};
+function invSheetHTML(inv,withTh){const L=inv.lignes.slice().sort((a,b)=>((prod(a.produit_id)||{}).code||"").localeCompare((prod(b.produit_id)||{}).code||""));
+ return rptHead("Fiche de comptage "+inv.numero,"Inventaire du "+fdt(inv.cree_le))+`<table><tr><th>Code</th><th>Produit</th>${withTh?'<th class="n">Théorique</th>':""}<th class="n" style="width:90px">Compté</th><th>Observation</th></tr>${L.map(l=>{const p=prod(l.produit_id)||{code:"?",nom:"?"};return`<tr class="blank"><td>${esc(p.code)}</td><td>${esc(p.nom)}</td>${withTh?`<td class="n">${l.theorique}</td>`:""}<td></td><td></td></tr>`}).join("")}</table><p style="margin-top:28px">Compté par : ____________________ &nbsp;&nbsp; Contrôlé par : ____________________ &nbsp;&nbsp; Date : ____ / ____ / ________</p>`}
+function invReportHTML(inv){const L=inv.lignes.slice().sort((a,b)=>((prod(a.produit_id)||{}).code||"").localeCompare((prod(b.produit_id)||{}).code||""));let tv=0;
+ const rows=L.map(l=>{const p=prod(l.produit_id)||{code:"?",nom:"?",cout:0},e=l.compte==null?null:l.compte-l.theorique,v=e==null?0:e*(p.cout||0);tv+=v;return`<tr><td>${esc(p.code)}</td><td>${esc(p.nom)}</td><td class="n">${l.theorique}</td><td class="n">${l.compte==null?"—":l.compte}</td><td class="n"><b>${e==null?"—":e?sgn(e):"0"}</b></td><td class="n">${e?fcfa(v):""}</td><td>${esc(l.note||"")}</td></tr>`}).join("");
+ return rptHead("Rapport d'inventaire "+inv.numero,(inv.statut==="valide"?"Validé le "+fdt(inv.clos_le)+" par "+(inv.clos_par_nom||""):inv.statut==="annule"?"ANNULÉ — "+(inv.motif_annulation||""):"En cours")+" · ouvert par "+(inv.cree_par_nom||""))+`<table><tr><th>Code</th><th>Produit</th><th class="n">Théorique</th><th class="n">Compté</th><th class="n">Écart</th><th class="n">Valeur (coût)</th><th>Observation</th></tr>${rows}<tr class="tot"><td colspan="5">Valeur totale des écarts</td><td class="n">${fcfa(tv)}</td><td></td></tr></table>`}
+
+/* ---- États périodiques ---- */
+function etatActivite(du,au){
+ const inR=t=>{if(!t)return false;const d=ymd(t);return d>=du&&d<=au},sum=a=>a.reduce((t,x)=>t+(+x.montant||0),0);
+ const liv=S.livraisons.filter(l=>l.statut==="livree"&&inR(l.fin_at)),ech=S.livraisons.filter(l=>l.statut==="echouee"&&inR(l.fin_at));
+ const cs=liv.map(l=>cmd(l.commande_id)).filter(Boolean);
+ return{crees:S.commandes.filter(c=>inR(c.date)).length,livrees:liv.length,echouees:ech.length,annulees:S.commandes.filter(c=>c.statut==="annulee"&&inR(c.date)).length,
+  ca:cs.reduce((t,c)=>t+c.total,0),frais:cs.reduce((t,c)=>t+(c.frais||0),0),
+  taux:liv.length+ech.length?liv.length/(liv.length+ech.length)*100:0,
+  encaisse:sum(S.fonds.filter(f=>["encaissement","acompte"].includes(f.type)&&inR(f.ts))),reverse:sum(S.fonds.filter(f=>f.type==="reversement"&&inR(f.ts))),
+  dep:sum(S.depenses.filter(d=>inR(d.ts))),paie:sum(S.paie.filter(x=>inR(x.ts))),comm:liv.reduce((t,l)=>t+commissionLiv(l),0),regl:sum(S.reglements.filter(x=>inR(x.ts)))}}
+function etatStockRows(){const r=perRange("e"),k=["e",r.du,r.au].join("|");return CL.on?cachedRpc(k,()=>CL.rpc("etat_stock",{p_du:r.du,p_au:r.au})):etatStockLocal(r.du,r.au)}
+function etatsBody(rows,a,r){
+ const T=rows.reduce((t,x)=>{["ouverture","entrees","sorties","retours","ajustements","inventaires","cloture"].forEach(k=>t[k]+=x[k]);t.vc+=x.cloture*x.cout;t.vv+=x.cloture*x.prix;return t},{ouverture:0,entrees:0,sorties:0,retours:0,ajustements:0,inventaires:0,cloture:0,vc:0,vv:0});
+ let h=`<h2>1. État des stocks</h2><table><tr><th>Produit</th><th class="n">Stock au ${fdj(r.du)}</th><th class="n">Entrées</th><th class="n">Sorties</th><th class="n">Retours</th><th class="n">Ajustements</th><th class="n">Inventaire</th><th class="n">Stock au ${fdj(r.au)}</th><th class="n">Valeur au coût</th><th class="n">Valeur à la vente</th></tr>
+ ${rows.map(x=>`<tr><td><b>${esc(x.code)}</b> ${esc(x.nom)}</td><td class="n">${x.ouverture}</td><td class="n">${x.entrees?sgn(x.entrees):0}</td><td class="n">${x.sorties||0}</td><td class="n">${x.retours?sgn(x.retours):0}</td><td class="n">${x.ajustements?sgn(x.ajustements):0}</td><td class="n">${x.inventaires?sgn(x.inventaires):0}</td><td class="n"><b>${x.cloture}</b></td><td class="n">${x.cout?fcfa(x.cloture*x.cout):"—"}</td><td class="n">${fcfa(x.cloture*x.prix)}</td></tr>`).join("")}
+ <tr class="tot"><td>Total</td><td class="n">${T.ouverture}</td><td class="n">${sgn(T.entrees)}</td><td class="n">${T.sorties}</td><td class="n">${sgn(T.retours)}</td><td class="n">${sgn(T.ajustements)}</td><td class="n">${sgn(T.inventaires)}</td><td class="n">${T.cloture}</td><td class="n">${fcfa(T.vc)}</td><td class="n">${fcfa(T.vv)}</td></tr></table>`;
+ if(a)h+=`<h2>2. Activité de livraison</h2><table><tr><td>Commandes créées</td><td class="n">${a.crees}</td></tr><tr><td>Livraisons réussies</td><td class="n">${a.livrees}</td></tr><tr><td>Livraisons échouées</td><td class="n">${a.echouees}</td></tr><tr><td>Commandes annulées</td><td class="n">${a.annulees}</td></tr><tr><td>Taux de réussite</td><td class="n">${a.taux.toFixed(0)} %</td></tr><tr><td>Montant des commandes livrées</td><td class="n">${fcfa(a.ca)}</td></tr><tr><td>dont frais de livraison</td><td class="n">${fcfa(a.frais)}</td></tr></table>`;
+ if(a&&can("admin","direction","caissier"))h+=`<h2>3. Caisse</h2><table><tr><td>Encaissements (livreurs et acomptes)</td><td class="n">${fcfa(a.encaisse)}</td></tr><tr><td>Reversements validés par la caisse</td><td class="n">${fcfa(a.reverse)}</td></tr><tr><td>Dépenses de mission</td><td class="n">${fcfa(a.dep)}</td></tr><tr><td>Commissions livreurs acquises</td><td class="n">${fcfa(a.comm)}</td></tr><tr><td>Paiements aux livreurs</td><td class="n">${fcfa(a.paie)}</td></tr><tr><td>Règlements aux vendeurs partenaires</td><td class="n">${fcfa(a.regl)}</td></tr></table>`;
+ return h}
+VIEWS.etats=()=>{
+ const r=perRange("e"),rows=etatStockRows(),head=`<div class="between"><h1>États périodiques</h1><div class="flex">${perSel2("e")}</div></div>`;
+ if(!rows)return head+'<div class="al">Chargement de l\'état…</div>';if(rows.err)return head+`<div class="al er">${esc(rows.err)}</div>`;
+ const a=can("admin","direction","superviseur","commercial","caissier")?etatActivite(r.du,r.au):null;
+ return head+`<div class="sm mu">Période du <b>${fdj(r.du)}</b> au <b>${fdj(r.au)}</b></div><div class="flex noprint" style="margin:8px 0"><button class="btn" data-act="etatPrint">🖨 Imprimer / PDF</button><button class="btn ghost" data-act="etatCsv">⬇ Stock (CSV)</button></div><div class="card" id="etat_body">${etatsBody(rows,a,r)}</div>
+ <p class="mu sm">Stock d'ouverture = stock restant au début de la période, reconstitué à partir du journal des mouvements ; stock de clôture = stock à la fin de la période. Valeur au coût : produits dont le coût d'achat est renseigné (fiche produit ou entrée de stock).</p>`};
+
 /* ---------- Carte centrale : tous les livreurs en direct ---------- */
 const CARTE={map:null,lg:null,mk:{},fitted:false,timer:null,view:null,sim:null};
 const ini=n=>(n||"?").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
@@ -676,8 +787,8 @@ function cliDetail(id){const c=cli(id),cs=S.commandes.filter(x=>x.client_id===id
 VIEWS.produits=()=>`<div class="between"><h1>Produits & stock</h1>${can("admin","commercial")?'<button class="btn" data-act="newProd">➕ Nouveau produit</button>':""}</div>
  ${tbl(["Code","Désignation","Prix","Stock","Seuil","Statut",""],S.produits.map(p=>`<tr><td>${esc(p.code)}</td><td>${esc(p.nom)}</td><td>${fcfa(p.prix)}</td><td><b style="color:${p.stock<=p.seuil?"var(--er)":"inherit"}">${p.stock}</b></td><td>${p.seuil}</td><td>${p.actif?badge("Actif","ok"):badge("Inactif","mu")}</td><td><button class="btn sm ghost" data-act="editProd" data-id="${p.id}">Modifier</button> <button class="btn sm ghost" data-act="adjProd" data-id="${p.id}">Ajuster stock</button></td></tr>`))}
  <h2>Derniers mouvements de stock</h2>${tbl(["Date","Produit","Type","Qté","Référence","Par"],S.stock_mvts.slice(-25).reverse().map(m=>`<tr><td>${fdt(m.ts)}</td><td>${esc(prod(m.produit_id)?prod(m.produit_id).nom:"?")}</td><td>${esc(m.type)}</td><td><b>${m.qte>0?"+":""}${m.qte}</b></td><td>${esc(m.ref||"")}</td><td>${esc(m.par)}</td></tr>`))}`;
-function prodForm(p){modal(p?"Modifier le produit":"Nouveau produit",`<div class="g2"><label>Code<input name="code" required value="${esc(p?p.code:"")}"></label><label>Désignation<input name="nom" required value="${esc(p?p.nom:"")}"></label></div><div class="g3"><label>Prix de vente<input type="number" name="prix" min="0" required value="${p?p.prix:""}"></label><label>${p?"Stock (via « Ajuster »)":"Stock initial"}<input type="number" name="stock" min="0" value="${p?p.stock:0}" ${p?"disabled":""}></label><label>Seuil d'alerte<input type="number" name="seuil" min="0" value="${p?p.seuil:10}"></label></div><label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" name="actif" style="width:auto" ${!p||p.actif?"checked":""}> Produit actif</label>`,
- {onSubmit:d=>{if(CL.on)return CL.prodSave(p,d);if(p){Object.assign(p,{code:d.code,nom:d.nom,prix:+d.prix,seuil:+d.seuil,actif:!!d.actif});audit("Modification produit",p.nom)}else{const n={id:uid("p"),code:d.code,nom:d.nom,prix:+d.prix,stock:0,seuil:+d.seuil,actif:!!d.actif};S.produits.push(n);if(+d.stock>0)stockMvt(n,+d.stock,"stock_initial","");audit("Création produit",n.nom)}save();render()}})}
+function prodForm(p){modal(p?"Modifier le produit":"Nouveau produit",`<div class="g2"><label>Code<input name="code" required value="${esc(p?p.code:"")}"></label><label>Désignation<input name="nom" required value="${esc(p?p.nom:"")}"></label></div><div class="g3"><label>Prix de vente<input type="number" name="prix" min="0" required value="${p?p.prix:""}"></label><label>Coût d'achat<input type="number" name="cout" min="0" value="${p?p.cout||0:0}"></label><label>${p?"Stock (via « Ajuster »)":"Stock initial"}<input type="number" name="stock" min="0" value="${p?p.stock:0}" ${p?"disabled":""}></label><label>Seuil d'alerte<input type="number" name="seuil" min="0" value="${p?p.seuil:10}"></label></div><label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" name="actif" style="width:auto" ${!p||p.actif?"checked":""}> Produit actif</label>`,
+ {onSubmit:d=>{if(CL.on)return CL.prodSave(p,d);if(p){Object.assign(p,{code:d.code,nom:d.nom,prix:+d.prix,cout:+d.cout||0,seuil:+d.seuil,actif:!!d.actif});audit("Modification produit",p.nom)}else{const n={id:uid("p"),code:d.code,nom:d.nom,prix:+d.prix,cout:+d.cout||0,stock:0,seuil:+d.seuil,actif:!!d.actif};S.produits.push(n);if(+d.stock>0)stockMvt(n,+d.stock,"stock_initial","");audit("Création produit",n.nom)}save();render()}})}
 
 /* ---------- Livreurs & motos ---------- */
 VIEWS.livreurs=()=>`<div class="between"><h1>Livreurs & motos</h1><div class="flex"><button class="btn" data-act="newLiv">➕ Livreur</button><button class="btn ghost" data-act="newMoto">➕ Moto</button></div></div>
@@ -848,6 +959,28 @@ const ACT={
  nav:id=>{view=id;render()},
  dossier:id=>dossierForm(liv(id)),dosDel:k=>{if(ui.dos){ui.dos[k]=null;slotSet(k,null)}},
  theme:k=>{setTheme(k);render()},
+ newEntree:entreeForm,
+ jrCsv:()=>{const r=journalExportRows();csvDown("journal_stock",["Date","Code","Produit","Type","Quantité","Stock après","Référence","Par"],r.map(m=>[new Date(m.ts).toLocaleString("fr-FR"),m.code,m.nom,MVT_L[m.type]||m.type,m.qte,m.solde,m.ref||"",m.par_nom||""]))},
+ jrPrint:()=>{const r=perRange("j"),rows=journalExportRows();rapport("Journal des mouvements",rptHead("Journal des mouvements de stock","Du "+fdj(r.du)+" au "+fdj(r.au))+`<table><tr><th>Date</th><th>Produit</th><th>Type</th><th class="n">Qté</th><th class="n">Stock après</th><th>Référence</th><th>Par</th></tr>${rows.map(m=>`<tr><td>${fdt(m.ts)}</td><td>${esc(m.code)} ${esc(m.nom)}</td><td>${esc(MVT_L[m.type]||m.type)}</td><td class="n">${sgn(m.qte)}</td><td class="n">${m.solde}</td><td>${esc(m.ref||"")}</td><td>${esc(m.par_nom||"")}</td></tr>`).join("")}</table>`)},
+ etatPrint:()=>{const r=perRange("e"),rows=etatStockRows();if(!rows||rows.err)return;rapport("État périodique",rptHead("État périodique","Du "+fdj(r.du)+" au "+fdj(r.au))+etatsBody(rows,can("admin","direction","superviseur","commercial","caissier")?etatActivite(r.du,r.au):null,r))},
+ etatCsv:()=>{const r=perRange("e"),rows=etatStockRows();if(!rows||rows.err)return;csvDown("etat_stock_"+r.du+"_"+r.au,["Code","Produit","Stock ouverture","Entrées","Sorties","Retours","Ajustements","Inventaire","Stock clôture","Coût unitaire","Prix de vente","Valeur au coût","Valeur à la vente"],rows.map(x=>[x.code,x.nom,x.ouverture,x.entrees,x.sorties,x.retours,x.ajustements,x.inventaires,x.cloture,x.cout,x.prix,x.cloture*x.cout,x.cloture*x.prix]))},
+ invOpen:()=>modal("Ouvrir un inventaire",`<div class="sm mu">Le stock théorique de chaque produit actif est relevé à l'instant. Un seul inventaire peut être ouvert à la fois.</div><label>Note (facultatif)<input name="n" placeholder="ex. Inventaire de fin de mois"></label>`,{label:"Ouvrir l'inventaire",onSubmit:d=>{
+   if(CL.on)return CL.go(()=>CL.rpc("ouvrir_inventaire",{p_note:d.n||null}),"Inventaire ouvert");
+   if(invOuvert())return toast("Un inventaire est déjà ouvert","err"),false;const y=new Date().getFullYear(),n=S.inventaires.filter(i=>i.numero.startsWith("INV-"+y)).length+1;
+   S.inventaires.push({id:uid("iv"),numero:"INV-"+y+"-"+String(n).padStart(4,"0"),statut:"ouvert",note:d.n||"",cree_le:now(),cree_par_nom:ME.nom,lignes:S.produits.filter(p=>p.actif).map(p=>({produit_id:p.id,theorique:p.stock,compte:null,note:null}))});
+   audit("Inventaire ouvert","INV-"+y+"-"+String(n).padStart(4,"0"));save();render()}}),
+ invSheet:()=>{const i=invOuvert();if(i)rapport("Fiche de comptage",invSheetHTML(i,ui.invth==="1"))},
+ invView:id=>{const i=S.inventaires.find(x=>x.id===id);if(i)rapport("Inventaire "+i.numero,invReportHTML(i))},
+ invValid:()=>{const i=invOuvert();if(!i)return;const miss=i.lignes.filter(l=>l.compte==null).length;if(miss)return toast("Il reste "+miss+" produit(s) non compté(s)","err");
+  const E=invEcarts(i);modal("Valider l'inventaire "+i.numero,`<div class="pill">${E.length} écart(s) · valeur au coût : <b>${fcfa(invValeur(i))}</b></div>${E.length?tbl(["Produit","Théorique","Compté","Écart"],E.map(l=>{const p=prod(l.produit_id);return`<tr><td>${esc(p.nom)}</td><td>${l.theorique}</td><td>${l.compte}</td><td><b class="${l.compte>l.theorique?"ecp":"ecn"}">${sgn(l.compte-l.theorique)}</b></td></tr>`})):'<div class="al">Aucun écart : le stock est conforme.</div>'}<div class="sm mu">La validation crée un mouvement « inventaire » par écart et ferme définitivement l'inventaire.</div>`,
+  {label:"Valider définitivement",cls:"ok",onSubmit:()=>{
+   if(CL.on)return CL.go(()=>CL.rpc("valider_inventaire",{p_inventaire:i.id}),"Inventaire validé").then(x=>{dcClear();return x});
+   for(const l of E){const p=prod(l.produit_id);if(p.stock+(l.compte-l.theorique)<0)return toast("Écart impossible pour « "+p.nom+" » : le stock deviendrait négatif","err"),false}
+   E.forEach(l=>stockMvt(prod(l.produit_id),l.compte-l.theorique,"inventaire",i.numero));i.statut="valide";i.clos_le=now();i.clos_par_nom=ME.nom;audit("Inventaire validé",i.numero+" — "+E.length+" écart(s)");save();render();toast("Inventaire validé","ok")}})},
+ invCancel:()=>{const i=invOuvert();if(!i)return;ask("Annuler l'inventaire "+i.numero,"Motif de l'annulation (obligatoire)",m=>{
+   if(CL.on)return CL.go(()=>CL.rpc("annuler_inventaire",{p_inventaire:i.id,p_motif:m}),"Inventaire annulé");
+   i.statut="annule";i.clos_le=now();i.clos_par_nom=ME.nom;i.motif_annulation=m;audit("Inventaire annulé",i.numero+" — "+m);save();render()},{cls:"er"})},
+
  installApp:async()=>{if(!IPROMPT)return;IPROMPT.prompt();try{await IPROMPT.userChoice}catch(e){}IPROMPT=null;refreshInstall()},
  carteFit:()=>carteFit(),carteFocus:id=>{const m=CARTE.mk[id];if(m&&CARTE.map){CARTE.map.setView(m.getLatLng(),16);m.openPopup()}else toast("Ce livreur n'a pas partagé sa position","err")},
  suiviLien:async id=>{const c=cmd(id);let link;if(CL.on){const t=await CL.rpc("creer_lien_suivi",{p_commande:id});link=location.href.split("#")[0].split("?")[0]+"#suivi="+t}else link=location.href.split("#")[0]+"#suivi="+id;suiviModal(c,link)},
@@ -952,6 +1085,12 @@ document.addEventListener("submit",e=>{
   if(u&&u.actif&&u.pin_h===hashPin(u.id,d.pin)){ME=u;sessionStorage.setItem("angels_me",u.id);view="dashboard";audit("Connexion",u.nom);save();render()}else toast("PIN incorrect","err")}});
 document.addEventListener("change",e=>{const k=e.target.dataset&&e.target.dataset.f;if(k){ui[k]=e.target.value;render()}
  if(e.target.id==="p_imp"&&e.target.files[0]){const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.v!==1||!d.commandes)throw 0;S=d;save();ME=null;sessionStorage.removeItem("angels_me");toast("Données importées","ok");render()}catch(x){toast("Fichier invalide","err")}};r.readAsText(e.target.files[0])}});
+document.addEventListener("change",e=>{const t=e.target;
+ if(t.id==="inv_th"){ui.invth=t.checked?"1":"";render();return}
+ const pid=t.dataset&&(t.dataset.inv||t.dataset.invn);if(!pid)return;const i=invOuvert();if(!i)return;const l=i.lignes.find(x=>x.produit_id===pid);if(!l)return;
+ const row=t.closest("tr"),cInp=row.querySelector("[data-inv]"),nInp=row.querySelector("[data-invn]");const v=cInp.value===""?null:Math.max(0,Math.floor(+cInp.value)),note=nInp.value.trim();
+ const save1=()=>{l.compte=v;l.note=note||null;if(!CL.on)save();const pr=document.getElementById("inv_prog");if(pr)pr.textContent=i.lignes.filter(x=>x.compte!=null).length+" / "+i.lignes.length;const ec=row.querySelector(".ec");if(ec){const e=v==null?null:v-l.theorique;ec.innerHTML=e==null?"—":`<span class="${e>0?"ecp":e<0?"ecn":""}">${e?sgn(e):"0"}</span>`}};
+ if(CL.on){CL.rpc("saisir_comptage",{p_inventaire:i.id,p_produit:pid,p_compte:v,p_note:note||null}).then(save1).catch(x=>toast(fixErr(x),"err"))}else save1()});
 window.addEventListener("storage",e=>{if(e.key!==KEY||!e.newValue||$("#modal").innerHTML)return;try{S=JSON.parse(e.newValue)}catch(x){return}
  if(ME){const u=usr(ME.id);if(!u||!u.actif){ME=null;sessionStorage.removeItem("angels_me");toast("Votre compte a été désactivé","err")}else ME=u}render()});
 let _tk=0;setInterval(()=>{if(!CL.on&&(_tk++)%2)return;if(ME&&!(ME.role==="livreur"&&Object.values(ui.mapOpen||{}).some(Boolean))&&!$("#modal").innerHTML&&!document.activeElement.matches("input,select,textarea")){if(CL.on)refresh().then(render).catch(()=>{});else render()}},30000);
@@ -972,7 +1111,7 @@ function ensureConfig(){
  if(c.mention_legale==null)c.mention_legale="Document de gestion. Si l'entreprise est assujettie à la facturation normalisée électronique, la facture réglementaire doit être émise via le dispositif officiel.";
  if(c.signature_seuil==null)c.signature_seuil=100000;
  if(c.dossier_obligatoire==null)c.dossier_obligatoire=false;if(c.etiq_scan==null)c.etiq_scan=true;if(c.etiq_montant==null)c.etiq_montant=false;if(c.etiq_tel==null)c.etiq_tel=false;
- S.docs=S.docs||[];S.avis=S.avis||[];S.notifs=S.notifs||[];S.seq=S.seq||{cmd:0,inc:0};S.seq.doc=S.seq.doc||{}}
+ S.docs=S.docs||[];S.avis=S.avis||[];S.inventaires=S.inventaires||[];S.notifs=S.notifs||[];S.seq=S.seq||{cmd:0,inc:0};S.seq.doc=S.seq.doc||{}}
 const fillTpl=(t,v)=>String(t).replace(/\{(\w+)\}/g,(_,k)=>v[k]!=null?v[k]:"");
 function notifier(c,to,note){
  const cfg=S.config;if(!cfg.notif||cfg.notif[to]!==true||!cfg.tpl[to])return;
@@ -1434,6 +1573,7 @@ async function hydrate(){
  Object.assign(N.pos,CL.pos);
  CL.vd={};dues.forEach(d=>CL.vd[d.vendeur_id]={acquis:+d.acquis,regle:+d.regle,restant:+d.restant,attente:+d.attente,elig:[]});
  elig.forEach(e=>{(CL.vd[e.vendeur_id]=CL.vd[e.vendeur_id]||{acquis:0,regle:0,restant:0,attente:0,elig:[]}).elig.push({commande_id:e.commande_id,net:+e.net,livree_le:e.livree_le})});
+ try{const [iv,il]=await Promise.all([fetchAll("inventaires"),fetchAll("inventaire_lignes")]);const g=grp(il,"inventaire_id");N.inventaires=iv.map(i=>Object.assign({},i,{lignes:(g[i.id]||[]).map(l=>({produit_id:l.produit_id,theorique:l.theorique,compte:l.compte,note:l.note}))}))}catch(e){N.inventaires=[]}
  try{N.avis=(await fetchAll("avis_livraison","livraison_id")).map(a=>({livraison_id:a.livraison_id,livreur_id:a.livreur_id,note:a.note,commentaire:a.commentaire,ts:a.cree_le}))}catch(e){N.avis=[]}
  try{const [dd,ff]=await Promise.all([fetchAll("livreur_dossiers","livreur_id"),CL.sb.from("livreur_fichiers").select("livreur_id,kind,miniature").range(0,999)]);
   const byL=Object.fromEntries(dd.map(x=>[x.livreur_id,x])),fl=grp(ff.data||[],"livreur_id");
@@ -1442,7 +1582,7 @@ async function hydrate(){
  ME={id:me.user_id,nom:me.nom,role:me.role,actif:me.actif};
 }
 let refreshing=null;
-function refresh(){if(!CL.on)return Promise.resolve();if(refreshing)return refreshing;refreshing=hydrate().finally(()=>{refreshing=null});return refreshing}
+function refresh(){if(!CL.on)return Promise.resolve();if(refreshing)return refreshing;dcClear();refreshing=hydrate().finally(()=>{refreshing=null});return refreshing}
 Object.assign(CL,{
  async init(){await loadSb();CL.sb=window.supabase.createClient(CLOUD_CFG.url,CLOUD_CFG.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}})},
  async rpc(fn,args){const{data,error}=await CL.sb.rpc(fn,args||{});if(error)throw new Error(fixErr(error));return data},
@@ -1490,7 +1630,7 @@ Object.assign(CL,{
   else await CL.upd("clients",c.id,{nom:d.nom.trim(),tel:d.tel.trim(),tel2:d.tel2||null})
  },"Client enregistré")},
  adrAdd(c,d,id){return CL.go(async()=>{const a=adrFrom(d);await CL.ins("adresses",{org_id:CL.org,client_id:c.id,libelle:a.libelle,zone:a.zone,quartier:a.quartier,repere:a.repere,instructions:a.instructions,lat:a.gps?a.gps.lat:null,lng:a.gps?a.gps.lng:null,gps_src:a.gps?"saisie par le personnel":null,gps_ts:a.gps?now():null,defaut:false})},"Adresse ajoutée",()=>cliDetail(id))},
- prodSave(p,d){return CL.go(async()=>{const row={code:d.code,nom:d.nom,prix:+d.prix,seuil:+d.seuil,actif:!!d.actif};
+ prodSave(p,d){return CL.go(async()=>{const row={code:d.code,nom:d.nom,prix:+d.prix,cout:+d.cout||0,seuil:+d.seuil,actif:!!d.actif};
   if(p)await CL.upd("produits",p.id,row);else{const n=await CL.ins("produits",Object.assign({org_id:CL.org},row));if(+d.stock>0)await CL.rpc("ajuster_stock",{p_produit:n.id,p_nouveau:+d.stock,p_motif:"Stock initial"})}},"Produit enregistré")},
  livSave(l,d,remu){return CL.go(async()=>{
   if(l){await CL.upd("livreurs",l.id,{nom:d.nom,tel:d.tel,zone:d.zone,moto_id:d.moto||null,remu});
