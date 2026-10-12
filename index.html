@@ -527,7 +527,13 @@ function waParseExport(text){
  return hits>=2?msgs:null}
 function waAttach(txt){const out=[];String(txt).replace(/([\w\-. ()]+\.(?:jpe?g|png|webp))\s*\((?:fichier joint|file attached)\)|<(?:attached|joint)\s*:\s*([^>]+\.(?:jpe?g|png|webp))>/gi,(m,a,b)=>{out.push((a||b).trim())});return out}
 const waAttachClean=t=>String(t).replace(/([\w\-. ()]+\.(?:jpe?g|png|webp))\s*\((?:fichier joint|file attached)\)|<(?:attached|joint)\s*:\s*[^>]+>|<(?:m[eé]dias? omis|media omitted)>|image absente|‎?image omitted/gi," ").trim();
+function draftDeDemande(d){const dr=waParseBlock("",S.config.zones);
+ Object.assign(dr,{nom:d.nom||"",tel:String(d.tel||"").replace(/\s/g,""),zone:S.config.zones.some(z=>z.nom===d.zone)?d.zone:"",quartier:d.quartier||"",repere:d.repere||"",obs:d.note||"",
+  lignes:d.lignes.map(l=>({desig:l.desig,qte:l.qte,pu:l.pu==null?NaN:l.pu})),photos:(d.photos||[]).slice(),gps:d.lat!=null?{lat:+d.lat,lng:+d.lng}:null,src:"",warn:d.lignes.some(l=>l.pu==null)?["prix à fixer"]:[]});return dr}
 function waDraftsFromText(text,files,split){
+ {const mk=[...String(text).matchAll(/\[ANGELS:([A-Za-z0-9_-]+)\]/g)],out=[];
+  mk.forEach(m=>{try{const d=unb64(m[1]);if(d&&Array.isArray(d.l)&&d.l.length){const dr=draftDeDemande({nom:d.n,tel:d.t,zone:d.z,quartier:d.q,repere:d.r,note:d.m,lat:d.a,lng:d.o,lignes:d.l.map(x=>({desig:String(x[0]).slice(0,120),qte:Math.max(1,Math.min(9999,+x[1]||1)),pu:x[2]==null?null:Math.max(0,Math.round(+x[2]))}))});dr.demande_ref=d.f||"";dr.photos=[];out.push(dr)}}catch(e){}});
+  if(out.length)return out}
  const zones=S.config.zones,exp=waParseExport(text);let drafts=[];
  if(exp){const people=[...new Set(exp.map(m=>m.from))],isPh=n=>!!waTel(n)&&noAcc(n).replace(/[^a-z]/g,"").length===0;
   const one=!split&&people.length<=2,cust=one?[people.find(isPh)||people.find(p=>!/^(vous|you|moi|me)$/i.test(p))||people[0]]:people.filter(p=>!/^(vous|you|moi|me)$/i.test(p));
@@ -559,7 +565,7 @@ function waCard(d,i){
  return`<div class="card wcard" style="margin:0 0 12px"><div class="between"><b>Commande ${i+1}</b>${d.warn.length?`<span>${d.warn.map(x=>badge(x,"wa")).join(" ")}</span>`:badge("Prêt","ok")}<button type="button" class="btn sm er" data-act="waDelDraft" data-id="${i}">Retirer</button></div>
  <div class="g3"><label>Nom du client<input data-wf="${i}:nom" value="${esc(d.nom)}"></label><label>Téléphone / WhatsApp<input data-wf="${i}:tel" value="${esc(d.tel)}" inputmode="tel"></label><label>Zone<select data-wf="${i}:zone"><option value="">— choisir —</option>${opts(S.config.zones.map(z=>z.nom),d.zone)}</select></label></div>
  <div class="g2"><label>Quartier / adresse<input data-wf="${i}:quartier" value="${esc(d.quartier)}"></label><label>Point de repère<input data-wf="${i}:repere" value="${esc(d.repere)}"></label></div>
- ${d.gps?`<div class="sm" style="margin:4px 0">📍 Position GPS envoyée par le client (jointe à l'adresse de livraison) · <a target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=${d.gps.lat}&mlon=${d.gps.lng}#map=17/${d.gps.lat}/${d.gps.lng}">voir sur la carte</a></div>`:""}${d.demande_id?'<div class="sm mu" style="margin:4px 0">Demande passée par le client : les prix indiqués sont une proposition, à vérifier avant de créer la commande.</div>':""}
+ ${d.gps?`<div class="sm" style="margin:4px 0">📍 Position GPS envoyée par le client (jointe à l'adresse de livraison) · <a target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=${d.gps.lat}&mlon=${d.gps.lng}#map=17/${d.gps.lat}/${d.gps.lng}">voir sur la carte</a></div>`:""}${d.demande_id||d.demande_ref?'<div class="sm mu" style="margin:4px 0">Demande passée par le client : les prix indiqués sont une proposition, à vérifier avant de créer la commande.</div>':""}
  <table class="wl"><tr><th>Article</th><th>Qté</th><th>Prix unit.</th><th>Total</th><th></th></tr>${d.lignes.map((l,j)=>waLine(i,j,l)).join("")}</table>
  <button type="button" class="btn sm ghost" data-act="waAddLine" data-id="${i}">+ Ajouter un article</button>
  <div class="wph">${d.photos.map((p,k)=>`<span class="wthumb"><img alt="" src="${p}"><button type="button" data-act="waDelPhoto" data-id="${i}:${k}" title="Retirer">✕</button></span>`).join("")}<label class="btn sm ghost" style="margin:0;cursor:pointer">🖼 Ajouter une capture<input type="file" accept="image/*" multiple data-wph="${i}" style="display:none"></label></div>
@@ -2142,18 +2148,17 @@ function demandeCard(d){
 function demandesSection(v){const L=demandesOf(v);
  return L.length?`<h2>📥 Demandes reçues de vos clients (${L.length})</h2><p class="mu sm">Vos clients commandent eux-mêmes via votre lien. Vérifiez les articles et les prix, puis créez la commande : ANGEL'S GROUP confirme et livre.</p>${L.map(demandeCard).join("")}`:""}
 function demTraiter(id){const d=(S.demandes||[]).find(x=>x.id===id);if(!d)return;
- waOpen();const dr=waParseBlock("",S.config.zones);
- Object.assign(dr,{nom:d.nom,tel:d.tel,zone:S.config.zones.some(z=>z.nom===d.zone)?d.zone:"",quartier:d.quartier||"",repere:d.repere||"",obs:d.note||"",
-  lignes:d.lignes.map(l=>({desig:l.desig,qte:l.qte,pu:l.pu==null?NaN:l.pu})),photos:(d.photos||[]).slice(),gps:d.lat!=null?{lat:+d.lat,lng:+d.lng}:null,demande_id:d.id,src:"",warn:d.lignes.some(l=>l.pu==null)?["prix à fixer"]:[]});
+ waOpen();const dr=draftDeDemande(d);dr.demande_id=d.id;
  WA.drafts=[dr];WA.stage=2;waRender()}
 async function demRejeter(id){const d=(S.demandes||[]).find(x=>x.id===id);if(!d)return;
  ask("Refuser la demande de "+d.nom,"Motif (article indisponible, zone non desservie…)",async m=>{
   try{if(CL.on){await CL.rpc("demande_traiter",{p_id:id,p_action:"rejetee",p_motif:m});await refresh()}else{d.statut="rejetee";d.motif=m;audit("Demande client refusée",d.nom);save()}
    toast("Demande refusée","ok");render();return true}catch(e){toast(fixErr(e),"err");return false}},{label:"Refuser",cls:"er"})}
 async function cmdLien(renew){const v=vend();if(!v)return;let link;
- try{if(CL.on){const t=await CL.rpc("creer_lien_commande",{p_renouveler:!!renew});link=location.href.split("#")[0].split("?")[0]+"#commande="+t}else link=location.href.split("#")[0].split("?")[0]+"#commande="+v.id}catch(e){return toast(fixErr(e),"err")}
+ try{if(CL.on){const t=await CL.rpc("creer_lien_commande",{p_renouveler:!!renew});link=location.href.split("#")[0].split("?")[0]+"#commande="+t}else{if(!String(v.tel||"").replace(/\D/g,""))return toast("Renseignez d'abord le téléphone WhatsApp du vendeur (fiche vendeur)","err");
+   link=location.href.split("#")[0].split("?")[0]+"#commande="+b64({o:S.config.org,w:S.config.whatsapp||"",v:v.nom,t:v.tel,z:S.config.zones.map(z=>z.nom)})}}catch(e){return toast(fixErr(e),"err")}
  const msg=`Bonjour ! Passez votre commande chez ${v.nom} en ligne (articles, captures, quantités, position de livraison) : ${link}`;
- modal("Lien de commande de vos clients",`<p class="sm mu">Partagez ce lien ou ce QR code (WhatsApp, statut, boutique). Vos clients y décrivent leur commande : articles, captures d'écran, quantités, prix s'ils le connaissent, et leur position de livraison. Rien n'est livré avant votre validation.</p>
+ modal("Lien de commande de vos clients",`<p class="sm mu">Partagez ce lien ou ce QR code (WhatsApp, statut, boutique). Vos clients y décrivent leur commande : articles, captures d'écran, quantités, prix s'ils le connaissent, et leur position de livraison. Rien n'est livré avant votre validation.${CL.on?"":" <b>Sans serveur</b> : la commande du client vous arrive sur WhatsApp (au numéro de votre fiche) ; collez-la dans « Saisie depuis WhatsApp » et tout est prérempli, position GPS comprise. Le client joint ses captures dans la conversation."}</p>
  <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><div style="width:150px;height:150px;background:#fff;padding:6px;border-radius:8px">${qrSvg(link)}</div><div style="flex:1;min-width:200px"><label>Lien<input readonly value="${esc(link)}" onfocus="this.select()"></label></div></div>
  <div class="flex" style="margin-top:10px"><button type="button" class="btn" data-act="cpTxt" data-id="${esc(link)}">📋 Copier le lien</button><a class="btn ok" target="_blank" rel="noopener" style="text-decoration:none" href="https://wa.me/?text=${encodeURIComponent(msg)}">💬 Partager sur WhatsApp</a>${CL.on?'<button type="button" class="btn ghost er" data-act="cmdLienNew">Renouveler (l\'ancien lien cessera de fonctionner)</button>':""}</div>`,{label:"Fermer",onSubmit:()=>true,focus:false})}
 /* Page publique */
@@ -2163,11 +2168,11 @@ function renderOrder(p,submit){
  const sync=()=>{[...app.querySelectorAll(".ol")].forEach((r,i)=>{if(!st.lines[i])return;st.lines[i].desig=r.querySelector(".o_d").value;st.lines[i].qte=Math.max(1,parseInt(r.querySelector(".o_q").value)||1);st.lines[i].pu=r.querySelector(".o_p").value})};
  const lines=()=>st.lines.map((l,i)=>`<div class="ol" style="border:1px solid var(--line,#d8dee6);border-radius:10px;padding:8px;margin-bottom:8px"><div style="display:flex;gap:6px"><input class="o_d" placeholder="Article (ex. sac à main noir)" value="${esc(l.desig)}" style="flex:1"><button type="button" class="btn sm ghost er" data-o="del" data-i="${i}" ${st.lines.length<2?"disabled":""}>✕</button></div>
   <div style="display:flex;gap:6px;margin-top:6px"><label style="flex:1">Quantité<input class="o_q" type="number" min="1" max="9999" value="${l.qte}"></label><label style="flex:1">Prix unitaire (F) <span class="mu sm">si vous le connaissez</span><input class="o_p" type="number" min="0" inputmode="numeric" value="${esc(l.pu)}"></label></div>
-  <div style="margin-top:6px">${l.img>=0&&st.photos[l.img]?`<img alt="" src="${st.photos[l.img]}" style="height:56px;border-radius:6px;vertical-align:middle"> <button type="button" class="btn sm ghost" data-o="unph" data-i="${i}">Retirer la capture</button>`:`<label class="btn sm ghost" style="display:inline-block;cursor:pointer">📷 Ajouter la capture d'écran / photo<input type="file" accept="image/*" data-o="ph" data-i="${i}" hidden></label>`}</div></div>`).join("");
+  ${p.sansPhoto?"":`<div style="margin-top:6px">${l.img>=0&&st.photos[l.img]?`<img alt="" src="${st.photos[l.img]}" style="height:56px;border-radius:6px;vertical-align:middle"> <button type="button" class="btn sm ghost" data-o="unph" data-i="${i}">Retirer la capture</button>`:`<label class="btn sm ghost" style="display:inline-block;cursor:pointer">📷 Ajouter la capture d'écran / photo<input type="file" accept="image/*" data-o="ph" data-i="${i}" hidden></label>`}</div>`}</div>`).join("");
  const draw=()=>{app.innerHTML=`<div class="login"><div class="card" style="max-width:560px;width:100%">
   <div style="font-size:13px;letter-spacing:1px;color:var(--b2);font-weight:700">${esc(p.org)}</div><h2 style="margin:2px 0 4px">Commander chez ${esc(p.vendeur)}</h2>
   <div class="mu sm" style="margin-bottom:12px">Décrivez ce que vous voulez : ${esc(p.vendeur)} confirme votre commande et la fait livrer à moto par ${esc(p.org)}.</div>
-  <h3 style="margin:8px 0">1. Vos articles</h3><div id="o_lines">${lines()}</div><button type="button" class="btn ghost" data-o="add" ${st.lines.length>=30?"disabled":""}>+ Ajouter un article</button>
+  <h3 style="margin:8px 0">1. Vos articles</h3>${p.sansPhoto?'<div class="sm mu" style="margin-bottom:8px">📷 Vos captures d\'écran, vous les enverrez dans WhatsApp à l\'étape suivante.</div>':""}<div id="o_lines">${lines()}</div><button type="button" class="btn ghost" data-o="add" ${st.lines.length>=30?"disabled":""}>+ Ajouter un article</button>
   <h3 style="margin:14px 0 8px">2. Vous</h3><div class="g2"><label>Votre nom<input id="o_nom" maxlength="80" autocomplete="name"></label><label>Téléphone / WhatsApp<input id="o_tel" inputmode="tel" autocomplete="tel" placeholder="07 07 00 00 00"></label></div>
   <h3 style="margin:14px 0 8px">3. Où livrer ?</h3><div class="g2"><label>Zone<select id="o_zone"><option value="">— choisir —</option>${p.zones.map(z=>`<option>${esc(z.nom)}</option>`).join("")}</select></label><label>Quartier<input id="o_q" maxlength="120"></label></div>
   <label>Point de repère (pharmacie, école, couleur du portail…)<input id="o_rep" maxlength="200"></label>
@@ -2195,14 +2200,24 @@ function renderOrder(p,submit){
   const pl={nom:val("o_nom"),tel:val("o_tel"),zone:val("o_zone"),quartier:val("o_q"),repere:val("o_rep"),lat:st.gps?st.gps.lat:null,lng:st.gps?st.gps.lng:null,note:val("o_note")||null,photos,
    lignes:L.map(l=>({desig:l.desig.trim(),qte:l.qte,pu:l.pu===""||isNaN(+l.pu)?null:Math.round(+l.pu),img:l.img>=0?used.indexOf(l.img):null}))};
   const b=$("#o_send");b.disabled=true;
-  try{const r=await submit(pl);app.innerHTML=`<div class="login"><div class="card" style="text-align:center;max-width:460px"><div style="font-size:42px">✅</div><h2>Commande envoyée</h2><p>Référence <b style="font-size:20px;letter-spacing:2px">${esc(r.ref)}</b></p><p class="mu">${esc(p.vendeur)} va vérifier votre commande et vous contacter pour confirmer les prix et la livraison.</p>${gp?`<a class="btn ok" style="display:block;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${gp.length===10?"225"+gp:gp}?text=${encodeURIComponent("Bonjour, je viens d'envoyer une commande chez "+p.vendeur+" (réf. "+r.ref+")")}">💬 Contacter ${esc(p.org)}</a>`:""}</div></div>`}
+  try{const r=await submit(pl);
+   if(r.wa){app.innerHTML=`<div class="login"><div class="card" style="text-align:center;max-width:460px"><div style="font-size:42px">📲</div><h2>Dernière étape</h2><p>Votre commande est prête. Touchez le bouton pour l'envoyer à <b>${esc(p.vendeur)}</b> sur WhatsApp, puis <b>joignez vos captures d'écran</b> dans la conversation.</p><a class="btn ok" style="display:block;text-decoration:none;font-size:17px" target="_blank" rel="noopener" href="${esc(r.wa)}">📲 Envoyer ma commande sur WhatsApp</a><p class="mu sm" style="margin-top:12px">Référence <b>${esc(r.ref)}</b> · ${esc(p.vendeur)} vérifie les prix puis vous confirme la livraison.</p></div></div>`;return}
+   app.innerHTML=`<div class="login"><div class="card" style="text-align:center;max-width:460px"><div style="font-size:42px">✅</div><h2>Commande envoyée</h2><p>Référence <b style="font-size:20px;letter-spacing:2px">${esc(r.ref)}</b></p><p class="mu">${esc(p.vendeur)} va vérifier votre commande et vous contacter pour confirmer les prix et la livraison.</p>${gp?`<a class="btn ok" style="display:block;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${gp.length===10?"225"+gp:gp}?text=${encodeURIComponent("Bonjour, je viens d'envoyer une commande chez "+p.vendeur+" (réf. "+r.ref+")")}">💬 Contacter ${esc(p.org)}</a>`:""}</div></div>`}
   catch(e){b.disabled=false;err(fixErr(e))}}
  draw()}
 async function bootOrderCloud(token){
  try{await CL.init();const p=await CL.rpc("commande_lien_get",{p_token:token});if(!p)throw new Error("Lien expiré ou invalide : demandez-en un nouveau à votre fournisseur.");
   renderOrder(p,pl=>CL.rpc("demande_deposer",{p_token:token,p:pl}))}
  catch(e){$("#app").innerHTML='<div class="login"><div class="card">'+esc(fixErr(e))+'</div></div>'}}
+function bootOrderStandalone(o){
+ const zs=(o.z||[]).map(n=>({nom:String(n)})),tel=String(o.t||"").replace(/\D/g,"");
+ renderOrder({org:o.o||"",w:o.w||"",vendeur:o.v||"le vendeur",zones:zs,sansPhoto:true},async pl=>{
+  const ref=Math.random().toString(36).slice(2,8).toUpperCase(),f=n=>new Intl.NumberFormat("fr-FR").format(n).replace(/\s/g," ")+" F";
+  const pay={f:ref,n:pl.nom,t:pl.tel,z:pl.zone,q:pl.quartier,r:pl.repere,m:pl.note||"",a:pl.lat,o:pl.lng,l:pl.lignes.map(l=>[l.desig,l.qte,l.pu])};
+  const msg=`🛒 Commande — ${o.v||""} (réf. ${ref})\nNom : ${pl.nom}\nTél : ${pl.tel}\nZone : ${pl.zone}${pl.quartier?" · "+pl.quartier:""}${pl.repere?" · "+pl.repere:""}\n${pl.lat!=null?"📍 https://maps.google.com/?q="+pl.lat+","+pl.lng+"\n":""}Articles :\n${pl.lignes.map(l=>"- "+l.qte+" x "+l.desig+(l.pu!=null?" ("+f(l.pu)+")":"")).join("\n")}${pl.note?"\nMessage : "+pl.note:""}\n(Captures d'écran jointes dans cette conversation)\n[ANGELS:${b64(pay)}]`;
+  return{ok:true,ref,wa:"https://wa.me/"+(tel.length===10?"225"+tel:tel)+"?text="+encodeURIComponent(msg)}})}
 function bootOrderLocal(vid){
+ try{const o=unb64(vid);if(o&&o.v&&Array.isArray(o.z))return bootOrderStandalone(o)}catch(e){}
  let d=null;try{d=JSON.parse(localStorage.getItem(KEY))}catch(e){}
  const v=d&&d.v===1&&(d.vendeurs||[]).find(x=>x.id===vid);if(!v){$("#app").innerHTML='<div class="login"><div class="card">Lien indisponible : ouvrez-le sur l\'appareil de démonstration.</div></div>';return}
  renderOrder({org:d.config.org,w:d.config.whatsapp,vendeur:v.nom,zones:d.config.zones.map(z=>({nom:z.nom,frais:z.frais}))},async pl=>{
