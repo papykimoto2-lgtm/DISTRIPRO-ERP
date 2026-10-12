@@ -1,0 +1,62 @@
+const { chromium } = require('/opt/node-tools/node_modules/playwright');
+let ok=0,ko=0;const chk=(n,c,x)=>{c?ok++:ko++;console.log((c?'✔':'✘')+' '+n+(c?'':'  → '+(typeof x==='string'?x:JSON.stringify(x))))};
+(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});
+const ctx=await b.newContext({viewport:{width:420,height:900},geolocation:{latitude:5.3571,longitude:-3.981,accuracy:25},permissions:['geolocation']});
+await ctx.addInitScript(()=>{window.__SANS_OFFRE=true;window.__notifs=[];window.Notification=class{constructor(t,o){window.__notifs.push(t)}static requestPermission(){Notification.permission='granted';return Promise.resolve('granted')}};Notification.permission='granted'});
+const pg=await ctx.newPage();const er=[];pg.on('pageerror',e=>er.push(e.message));let dlg=[];pg.on('dialog',d=>{dlg.push(d.message());d.accept()});
+await pg.goto('file:///home/user/DISTRIPRO-ERP/index.html');await pg.waitForTimeout(300);
+const as=async role=>{await pg.evaluate(r=>{ME=S.users.find(u=>u.role===r);sessionStorage.setItem('angels_me',ME.id);view='x';render()},role);await pg.waitForTimeout(200)};
+await as('livreur');
+chk('bouton rouge SOS toujours visible dans l\'application livreur',await pg.isVisible('.sosbtn'));
+await pg.click('.sosbtn');await pg.waitForSelector('[data-sos]');
+chk('5 situations proposées, envoi désactivé tant qu\'aucune n\'est choisie',await pg.locator('[data-sos]').count()===5&&await pg.isDisabled('#sos_go'));
+await pg.click('[data-sos=accident]');await pg.fill('#sos_n','Chute devant le marché d\'Angré');
+const box=await pg.locator('#sos_go').boundingBox(),cx=box.x+box.width/2,cy=box.y+box.height/2;
+await pg.mouse.move(cx,cy);await pg.mouse.down();await pg.waitForTimeout(500);await pg.mouse.up();await pg.waitForTimeout(200);
+chk('un appui trop court n\'envoie rien (protection contre l\'appui accidentel)',await pg.evaluate(()=>(S.sos||[]).length)===0);
+await pg.mouse.move(cx,cy);await pg.mouse.down();await pg.waitForTimeout(1800);await pg.mouse.up();await pg.waitForSelector('text=Alerte envoyée',{timeout:5000});
+const a=await pg.evaluate(()=>S.sos[0]);
+chk('maintenir 1,5 s envoie l\'alerte avec type, précision et position',a&&a.type==='accident'&&/Angré/.test(a.note)&&a.lat===5.3571&&a.statut==='ouverte',a);
+let t=await pg.innerText('#mf');
+chk('confirmation : appel du superviseur et numéros d\'urgence',/Appeler le superviseur/.test(t)&&/110/.test(t)&&/185/.test(t)&&/180/.test(t)&&/fausse alerte/.test(t),t);
+await pg.evaluate(()=>closeModal());
+chk('bandeau « Alerte SOS en cours » sur l\'écran du livreur',/Alerte SOS en cours/.test(await pg.innerText('#app')));
+await pg.click('.sosbtn');await pg.waitForTimeout(300);chk('un second appui rouvre l\'alerte existante, sans doublon',/Alerte envoyée/.test(await pg.innerText('#modal'))&&await pg.evaluate(()=>S.sos.length)===1);await pg.evaluate(()=>closeModal());
+// équipe
+await as('superviseur');
+chk('barre rouge persistante pour le superviseur',await pg.isVisible('#sosbar')&&/Issa/.test(await pg.innerText('#sosbar'))&&/Accident/.test(await pg.innerText('#sosbar'))&&/Angré/.test(await pg.innerText('#sosbar')));
+chk('sirène déclenchée et notification système',await pg.evaluate(()=>(window.__ring||0)>=1)&&await pg.evaluate(()=>window.__notifs.some(n=>/SOS/.test(n))));
+chk('boutons : appeler, position, prendre en charge',await pg.locator('#sosbar a[href^="tel:"]').count()===1&&await pg.locator('#sosbar a[href*="maps?q=5.3571"]').count()===1&&await pg.locator('#sosbar [data-act=sosTake]').count()===1);
+await pg.screenshot({path:'sos_equipe.png',clip:{x:0,y:0,width:420,height:260}});
+await pg.click('#sosbar [data-act=sosTake]');await pg.waitForTimeout(300);
+chk('prise en charge enregistrée avec le nom, sirène coupée',await pg.evaluate(()=>S.sos[0].statut==='prise'&&!!S.sos[0].prise_par_nom&&!SON.iv)&&/pris en charge par/.test(await pg.innerText('#sosbar')));
+await as('admin');chk('l\'administrateur voit aussi l\'alerte prise en charge',/pris en charge par/.test(await pg.innerText('#sosbar')));
+await as('livreur');chk('le livreur voit « prise en charge par … »',/prise en charge par/.test(await pg.innerText('#app')));
+await as('superviseur');await pg.click('#sosbar [data-act=sosClose]');await pg.waitForSelector('textarea[name=v]');await pg.fill('textarea[name=v]','x');await pg.click('#mf .mf .btn:not(.ghost)');await pg.waitForTimeout(250);
+chk('clôture sans précision refusée',await pg.evaluate(()=>S.sos[0].statut)==='prise');
+await pg.fill('textarea[name=v]','Livreur conduit à la clinique, moto récupérée');await pg.click('#mf .mf .btn:not(.ghost)');await pg.waitForTimeout(300);
+chk('alerte clôturée : la barre rouge disparaît',await pg.evaluate(()=>S.sos[0].statut)==='cloturee'&&!(await pg.isVisible('#sosbar').catch(()=>false)));
+// fausse alerte par le livreur
+await as('livreur');await pg.evaluate(()=>{const lv=livreurOf(ME);S.sos.push({id:'s2',livreur_id:lv.id,type:'autre',note:'',lat:null,lng:null,statut:'ouverte',cree_le:now()});render()});
+await pg.click('#app [data-act=sosFausse]');await pg.waitForTimeout(300);chk('le livreur annule une fausse alerte',await pg.evaluate(()=>S.sos.find(x=>x.id==='s2').statut)==='fausse'&&!/Alerte SOS en cours/.test(await pg.innerText('#app')));
+chk('le caissier ne voit pas la barre',await (async()=>{await as('caissier');return !(await pg.isVisible('#sosbar').catch(()=>false))})());
+// paramètres
+await as('admin');await pg.evaluate(()=>{view='params';render();ACT.pTab('liv')});
+chk('paramètres : téléphone d\'astreinte et numéros d\'urgence modifiables',await pg.isVisible('#p_sostel')&&await pg.isVisible('#p_sosurg'));
+await pg.fill('#p_sostel','07 07 11 22 33');await pg.fill('#p_sosurg','Police : 111\nGendarmerie : 170');await pg.click('#psave');await pg.waitForTimeout(250);
+chk('réglages SOS enregistrés',await pg.evaluate(()=>S.config.sos_tel==='07 07 11 22 33'&&S.config.sos_urgences.length===2));
+await as('livreur');await pg.evaluate(()=>{const lv=livreurOf(ME);S.sos.push({id:'s3',livreur_id:lv.id,type:'panne',note:'',lat:5.3,lng:-4,statut:'ouverte',cree_le:now()});render()});await pg.click('#app [data-act=sosDetail]');await pg.waitForTimeout(250);
+t=await pg.innerText('#mf');chk('la fiche utilise les numéros configurés',/tel|Appeler/.test(t)&&/Police/.test(t)&&/Gendarmerie/.test(t)&&!/SAMU/.test(t),t);
+chk('lien d\'appel vers le téléphone d\'astreinte',await pg.locator('#mf a[href="tel:0707112233"]').count()===1);await pg.evaluate(()=>{closeModal();S.sos.forEach(a=>a.statut='fausse');render()});
+// préférences d'affichage
+await pg.click('[data-act=prefs]');await pg.waitForSelector('#pf_g');await pg.check('#pf_g');await pg.check('#pf_e');await pg.click('#mf .mf .btn:not(.ghost)');await pg.waitForTimeout(300);
+chk('gros caractères et économie de données activés et mémorisés',await pg.evaluate(()=>document.body.classList.contains('gros')&&document.body.classList.contains('eco')&&JSON.parse(localStorage.angels_pref).gros&&JSON.parse(localStorage.angels_pref).eco));
+chk('gros caractères : l\'écran livreur est agrandi',await pg.evaluate(()=>getComputedStyle(document.querySelector('.lv')).zoom)!=='1');
+const sz=await pg.evaluate(async()=>{const c=document.createElement('canvas');c.width=c.height=1800;const x=c.getContext('2d');for(let i=0;i<4000;i++){x.fillStyle='hsl('+(i*7%360)+',70%,50%)';x.fillRect(Math.random()*1800,Math.random()*1800,60,60)}
+ const blob=await new Promise(r=>c.toBlob(r,'image/png'));const eco=(await imgResize(blob,1280,.78,360000)).length;PREF.eco=false;const norm=(await imgResize(blob,1280,.78,360000)).length;PREF.eco=true;return{eco,norm}});
+chk('économie de données : les photos envoyées sont nettement plus légères',sz.eco<=120000&&sz.norm>sz.eco*1.4,sz);
+chk('économie de données : vignettes masquées',await pg.evaluate(()=>{const e=document.querySelector('img.av');return !e||getComputedStyle(e).display==='none'}));
+dlg=[];await pg.evaluate(()=>{const l=S.livraisons.find(x=>x.livreur_id===livreurOf(ME).id&&x.commande_id&&cmd(x.commande_id).adr.gps);if(l)ACT.lMap(l.id)});
+chk('économie de données : la carte demande confirmation avant de télécharger',dlg.some(m=>/télécharge/.test(m))||!(await pg.evaluate(()=>S.livraisons.some(x=>x.livreur_id===livreurOf(ME).id&&cmd(x.commande_id).adr.gps))),dlg);
+await pg.evaluate(()=>{PREF={};localStorage.removeItem('angels_pref');applyPref();render()});await pg.screenshot({path:'sos_livreur.png'});
+chk('aucune erreur JS',er.length===0,er);console.log(ok+' ok / '+ko+' échecs');await b.close()})();

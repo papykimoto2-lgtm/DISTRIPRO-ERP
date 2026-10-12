@@ -99,3 +99,6 @@ Migration `20261023000000_livreurs_externes.sql` : `livreurs.type` (`interne`/`e
 
 ### Caisse
 Migration `20261024000000_caisse.sql` : tables `caisses`, `caisse_sessions` (une seule session ouverte par caisse), `caisse_mouvements` (numéro unique, statuts `en_attente`/`valide`/`rejete`) en lecture seule pour `admin`, `direction`, `caissier` ; **aucune écriture directe**, uniquement `caisse_creer`, `caisse_ouvrir`, `caisse_mouvement`, `caisse_valider`, `caisse_cloturer`, `caisse_regulariser`. Déclencheurs `app.trg_caisse_*` sur `fonds` (reversement en espèces), `reglements_vendeurs` (espèces) et `paiements_livreurs` : écriture automatique validée dans la caisse principale ouverte (ignorée si aucune caisse n'est ouverte). Tests : `tests/test_caisse.sql`, `tests/banc/e2e_caisse*.js`.
+
+### Alertes SOS des livreurs
+Migration `20261025000000_sos_livreurs.sql` : table `alertes_sos` (lecture seule ; une seule alerte `ouverte`/`prise` par livreur ; visible de l'administrateur, du superviseur, de la direction et du livreur concerné), fonctions `sos_declencher` (livreur ; 5 par heure ; dernière position connue si le GPS manque) et `sos_traiter` (`prendre` : une seule personne ; `cloturer` et `fausse` avec précision ; le livreur peut seulement signaler une fausse alerte sur la sienne). Tests : `tests/test_sos.sql`, `tests/banc/e2e_sos*.js`.

@@ -23,6 +23,9 @@ aside .brand small{display:block;font-weight:400;opacity:.7;font-size:11px}
 .clkbox{margin:0 8px 12px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.1);line-height:1.25}.clkbox b{display:block;font-size:22px;letter-spacing:1px;font-variant-numeric:tabular-nums}.clkbox span{font-size:11.5px;opacity:.8;text-transform:capitalize}
 aside a{display:flex;gap:8px;align-items:center;padding:9px 10px;border-radius:8px;color:#dbe2ff;cursor:pointer;text-decoration:none}
 aside a:hover{background:rgba(255,255,255,.1)}
+.sosbtn{position:fixed;right:14px;bottom:18px;z-index:8500;width:66px;height:66px;border-radius:50%;border:3px solid #fff;background:#c4121f;color:#fff;font-size:26px;line-height:1;box-shadow:0 6px 20px rgba(0,0,0,.4);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0}.sosbtn small{font-size:11px;font-weight:800;letter-spacing:1px}
+body.gros .lv,body.gros #offre>div,body.gros .md{zoom:1.22}body.gros .lv .btn{padding:14px 12px;font-size:16px}
+body.eco img.av{display:none}body.eco *{animation:none!important;transition:none!important}
 aside .gt{margin:12px 10px 3px;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;opacity:.55;font-weight:700}
 aside a.on{background:#fff;color:var(--b2);font-weight:700}
 aside .who{margin-top:14px;padding:10px;border-top:1px solid rgba(255,255,255,.2);font-size:12px}
@@ -55,14 +58,14 @@ input,select,textarea{border:1px solid var(--bd);border-radius:8px;padding:7px 9
 label{display:block;font-size:12px;color:var(--mu);font-weight:600}
 label input,label select,label textarea{margin-top:3px;color:var(--tx);font-weight:400;font-size:14px}
 .g2{display:grid;gap:10px;grid-template-columns:1fr 1fr}.g3{display:grid;gap:10px;grid-template-columns:1fr 1fr 1fr}
-.ov{position:fixed;inset:0;background:rgba(10,20,60,.55);display:flex;align-items:flex-start;justify-content:center;padding:20px 10px;overflow:auto;z-index:50}
+.ov{position:fixed;inset:0;background:rgba(10,20,60,.55);display:flex;align-items:flex-start;justify-content:center;padding:20px 10px;overflow:auto;z-index:9000}
 .md{background:#fff;border-radius:14px;width:100%;max-width:520px}.md.wide{max-width:780px}
 .mh{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;border-bottom:1px solid var(--bd)}
 .mb{padding:14px 16px;display:grid;gap:10px}
 .mf{padding:12px 16px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:8px}
 .x{background:none;border:0;font-size:18px;cursor:pointer}
 .sec{font-weight:700;margin-top:4px}
-#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:99;display:grid;gap:6px;width:min(92vw,420px)}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:9500;display:grid;gap:6px;width:min(92vw,420px)}
 .t{background:#1b2240;color:#fff;padding:10px 14px;border-radius:10px}.t.err{background:var(--er)}.t.ok{background:var(--ok)}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .tabs button{border:1px solid var(--bd);background:#fff;border-radius:99px;padding:6px 13px;cursor:pointer}
@@ -441,11 +444,11 @@ function loginHTMLLocal(){
  <div style="margin-top:14px"><div class="mu sm" style="margin-bottom:6px">Couleur du logiciel</div>${themeDots()}</div><div style="margin-top:14px">${instBox()}</div><div class="mu sm" style="margin-top:12px">💡 Ouvrez un second onglet pour jouer le livreur pendant que vous supervisez.</div></div></div>`}
 
 /* ---------- Gabarit ---------- */
-function render(){render0();carteHook();refreshInstall();if(window.__shareReady)window.__shareReady.then(()=>{shareHook()});else shareHook()}
+function render(){render0();try{sosBar()}catch(e){}carteHook();refreshInstall();if(window.__shareReady)window.__shareReady.then(()=>{shareHook()});else shareHook()}
 function render0(){
  if(!S&&!CL.on)return;
  if(!ME){$("#app").innerHTML=loginHTML();return}
- if(ME.role==="livreur"){$("#app").innerHTML=livreurHTML();syncGPS();initMaps();setTimeout(offreCheck,0);return}
+ if(ME.role==="livreur"){$("#app").innerHTML=livreurHTML()+sosBtnHTML;syncGPS();initMaps();setTimeout(offreCheck,0);return}
  const nav=NAV.filter(n=>n.r.includes(ME.role));if(!nav.find(n=>n.v===view))view=nav[0].v;
  $("#app").innerHTML=`<div class="shell"><aside><div class="brand">ANGEL'S GROUP<small>ERP · Livraisons V1</small></div>${clkBox()}${nav.map((n,k)=>(k===0||nav[k-1].g!==n.g?`<div class="gt">${n.g}</div>`:"")+`<a class="${n.v===view?"on":""}" data-act="nav" data-id="${n.v}">${n.i} ${n.l}</a>`).join("")}<div class="who">👤 ${esc(ME.nom)}<br><span style="opacity:.7">${ROLES[ME.role]}</span><div class="themes">${THEMES.map(([k,t,c])=>`<button type="button" class="${themeCur()===k?"on":""}" style="background:${c}" data-act="theme" data-id="${k}" title="${t}" aria-label="${t}"></button>`).join("")}</div><div style="margin:8px 0 2px">${instBox()}</div><a data-act="logout" style="padding:6px 0">⏏ Déconnexion</a></div></aside><main>${VIEWS[view]()}</main></div>`}
 
@@ -835,7 +838,7 @@ function verserMomoForm(){
   if(!(m>0)||m>max)return toast("Montant invalide (maximum "+fcfa(max)+")","err"),false;if(ref.length<4)return toast("Référence de la transaction obligatoire","err"),false;
   if(CL.on)return CL.go(()=>CL.rpc("declarer_versement",{p_montant:m,p_mode:d.mode,p_ref:ref,p_note:d.note||null}),"Versement déclaré : la caisse va le valider");
   if(refUtilisee(ref))return toast("Cette référence de transaction est déjà enregistrée","err"),false;
-  S.versements=S.versements||[];S.demandes=S.demandes||[];S.caisses=S.caisses||[];S.caisse_sessions=S.caisse_sessions||[];S.caisse_mvts=S.caisse_mvts||[];S.versements.push({id:uid("vd"),livreur_id:lv.id,montant:m,mode:d.mode,ref,note:d.note||"",statut:"declare",cree_le:now()});audit("Versement Mobile Money déclaré",`${lv.nom} — ${fcfa(m)} (${d.mode} ${ref})`);save();render();toast("Versement déclaré : la caisse va le valider","ok")}})}
+  S.versements=S.versements||[];S.demandes=S.demandes||[];S.caisses=S.caisses||[];S.caisse_sessions=S.caisse_sessions||[];S.caisse_mvts=S.caisse_mvts||[];S.sos=S.sos||[];S.versements.push({id:uid("vd"),livreur_id:lv.id,montant:m,mode:d.mode,ref,note:d.note||"",statut:"declare",cree_le:now()});audit("Versement Mobile Money déclaré",`${lv.nom} — ${fcfa(m)} (${d.mode} ${ref})`);save();render();toast("Versement déclaré : la caisse va le valider","ok")}})}
 function versPending(){
  const L=(S.versements||[]).filter(v=>v.statut==="declare").sort((a,b)=>new Date(a.cree_le)-new Date(b.cree_le));if(!L.length)return"";
  return`<div class="card" style="margin:0 0 12px;border-left:4px solid var(--b)"><b>📲 Versements Mobile Money déclarés à valider (${L.length})</b><div class="sm mu">Vérifiez dans votre application Mobile Money que la somme est bien arrivée avec cette référence.</div>
@@ -1238,7 +1241,7 @@ function dossierEtat(l){
  return{ok:!m.length,manques:m,bientot}}
 const avatarL=l=>{const f=l.fichiers&&l.fichiers.photo;return f&&(f.mini||f.full)?`<img class="av" alt="" src="${f.mini||f.full}">`:`<span class="av" style="display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:var(--mu)">${esc((l.nom||"?").trim().slice(0,1).toUpperCase())}</span>`};
 function dossierBadge(l){const e=dossierEtat(l);return e.ok?(e.bientot.length?badge("Échéance proche","wa"):badge("Dossier complet","ok")):badge("À compléter ("+e.manques.length+")","er")}
-function imgResize(file,max,q,lim){return new Promise((ok,ko)=>{const r=new FileReader();r.onerror=()=>ko(new Error("Lecture du fichier impossible"));r.onload=()=>{const im=new Image();im.onerror=()=>ko(new Error("Ce fichier n'est pas une image lisible"));
+function imgResize(file,max,q,lim){if(ECO()){max=Math.min(max,720);q=Math.min(q,.6);lim=Math.min(lim,120000)}return new Promise((ok,ko)=>{const r=new FileReader();r.onerror=()=>ko(new Error("Lecture du fichier impossible"));r.onload=()=>{const im=new Image();im.onerror=()=>ko(new Error("Ce fichier n'est pas une image lisible"));
  im.onload=()=>{const k=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);
   let out=c.toDataURL("image/jpeg",q),qq=q;while(out.length>lim&&qq>.3){qq-=.1;out=c.toDataURL("image/jpeg",qq)}out.length>lim?ko(new Error("Image trop lourde")):ok(out)};im.src=r.result};r.readAsDataURL(file)})}
 function slotHTML(k,t,img){return`<div class="slot" data-slot="${k}"><b>${t}</b><div class="ph ${img?"hide":""}">Aucune image</div><img alt="" class="${img?"":"hide"}" src="${img||""}"><div class="flex" style="justify-content:center;gap:6px"><label class="btn sm ghost" style="margin:0;cursor:pointer">📷 ${img?"Remplacer":"Ajouter"}<input type="file" accept="image/*" ${k==="photo"?'capture="user"':'capture="environment"'} data-img="${k}" style="display:none"></label><button type="button" class="btn sm ghost ${img?"":"hide"}" data-act="dosDel" data-id="${k}">Retirer</button></div></div>`}
@@ -1333,6 +1336,7 @@ VIEWS.params0=()=>{const c=S.config;return`<h1>Paramètres</h1>
  <h2>Société et documents</h2><div class="card"><div class="g2"><label>Adresse<input id="p_ad" value="${esc(c.ste.adresse)}"></label><label>Téléphones<input id="p_stel" value="${esc(c.ste.tel)}"></label></div><div class="g2" style="margin-top:10px"><label>NIF<input id="p_nif" value="${esc(c.ste.nif)}"></label><label>RCCM<input id="p_rccm" value="${esc(c.ste.rccm)}"></label></div>
  <label style="margin-top:10px">Mention en bas des documents<textarea id="p_ml" rows="2">${esc(c.mention_legale)}</textarea></label><label style="margin-top:10px">Signature du destinataire obligatoire dès (F, 0 = jamais)<input id="p_sig" type="number" min="0" value="${c.signature_seuil}" style="max-width:220px"></label></div>
  <h2>Paiements et versements</h2><div class="card"><label>Comptes Mobile Money d'ANGEL'S GROUP (un par ligne, ex. « Wave : 05 84 16 32 32 »)<textarea id="p_momo" rows="3">${esc((c.momo_comptes||[]).join("\n"))}</textarea></label><div class="sm mu">Ces comptes sont montrés aux livreurs pour leurs versements par Mobile Money.</div></div>
+ <h2>Alertes SOS des livreurs</h2><div class="card"><label>Téléphone du superviseur d'astreinte (appelé depuis l'alerte SOS)<input id="p_sostel" value="${esc(c.sos_tel||"")}" placeholder="${esc(c.whatsapp||"05 00 00 00 00")}" inputmode="tel"></label><label style="margin-top:10px">Numéros d'urgence affichés au livreur (un par ligne, « Libellé : numéro »)<textarea id="p_sosurg" rows="3">${esc((c.sos_urgences||SOS_URG_DEF).join("\n"))}</textarea></label><div class="sm mu">Numéros proposés par défaut : à vérifier et à adapter. Le livreur déclenche l'alerte en maintenant le bouton rouge 🆘 ; vous la voyez aussitôt en barre rouge avec sirène.</div></div>
  <h2>Dossiers des livreurs</h2><div class="card"><label style="display:flex;gap:8px;align-items:center;font-size:14px;color:var(--tx);font-weight:600"><input type="checkbox" id="p_do" style="width:auto" ${c.dossier_obligatoire?"checked":""}> Exiger un dossier complet et à jour (pièce d'identité, permis, photos, accord) avant toute affectation</label><div class="sm mu" style="margin-top:6px">Quand c'est coché, un livreur au dossier incomplet ou expiré ne peut recevoir ni mission ni tournée.</div></div>
  <h2>Étiquettes colis (QR code)</h2><div class="card"><label style="display:flex;gap:8px;align-items:center;font-size:14px;color:var(--tx);font-weight:600"><input type="checkbox" id="p_es" style="width:auto" ${c.etiq_scan?"checked":""}> Scan obligatoire des colis à la prise en charge et à la remise (quand la commande a des étiquettes)</label>
  <label style="display:flex;gap:8px;align-items:center;font-size:14px;color:var(--tx);font-weight:600;margin-top:8px"><input type="checkbox" id="p_em" style="width:auto" ${c.etiq_montant?"checked":""}> Imprimer le montant à encaisser sur l'étiquette <span class="sm mu">(le montant de l'application fait foi)</span></label>
@@ -1362,9 +1366,9 @@ function livreurHTML(){
  const lv=livreurOf(ME);if(!lv)return`<div class="lv"><div class="card">Compte livreur non rattaché. <a data-act="logout" href="#">Déconnexion</a></div></div>`;
  const mine=S.livraisons.filter(l=>l.livreur_id===lv.id),todo=(()=>{const L=mine.filter(isActive),P=propositionItineraire(lv),rk={};P.stops.forEach(s=>rk[s.l.id]=s.n);return L.sort((a,b)=>(a.statut==="affectee"?0:1)-(b.statut==="affectee"?0:1)||((rk[a.id]||999)-(rk[b.id]||999))||(a.tournee_id?0:1)-(b.tournee_id?0:1)||(a.ordre||99)-(b.ordre||99)||new Date(a.affectee_at)-new Date(b.affectee_at))})(),today=new Date().toDateString(),done=mine.filter(l=>["livree","echouee"].includes(l.statut)&&new Date(l.fin_at).toDateString()===today);
  const aEnc=todo.reduce((a,l)=>a+l.montant_attendu,0),det=soldeLiv(lv.id);
- return`<div class="lv"><div class="lvh"><div class="between"><div><b style="font-size:17px">${esc(lv.nom)}</b><br><span style="opacity:.75" class="sm">${lv.statut==="disponible"?"🟢 Disponible":"🔴 Indisponible"}</span><br><span class="sm" style="opacity:.85">${avisMoy(lv.id).n?"★ "+avisMoy(lv.id).m.toFixed(1)+" · "+avisMoy(lv.id).n+" avis clients":"Pas encore d'avis"}</span><br><span class="sm clk" data-k="td" style="opacity:.75">${new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})+" · "+clkT().slice(0,5)}</span></div><div class="flex"><button class="btn sm ghost" data-act="myStatus">Statut</button><button class="btn sm ghost" data-act="logout">⏏</button></div></div><div style="margin-top:8px">${instBox()}</div>
+ return`<div class="lv"><div class="lvh"><div class="between"><div><b style="font-size:17px">${esc(lv.nom)}</b><br><span style="opacity:.75" class="sm">${lv.statut==="disponible"?"🟢 Disponible":"🔴 Indisponible"}</span><br><span class="sm" style="opacity:.85">${avisMoy(lv.id).n?"★ "+avisMoy(lv.id).m.toFixed(1)+" · "+avisMoy(lv.id).n+" avis clients":"Pas encore d'avis"}</span><br><span class="sm clk" data-k="td" style="opacity:.75">${new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})+" · "+clkT().slice(0,5)}</span></div><div class="flex"><button class="btn sm ghost" data-act="prefs" title="Préférences d'affichage">⚙</button><button class="btn sm ghost" data-act="myStatus">Statut</button><button class="btn sm ghost" data-act="logout">⏏</button></div></div><div style="margin-top:8px">${instBox()}</div>
  <div class="grid" style="margin-top:10px;grid-template-columns:repeat(3,1fr)"><div><div style="font-size:20px;font-weight:800">${todo.length}</div><div class="sm" style="opacity:.75">à faire</div></div><div><div style="font-size:20px;font-weight:800">${done.filter(l=>l.statut==="livree").length}</div><div class="sm" style="opacity:.75">livrées aujourd'hui</div></div><div><div style="font-size:20px;font-weight:800">${fcfa(det)}</div><div class="sm" style="opacity:.75">à reverser</div></div></div></div>
- ${offreBandeau()}${aEnc?`<div class="al warn">Montants à encaisser sur vos courses : <b>${fcfa(aEnc)}</b></div>`:""}
+ ${sosBandeauLivreur(lv)}${offreBandeau()}${aEnc?`<div class="al warn">Montants à encaisser sur vos courses : <b>${fcfa(aEnc)}</b></div>`:""}
  ${carteItineraire(lv)}${versementPanel(lv)}
  ${(S.collectes||[]).filter(c=>c.livreur_id===lv.id&&["planifiee","acceptee","en_route"].includes(c.statut)).map(collecteCard).join("")}
  ${todo.length?todo.map(missionCard).join(""):'<div class="card mu">Aucune mission pour le moment. Les nouvelles missions apparaissent ici.</div>'}
@@ -1407,7 +1411,13 @@ const ACT={
 
  waOpen:()=>waOpen(),
  pTab:id=>{ui.ptab=id;document.querySelectorAll("#ptabs button").forEach(b=>b.classList.toggle("on",b.dataset.id===id));document.querySelectorAll("[data-pt]").forEach(d=>d.classList.toggle("hide",d.dataset.pt!==id))},
- sonOn:()=>activerSonnerie(),itiPos:async()=>{const p=await localiser();if(!p)return toast("Position indisponible : autorisez la localisation","err");render()},
+ sonOn:()=>activerSonnerie(),sosOpen:()=>sosOpenForm(),prefs:()=>prefsForm(),
+ sosDetail:id=>{const a=(S.sos||[]).find(x=>x.id===id);if(a)sosEnvoye(a)},
+ sosFausse:id=>{if(confirm("Annuler cette alerte (fausse alerte) ?")){closeModal();sosAgir(id,"fausse")}},
+ sosTake:id=>sosAgir(id,"prendre"),
+ sosClose:id=>ask("Clôturer l'alerte SOS","Ce qui a été fait (obligatoire)",m=>sosAgir(id,"cloturer",m),{label:"Clôturer"}),
+ sosNo:id=>ask("Fausse alerte","Pourquoi est-ce une fausse alerte ? (obligatoire)",m=>sosAgir(id,"fausse",m),{label:"Confirmer"}),
+itiPos:async()=>{const p=await localiser();if(!p)return toast("Position indisponible : autorisez la localisation","err");render()},
  cxNew:()=>modal("Nouvelle caisse",`<label>Nom de la caisse *<input name="n" required maxlength="60" placeholder="Caisse principale"></label><label>Compte<select name="c"><option value="571">571 — Caisse principale</option><option value="572">572 — Petite caisse / caisse annexe</option></select></label>`,{label:"Créer la caisse",cls:"ok",onSubmit:d=>cxRun(()=>cxCreerLocal(d.n,d.c),"caisse_creer",{p_nom:d.n,p_compte:d.c},"Caisse créée")}),
  cxOuvrir:id=>cxOuvrirForm(cxCaisse(id)),cxBon:id=>{const[i,t]=id.split("|");cxBonForm(cxCaisse(i),t)},cxCloture:id=>cxClotureForm(cxCaisse(id)),
  cxMotif:t=>{const f=document.querySelector('#mf input[name=motif]');if(f){f.value=t;f.focus()}},
@@ -1509,7 +1519,7 @@ const ACT={
  togUser:id=>{if(CL.on)return CL.go(()=>CL.updBy("membres","user_id",id,{actif:!usr(id).actif}),"Compte mis à jour");const u=usr(id);u.actif=!u.actif;audit(u.actif?"Compte réactivé":"Compte désactivé",u.nom);done()},
  pinUser:id=>{const u=usr(id);modal("Nouveau PIN — "+u.nom,`<label>PIN (${PINMIN} à 8 chiffres)<input name="pin" pattern="[0-9]{${PINMIN},8}" inputmode="numeric" required></label>`,{onSubmit:d=>{if(CL.on)return CL.go(()=>CL.fn("creer-utilisateur",{action:"reset",user_id:u.id,mot_de_passe:d.pin}),"Mot de passe modifié");u.pin_h=hashPin(u.id,d.pin);audit("PIN réinitialisé",u.nom);done("PIN modifié")}})},
  newZone:()=>zoneForm(),editZone:id=>zoneForm(S.config.zones.find(z=>z.id===id)),
- saveParams:()=>{const c=S.config,L=id=>$(id).value.split("\n").map(s=>s.trim()).filter(Boolean);c.motifs=L("#p_motifs");c.cats=L("#p_cats");c.remu={type:$("#p_rt").value,fixe:+$("#p_rf").value||0,pct:+$("#p_rp").value||0};c.gps_stale_ok=+$("#p_g1").value||2;c.gps_stale_warn=+$("#p_g2").value||10;c.gps_interval=+$("#p_g3").value||20;c.gps_retention_jours=+$("#p_g4").value||30;c.ste={adresse:$("#p_ad").value,tel:$("#p_stel").value,nif:$("#p_nif").value,rccm:$("#p_rccm").value};c.mention_legale=$("#p_ml").value;c.dossier_obligatoire=$("#p_do").checked;c.momo_comptes=L("#p_momo");c.etiq_scan=$("#p_es").checked;c.etiq_montant=$("#p_em").checked;c.etiq_tel=$("#p_et").checked;c.signature_seuil=Math.max(0,+$("#p_sig").value||0);["confirmee","en_cours","livree","echouee"].forEach(k=>{c.notif[k]=$("#pn_"+k).checked;c.tpl[k]=$("#pt_"+k).value.trim()||TPL_DEF[k]});if(CL.on)return CL.saveConfig();audit("Paramètres modifiés","");done("Paramètres enregistrés")},
+ saveParams:()=>{const c=S.config,L=id=>$(id).value.split("\n").map(s=>s.trim()).filter(Boolean);c.motifs=L("#p_motifs");c.cats=L("#p_cats");c.remu={type:$("#p_rt").value,fixe:+$("#p_rf").value||0,pct:+$("#p_rp").value||0};c.gps_stale_ok=+$("#p_g1").value||2;c.gps_stale_warn=+$("#p_g2").value||10;c.gps_interval=+$("#p_g3").value||20;c.gps_retention_jours=+$("#p_g4").value||30;c.ste={adresse:$("#p_ad").value,tel:$("#p_stel").value,nif:$("#p_nif").value,rccm:$("#p_rccm").value};c.mention_legale=$("#p_ml").value;c.dossier_obligatoire=$("#p_do").checked;c.momo_comptes=L("#p_momo");c.sos_tel=$("#p_sostel").value.trim();c.sos_urgences=L("#p_sosurg");c.etiq_scan=$("#p_es").checked;c.etiq_montant=$("#p_em").checked;c.etiq_tel=$("#p_et").checked;c.signature_seuil=Math.max(0,+$("#p_sig").value||0);["confirmee","en_cours","livree","echouee"].forEach(k=>{c.notif[k]=$("#pn_"+k).checked;c.tpl[k]=$("#pt_"+k).value.trim()||TPL_DEF[k]});if(CL.on)return CL.saveConfig();audit("Paramètres modifiés","");done("Paramètres enregistrés")},
  exportData:()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:"application/json"}));a.download="angels_erp_"+new Date().toISOString().slice(0,10)+".json";a.click()},
  resetData:()=>{if(confirm("Effacer toutes les données et recharger la démonstration ?")){localStorage.removeItem(KEY);ME=null;sessionStorage.removeItem("angels_me");load();render()}},
  /* livreur */
@@ -1541,7 +1551,8 @@ const ACT={
  newVend:()=>vendForm(),editVend:id=>vendForm(vendOf(id)),newVCmd:vCmdForm,vImport:vImportModal,
  csvModel:()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["ref;client;tel;zone;quartier;repere;article;qte;prix;paye_chez_moi\nA001;Mme Kouassi;0707123456;Cocody;Angré;Près de la pharmacie;Robe wax;2;12000;10000\nA001;Mme Kouassi;0707123456;Cocody;Angré;Près de la pharmacie;Sandales;1;8000;\nA002;M. Bamba;0505987654;Yopougon;Sicogi;Derrière l'école;Sac à main;1;15000;\n"],{type:"text/csv"}));a.download="modele_commandes.csv";a.click()},
  vReg:id=>{const v=vendOf(id),d=vendDue(v);modal("Règlement — "+v.nom,`<div class="pill">Reste à régler : <b>${fcfa(d.restant)}</b></div><label>Montant réglé<input type="number" name="m" min="1" max="${d.restant}" required value="${d.restant}"></label><label>Mode<select name="mode">${opts(S.config.modes)}</select></label><label>Note / référence<input name="note"></label>`,{label:"Enregistrer",cls:"ok",onSubmit:x=>{const m=+x.m;if(m<=0||m>d.restant)return toast("Montant invalide","err"),false;if(CL.on)return CL.go(()=>CL.rpc("regler_vendeur",{p_vid:id,p_montant:m,p_mode:x.mode,p_note:x.note||""}),"Règlement enregistré");const rgx={id:uid("rg"),vendeur_id:id,montant:m,mode:x.mode,note:x.note,ts:now(),par:who()};S.reglements.push(rgx);if(/^esp/i.test(x.mode))caisseAuto("sortie",m,"Règlement vendeur "+v.nom,v.nom,"Règlement vendeur","reglement_vendeur",rgx.id);audit("Règlement vendeur",`${v.nom} — ${fcfa(m)}`);done("Règlement enregistré")}})},
- lMap:id=>{ui.mapOpen=ui.mapOpen||{};ui.mapOpen[id]=!ui.mapOpen[id];render()},
+ lMap:id=>{if(ECO()&&!(ui.mapOpen&&ui.mapOpen[id])&&!confirm("Économie de données : afficher la carte télécharge environ 1 Mo. Continuer ?"))return;ACT.lMap0(id)},
+ lMap0:id=>{ui.mapOpen=ui.mapOpen||{};ui.mapOpen[id]=!ui.mapOpen[id];render()},
  lAskGeo:id=>{const c=cmd(byId(S.livraisons,id).commande_id);geoLinkModal(c.client_id,c.adr.id,c.numero)},
  geoLink:id=>{const[c,a]=id.split("|");geoLinkModal(c,a)},geoPick:id=>{const[c,a]=id.split("|");geoPickModal(c,a)},geoPaste:id=>{const[c,a]=id.split("|");geoPasteModal(c,a)},
  copyLink:()=>{const v=$("#gl").value;(navigator.clipboard?navigator.clipboard.writeText(v):Promise.reject()).then(()=>toast("Lien copié","ok"),()=>{$("#gl").select();toast("Sélectionné : copiez-le (Ctrl+C)")})},
@@ -1583,7 +1594,7 @@ function ensureConfig(){
  c.ste=Object.assign({adresse:"",nif:"",rccm:"",tel:"05 84 16 32 32 / 05 00 66 04 37 / 07 88 07 45 18"},c.ste||{});
  if(c.mention_legale==null)c.mention_legale="Document de gestion. Si l'entreprise est assujettie à la facturation normalisée électronique, la facture réglementaire doit être émise via le dispositif officiel.";
  if(c.signature_seuil==null)c.signature_seuil=100000;
- if(c.dossier_obligatoire==null)c.dossier_obligatoire=false;if(c.etiq_scan==null)c.etiq_scan=true;if(c.etiq_montant==null)c.etiq_montant=false;if(c.etiq_tel==null)c.etiq_tel=false;
+ if(c.sos_urgences==null)c.sos_urgences=SOS_URG_DEF.slice();if(c.sos_tel==null)c.sos_tel="";if(c.dossier_obligatoire==null)c.dossier_obligatoire=false;if(c.etiq_scan==null)c.etiq_scan=true;if(c.etiq_montant==null)c.etiq_montant=false;if(c.etiq_tel==null)c.etiq_tel=false;
  S.docs=S.docs||[];S.avis=S.avis||[];S.inventaires=S.inventaires||[];S.collectes=S.collectes||[];S.versements=S.versements||[];S.notifs=S.notifs||[];S.seq=S.seq||{cmd:0,inc:0};S.seq.doc=S.seq.doc||{}}
 const fillTpl=(t,v)=>String(t).replace(/\{(\w+)\}/g,(_,k)=>v[k]!=null?v[k]:"");
 function notifier(c,to,note){
@@ -2058,6 +2069,7 @@ async function hydrate(){
  try{const ph=await CL.chk(CL.sb.from("commande_photos").select("id,commande_id").range(0,4999));const cnt={};ph.forEach(x=>cnt[x.commande_id]=(cnt[x.commande_id]||0)+1);N.commandes.forEach(c=>{if(cnt[c.id])c.nphotos=cnt[c.id]})}catch(e){}
  try{N.versements=await fetchAll("versements_declares")}catch(e){N.versements=[]}
  try{if(["admin","direction","caissier"].includes(me.role)){const [a,b,c]=await Promise.all([fetchAll("caisses","cree_le"),fetchAll("caisse_sessions","ouverte_le"),fetchAll("caisse_mouvements","cree_le")]);N.caisses=a;N.caisse_sessions=b;N.caisse_mvts=c}else{N.caisses=[];N.caisse_sessions=[];N.caisse_mvts=[]}}catch(e){N.caisses=[];N.caisse_sessions=[];N.caisse_mvts=[]}
+ try{N.sos=await CL.chk(CL.sb.from("alertes_sos").select("*").order("cree_le",{ascending:false}).range(0,199))}catch(e){N.sos=[]}
  try{N.demandes=await CL.chk(CL.sb.from("demandes_commande").select("*").eq("statut","nouvelle").order("cree_le").range(0,99))}catch(e){N.demandes=[]}
  try{const [cl,cc,cd]=await Promise.all([fetchAll("collectes"),fetchAll("collecte_commandes","commande_id"),fetchAll("collecte_codes","collecte_id")]);const g=grp(cc,"collecte_id"),codes=Object.fromEntries(cd.map(x=>[x.collecte_id,x.code]));N.collectes=cl.map(c=>Object.assign({},c,{code:codes[c.id],lignes:(g[c.id]||[]).map(l=>({commande_id:l.commande_id,numero:l.numero,resume:l.resume,colis_collectes:l.colis_collectes,colis_recus:l.colis_recus}))}))}catch(e){N.collectes=[]}
  try{const [iv,il]=await Promise.all([fetchAll("inventaires"),fetchAll("inventaire_lignes")]);const g=grp(il,"inventaire_id");N.inventaires=iv.map(i=>Object.assign({},i,{lignes:(g[i.id]||[]).map(l=>({produit_id:l.produit_id,theorique:l.theorique,compte:l.compte,note:l.note}))}))}catch(e){N.inventaires=[]}
@@ -2152,7 +2164,7 @@ Object.assign(CL,{
 });
 /* Le tableau de paramètres n'offre ni export ni réinitialisation en mode connecté (les données sont sur le serveur). */
 /* Paramètres rangés par onglets (tout reste dans la page : « Enregistrer » enregistre l'ensemble, changer d'onglet ne perd rien) */
-const PTABS=[["zones","🗺️ Zones & tarifs",["Zones de livraison"]],["liv","🏍️ Livreurs & GPS",["Rémunération par défaut & GPS","Dossiers des livreurs","Étiquettes colis (QR code)"]],["listes","📝 Listes",["Listes paramétrables"]],["ste","🏢 Société & documents",["Société et documents"]],["pay","💳 Paiements",["Paiements et versements"]],["notif","💬 Notifications",["Notifications aux clients"]],["data","💾 Données",["Données"]]];
+const PTABS=[["zones","🗺️ Zones & tarifs",["Zones de livraison"]],["liv","🏍️ Livreurs & GPS",["Rémunération par défaut & GPS","Alertes SOS des livreurs","Dossiers des livreurs","Étiquettes colis (QR code)"]],["listes","📝 Listes",["Listes paramétrables"]],["ste","🏢 Société & documents",["Société et documents"]],["pay","💳 Paiements",["Paiements et versements"]],["notif","💬 Notifications",["Notifications aux clients"]],["data","💾 Données",["Données"]]];
 VIEWS.params=()=>{let h=VIEWS.params0();if(CL.on){const i=h.indexOf("<h2>Données</h2>");if(i>=0)h=h.slice(0,i)}
  const k=h.indexOf("<h2>"),head=k>=0?h.slice(0,k):h,secs=k>=0?h.slice(k).split(/(?=<h2>)/):[],by={};
  secs.forEach(x=>{const t=((/^<h2>(.*?)<\/h2>/.exec(x)||[])[1]||"").replace(/&amp;/g,"&"),tab=(PTABS.find(p=>p[2].includes(t))||PTABS[3])[0];(by[tab]=by[tab]||[]).push(x)});
@@ -2549,7 +2561,7 @@ function offreAfficher(l,lv,me,reste){
  if(autres.length&&a.gps){const P0=propositionItineraire(lv),P1=propositionItineraire(lv,[l]);if(P0.stops.length&&P1.km>=P0.km)detour=`<div class="pill" style="margin-top:8px">🧭 Sur votre itinéraire actuel (${autres.length} course(s) en cours) : <b>+${kmTxt(P1.km-P0.km)}</b> de détour</div>`}
  const nb=c.lignes.reduce((s,x)=>s+x.qte,0);
  const el=document.createElement("div");el.id="offre";el.dataset.lid=l.id;
- el.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(10,20,40,.88);display:flex;align-items:flex-end;justify-content:center;padding:0";
+ el.style.cssText="position:fixed;inset:0;z-index:8000;background:rgba(10,20,40,.88);display:flex;align-items:flex-end;justify-content:center;padding:0";
  el.innerHTML=`<div style="background:var(--card,#fff);color:var(--tx,#111);width:100%;max-width:520px;border-radius:22px 22px 0 0;padding:18px 18px 22px;box-shadow:0 -10px 40px rgba(0,0,0,.4)">
   <div class="between"><b style="font-size:18px">🏍️ Nouvelle course !</b><span id="offre_t" class="badge wa">${OFFRE_DELAI} s</span></div>
   ${reste>0?`<div class="sm mu">+ ${reste} autre(s) course(s) en attente</div>`:""}${c.priorite==="urgente"?`<div style="margin-top:6px">${badge("URGENT","er")}</div>`:""}
@@ -2576,11 +2588,79 @@ async function offreRepondre(id,action,motif){
 function offreBandeau(){if(sonActif()&&(!("Notification" in window)||Notification.permission!=="default"))return"";
  return`<div class="al warn" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span>🔔 Activez la sonnerie pour que votre téléphone sonne à chaque nouvelle course.</span><button class="btn sm ok" data-act="sonOn">Activer la sonnerie</button></div>`}
 /* Détection des nouvelles courses : toutes les 10 s en ligne, et à chaque affichage */
-let _offP=false;
-setInterval(async()=>{if(!ME||ME.role!=="livreur"||document.getElementById("offre")||_offP||document.hidden&&false)return;
- if(!CL.on)return offreCheck();
- _offP=true;try{const lv=livreurOf(ME);if(!lv)return;const vues=offresVues(lv),r=await CL.sb.from("livraisons").select("id").eq("livreur_id",lv.id).eq("statut","affectee");   // requête légère : le rechargement complet n'a lieu que s'il y a une nouvelle offre
-  if(!r.error&&(r.data||[]).some(x=>!vues.includes(x.id))){await refresh();await offreCheck()}}catch(e){}finally{_offP=false}},6000);
+let _offP=false,_offT=0;
+setInterval(async()=>{if(!ME||_offP)return;if(ECO()&&(_offT++)%2)return;
+ if(ME.role==="livreur"){const ouvert=!!document.getElementById("offre");if(!CL.on)return ouvert?0:offreCheck();
+  _offP=true;try{const lv=livreurOf(ME);if(!lv)return;const vues=offresVues(lv),r=ouvert?{data:[]}:await CL.sb.from("livraisons").select("id").eq("livreur_id",lv.id).eq("statut","affectee");   // requête légère : rechargement complet seulement s'il y a une nouvelle offre
+   const nouv=!r.error&&(r.data||[]).some(x=>!vues.includes(x.id)),sos=!!sosDuLivreur(lv);
+   if(nouv||sos){await refresh();if(nouv)await offreCheck();const a=sosDuLivreur(lv),mo=$("#modal").innerHTML.includes("Alerte envoyée");
+    if(a&&mo&&ui.sosSt!==a.statut)sosEnvoye(a);else if(sos&&!mo&&!$("#modal").innerHTML&&!document.getElementById("offre"))render()}
+   else if(!sos&&$("#modal").innerHTML.includes("Alerte envoyée")){closeModal();render()}}catch(e){}finally{_offP=false}return}
+ if(["admin","superviseur","direction"].includes(ME.role)){if(!CL.on)return sosBar();
+  _offP=true;try{const r=await CL.sb.from("alertes_sos").select("id,statut").in("statut",["ouverte","prise"]),sig=(r.data||[]).map(x=>x.id+x.statut).sort().join();
+   if(!r.error&&sig!==ui.sosSig){ui.sosSig=sig;await refresh();sosBar()}}catch(e){}finally{_offP=false}}},6000);
+/* ---------- Alerte SOS du livreur + préférences d'affichage (gros caractères, économie de données) ----------
+   Le livreur maintient le bouton rouge 1,5 s : l'équipe (administrateur, superviseurs) est alertée avec sa position, une sirène et une
+   barre rouge persistante jusqu'à la clôture. Pour les téléphones d'entrée de gamme : gros caractères et mode économie de données. */
+const SOS_TYPES=[["accident","🏍️ Accident"],["agression","🛑 Agression ou vol"],["panne","🔧 Moto en panne"],["malaise","🩺 Malaise ou blessure"],["autre","❗ Autre urgence"]],SOS_LIB=Object.fromEntries(SOS_TYPES);
+const SOS_URG_DEF=["Police secours : 110","SAMU : 185","Sapeurs-pompiers : 180"];
+const sosOuvertes=()=>(S.sos||[]).filter(a=>["ouverte","prise"].includes(a.statut));
+const sosDuLivreur=lv=>sosOuvertes().find(a=>a.livreur_id===lv.id);
+const telNum=t=>String(t||"").replace(/[^\d+]/g,"");
+const sosTel=()=>S.config.sos_tel||S.config.whatsapp||"";
+function sosLignesUrgence(){return(S.config.sos_urgences||SOS_URG_DEF).map(l=>{const m=/^(.*?)[:\s]+([+\d][\d\s.]*)$/.exec(l);return m?{l:m[1].trim()||l,n:telNum(m[2])}:null}).filter(x=>x&&x.n)}
+function sosOpenForm(){const lv=livreurOf(ME);if(!lv)return;const ex=sosDuLivreur(lv);if(ex)return sosEnvoye(ex);
+ let type=null;
+ modal("🆘 Alerte SOS",`<div class="al warn sm" style="margin:0 0 10px">Utilisez ce bouton en cas de <b>danger réel</b>. Votre superviseur reçoit immédiatement votre position.</div>
+ <div class="sm" style="margin-bottom:6px"><b>Que se passe-t-il ?</b></div><div id="sos_t">${SOS_TYPES.map(([k,t])=>`<button type="button" class="btn ghost" style="width:100%;margin-bottom:6px;text-align:left" data-sos="${k}">${t}</button>`).join("")}</div>
+ <label>Précision (facultatif)<input id="sos_n" maxlength="300" placeholder="Où êtes-vous, que s'est-il passé ?"></label>
+ <button type="button" class="btn er" id="sos_go" style="width:100%;margin-top:10px;padding:16px;font-size:17px;position:relative;overflow:hidden" disabled><span id="sos_bar" style="position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(255,255,255,.35)"></span><span style="position:relative">Maintenez 1,5 s pour envoyer l'alerte</span></button>
+ <div class="sm mu" style="margin-top:8px">Choisissez d'abord la situation, puis maintenez le bouton rouge. Sans réseau, appelez directement : ${esc(sosTel()||"votre superviseur")}.</div>`,{label:"Fermer",onSubmit:()=>true,focus:false});
+ const go=$("#sos_go"),bar=$("#sos_bar");let tm=null,t0=0,raf=0;
+ document.querySelectorAll("[data-sos]").forEach(b=>b.onclick=()=>{type=b.dataset.sos;document.querySelectorAll("[data-sos]").forEach(x=>{x.classList.toggle("ghost",x!==b);x.classList.toggle("er",x===b)});go.disabled=false});
+ const stop=()=>{clearTimeout(tm);cancelAnimationFrame(raf);bar.style.width="0"},start=ev=>{if(!type||go.disabled)return;ev.preventDefault();t0=Date.now();const loop=()=>{bar.style.width=Math.min(100,(Date.now()-t0)/15)+"%";raf=requestAnimationFrame(loop)};loop();tm=setTimeout(()=>{stop();sosSend(type,$("#sos_n")?$("#sos_n").value:"")},1500)};
+ go.addEventListener("pointerdown",start);["pointerup","pointerleave","pointercancel"].forEach(e=>go.addEventListener(e,stop));
+ go.addEventListener("click",e=>{if(e.detail===0&&type&&confirm("Envoyer l'alerte SOS maintenant ?"))sosSend(type,$("#sos_n").value)})}
+async function sosSend(type,note){const lv=livreurOf(ME);if(!lv)return;toast("Envoi de l'alerte…","");
+ let p=posLivreur(lv);const fresh=await localiser();if(fresh)p=fresh;
+ try{if(CL.on){await CL.rpc("sos_declencher",{p_type:type,p_note:note||null,p_lat:p?+p.lat.toFixed(6):null,p_lng:p?+p.lng.toFixed(6):null,p_acc:null});await refresh()}
+  else{if(!sosDuLivreur(lv)){S.sos=S.sos||[];S.sos.push({id:uid("sos"),livreur_id:lv.id,type,note:String(note||"").trim().slice(0,300),lat:p?+p.lat.toFixed(6):null,lng:p?+p.lng.toFixed(6):null,statut:"ouverte",cree_le:now()});audit("ALERTE SOS",lv.nom+" — "+type);save()}}
+  const a=sosDuLivreur(lv);closeModal();render();if(a)sosEnvoye(a)}
+ catch(e){toast(fixErr(e)+" — appelez directement votre superviseur","err")}}
+function sosEnvoye(a){ui.sosSt=a.statut;const lv=livreurOf(ME),u=sosLignesUrgence(),tel=telNum(sosTel()),mapL=a.lat!=null?`https://www.google.com/maps?q=${a.lat},${a.lng}`:"";
+ const msg=`🆘 SOS ${lv.nom} (${SOS_LIB[a.type]||a.type})${a.lat!=null?" — ma position : "+mapL:""}`;
+ modal("🆘 Alerte envoyée",`<div class="al" style="background:#fdecec;color:#7a1010;margin:0 0 10px"><b>Votre superviseur est prévenu</b> (${fdt(a.cree_le)}).<br>${a.statut==="prise"?`✔ Pris en charge par <b>${esc(a.prise_par_nom||"l'équipe")}</b>.`:"En attente de prise en charge… restez en sécurité."}${a.lat==null?"<br>⚠ Position non disponible.":""}</div>
+ <div class="row">${tel?`<a class="btn ok" style="text-align:center;text-decoration:none" href="tel:${tel}">📞 Appeler le superviseur</a>`:""}${tel?`<a class="btn ghost" style="text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${tel.length===10?"225"+tel:tel.replace("+","")}?text=${encodeURIComponent(msg)}">💬 WhatsApp</a>`:""}</div>
+ <div class="sm" style="margin:10px 0 4px"><b>Numéros d'urgence</b></div><div class="row" style="flex-wrap:wrap">${u.map(x=>`<a class="btn ghost" style="text-align:center;text-decoration:none" href="tel:${x.n}">📞 ${esc(x.l)} (${esc(x.n)})</a>`).join("")}</div>
+ <button type="button" class="btn ghost" style="width:100%;margin-top:12px" data-act="sosFausse" data-id="${a.id}">C'était une fausse alerte : annuler</button>`,{label:"Fermer",onSubmit:()=>true,focus:false})}
+function sosBandeauLivreur(lv){const a=sosDuLivreur(lv);if(!a)return"";return`<div class="al" style="background:#fdecec;color:#7a1010"><b>🆘 Alerte SOS en cours</b> depuis ${fdt(a.cree_le)} — ${a.statut==="prise"?"prise en charge par <b>"+esc(a.prise_par_nom||"l'équipe")+"</b>":"en attente de prise en charge"}.<div class="flex" style="margin-top:6px"><button class="btn sm" data-act="sosDetail" data-id="${a.id}">Appels et détails</button><button class="btn sm ghost" data-act="sosFausse" data-id="${a.id}">Fausse alerte</button></div></div>`}
+const sosBtnHTML='<button type="button" class="sosbtn" data-act="sosOpen" aria-label="Alerte SOS">🆘<small>SOS</small></button>';
+/* Côté équipe : barre rouge persistante + sirène à chaque nouvelle alerte */
+function sosVu(){try{return JSON.parse(sessionStorage.getItem("angels_sos_vus")||"[]")}catch(e){return[]}}
+function sosBar(){const old=document.getElementById("sosbar");if(old)old.remove();document.body.style.paddingTop="";
+ if(!ME||!["admin","superviseur","direction"].includes(ME.role)||!S||!S.sos)return;const L=sosOuvertes();if(!L.length){sonnerie(false);return}
+ const act=["admin","superviseur"].includes(ME.role),vus=sosVu(),neuves=L.filter(a=>a.statut==="ouverte"&&!vus.includes(a.id));
+ const el=document.createElement("div");el.id="sosbar";el.style.cssText="position:fixed;top:0;left:0;right:0;z-index:9200;background:#b3121e;color:#fff;padding:8px 12px;box-shadow:0 4px 18px rgba(0,0,0,.35);font-size:14px";
+ el.innerHTML=L.map(a=>{const lv=liv(a.livreur_id)||{nom:"?",tel:""},u=sosLignesUrgence();return`<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:3px 0"><b>🆘 ${esc(lv.nom)}</b><span>${esc(SOS_LIB[a.type]||a.type)} · ${fdt(a.cree_le)}${a.note?" · « "+esc(a.note)+" »":""}${a.statut==="prise"?" · pris en charge par "+esc(a.prise_par_nom||""):""}</span>
+  <a class="btn sm" style="background:#fff;color:#b3121e;text-decoration:none" href="tel:${telNum(lv.tel)}">📞 Appeler</a>${a.lat!=null?`<a class="btn sm" style="background:#fff;color:#b3121e;text-decoration:none" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${a.lat},${a.lng}">📍 Position</a>`:'<span class="sm">(position inconnue)</span>'}
+  ${act&&a.statut==="ouverte"?`<button class="btn sm" style="background:#fff;color:#b3121e" data-act="sosTake" data-id="${a.id}">✔ Je prends en charge</button>`:""}${act&&a.statut==="prise"?`<button class="btn sm" style="background:#fff;color:#b3121e" data-act="sosClose" data-id="${a.id}">Clôturer</button>`:""}${act?`<button class="btn sm" style="background:transparent;color:#fff;border:1px solid #fff" data-act="sosNo" data-id="${a.id}">Fausse alerte</button>`:""}</div>`}).join("");
+ document.body.appendChild(el);document.body.style.paddingTop=el.offsetHeight+"px";
+ if(neuves.length){try{localStorage.setItem("angels_son","1")}catch(e){}sonnerie(true);notifOffre("🆘 ALERTE SOS","Un livreur a déclenché une alerte","sos-"+neuves[0].id);try{sessionStorage.setItem("angels_sos_vus",JSON.stringify(vus.concat(neuves.map(a=>a.id))))}catch(e){}}
+ else if(!L.some(a=>a.statut==="ouverte"))sonnerie(false)}
+function sosAgir(id,action,note){
+ if(CL.on)return CL.go(()=>CL.rpc("sos_traiter",{p_id:id,p_action:action,p_note:note||null}),action==="prendre"?"Alerte prise en charge":"Alerte traitée");
+ const a=(S.sos||[]).find(x=>x.id===id);if(!a)return false;
+ if(action==="prendre"){if(a.statut!=="ouverte"){toast("Déjà prise en charge","err");return false}a.statut="prise";a.prise_par_nom=ME.nom;a.prise_le=now()}
+ else if(action==="fausse"&&ME.role==="livreur"){a.statut="fausse";a.cloturee_par_nom=ME.nom;a.cloturee_le=now();a.resolution="Fausse alerte signalée par le livreur"}
+ else{if(String(note||"").trim().length<3){toast("Précisez ce qui a été fait","err");return false}a.statut=action==="fausse"?"fausse":"cloturee";a.cloturee_par_nom=ME.nom;a.cloturee_le=now();a.resolution=String(note).trim()}
+ audit("SOS : "+action,(liv(a.livreur_id)||{}).nom||"");save();render();return true}
+/* Préférences d'affichage de l'appareil */
+let PREF={};try{PREF=JSON.parse(localStorage.getItem("angels_pref")||"{}")||{}}catch(e){PREF={}}
+const ECO=()=>!!PREF.eco;
+function applyPref(){document.body.classList.toggle("gros",!!PREF.gros);document.body.classList.toggle("eco",!!PREF.eco)}applyPref();
+function prefsForm(){modal("⚙️ Préférences d'affichage",`<label style="display:flex;gap:10px;align-items:flex-start;font-size:15px;color:var(--tx);font-weight:600"><input type="checkbox" id="pf_g" style="width:auto;margin-top:4px" ${PREF.gros?"checked":""}> <span>🔠 Gros caractères et gros boutons<br><span class="sm mu" style="font-weight:400">Plus facile à lire et à toucher, en moto ou en plein soleil.</span></span></label>
+ <label style="display:flex;gap:10px;align-items:flex-start;font-size:15px;color:var(--tx);font-weight:600;margin-top:12px"><input type="checkbox" id="pf_e" style="width:auto;margin-top:4px" ${PREF.eco?"checked":""}> <span>📶 Économie de données<br><span class="sm mu" style="font-weight:400">Pas de vignettes, photos envoyées plus légères, vérification des nouvelles courses moins fréquente, cartes seulement à la demande.</span></span></label>
+ <div class="sm mu" style="margin-top:10px">Ces réglages sont mémorisés sur ce téléphone.</div>`,{label:"Enregistrer",onSubmit:()=>{PREF={gros:$("#pf_g").checked,eco:$("#pf_e").checked};try{localStorage.setItem("angels_pref",JSON.stringify(PREF))}catch(e){}applyPref();closeModal();render();return true}})}
 
 /* ---------- Démarrage ---------- */
 const _ptok=(location.hash.match(/^#portail=(.+)$/)||[])[1],_stok=(location.hash.match(/^#suivi=(.+)$/)||[])[1],_ctok=(location.hash.match(/^#commande=(.+)$/)||[])[1];

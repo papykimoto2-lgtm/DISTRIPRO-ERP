@@ -17,6 +17,7 @@ const mk=async(nom)=>{await ay.evaluate(()=>{view='mesCmd';render()});await ay.c
  const id=sql(`select c.id from public.commandes c join public.clients k on k.id=c.client_id where k.nom='${nom}'`);
  await ad.evaluate(i=>CL.rpc("commande_action",{p_cid:i,p_action:"confirmer"}),id);await pr.evaluate(async i=>{await CL.rpc("commande_action",{p_cid:i,p_action:"preparer"});await CL.rpc("commande_action",{p_cid:i,p_action:"prete"})},id);return id};
 const o1=await mk('Off A '+Date.now().toString().slice(-5)),o2=await mk('Off B '+Date.now().toString().slice(-5));
+sql(`update public.livraisons set statut='refusee' where livreur_id='${ISSA}' and statut='affectee'`);
 // le livreur est connecté avant l'affectation
 const is=await sess('issa');await is.setViewportSize({width:420,height:900});await is.evaluate(()=>{window.__vib=[];navigator.vibrate=p=>{window.__vib.push(p);return true}});
 await is.evaluate(()=>{const lv=livreurOf(ME);localStorage.setItem('angels_offres_'+lv.id,JSON.stringify(S.livraisons.filter(l=>l.livreur_id===lv.id&&l.statut==='affectee').map(l=>l.id)))});
