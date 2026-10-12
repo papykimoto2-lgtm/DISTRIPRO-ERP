@@ -16,6 +16,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 aside{width:230px;background:var(--b2);color:#fff;padding:14px 10px;flex-shrink:0;position:sticky;top:0;height:100vh;overflow:auto}
 aside .brand{font-weight:800;font-size:16px;padding:6px 8px 12px;line-height:1.2}
 aside .brand small{display:block;font-weight:400;opacity:.7;font-size:11px}
+.clkbox{margin:0 8px 12px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.1);line-height:1.25}.clkbox b{display:block;font-size:22px;letter-spacing:1px;font-variant-numeric:tabular-nums}.clkbox span{font-size:11.5px;opacity:.8;text-transform:capitalize}
 aside a{display:flex;gap:8px;align-items:center;padding:9px 10px;border-radius:8px;color:#dbe2ff;cursor:pointer;text-decoration:none}
 aside a:hover{background:rgba(255,255,255,.1)}
 aside a.on{background:#fff;color:var(--b2);font-weight:700}
@@ -94,6 +95,10 @@ html[data-theme=bleu]{--b:#1a3aa8;--b2:#0f2570;--b3:#2a55d6;--bbg:#e5ebfb;--bg:#
 html[data-theme=or]{--b:#9a6f12;--b2:#15171d;--b3:#c8962a;--bbg:#f6edd8;--bg:#f5f4f1;--bd:#e6e2d8}
 .themes{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.themes button{all:unset;cursor:pointer;width:26px;height:26px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--bd);transition:.15s}.themes button:hover{transform:scale(1.15)}.themes button.on{box-shadow:0 0 0 2px var(--tx)}
 aside .themes{margin:6px 0 2px}aside .themes button{width:18px;height:18px;border-color:rgba(255,255,255,.5)}
+.stp{list-style:none;margin:12px 0;padding:0}.stp li{display:flex;gap:10px;align-items:center;padding:7px 0;position:relative;color:var(--mu)}
+.stp li i{width:22px;height:22px;border-radius:50%;border:2px solid var(--bd);background:#fff;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-size:12px;flex-shrink:0}
+.stp li.ok{color:var(--tx)}.stp li.ok i{background:var(--b);border-color:var(--b);color:#fff}.stp li.cur{color:var(--b2);font-weight:700}.stp li.cur i{border-color:var(--b);box-shadow:0 0 0 4px var(--bbg)}
+.stp li small{margin-left:auto;font-weight:400}.stars{display:flex;gap:6px;justify-content:center;margin:8px 0}.stars button{all:unset;cursor:pointer;font-size:34px;line-height:1;color:#cfd5e3}.stars button.on{color:#f5a700}
 .kpi{transition:.15s}.kpi:hover{box-shadow:0 4px 14px rgba(15,37,112,.12);transform:translateY(-1px)}
 @media(max-width:760px){.login.hero{grid-template-columns:1fr}.hero-l{padding:28px 22px;min-height:0}.hero-l h1{font-size:23px}.hero-r{padding:22px 16px}.pcards{grid-template-columns:1fr}}
 
@@ -318,6 +323,7 @@ function seed(){
   creerCmdVendeur(V,{nom:"Mme Konan",tel:"0505777777",zone:"Abobo",quartier:"Anonkoua",repere:"Face à l'église",ins:"",lignes:[{desig:"Robe wax",qte:1,pu:15000},{desig:"Foulard",qte:2,pu:3000}],pay:"livraison",obs:""});
   const vo=creerCmdVendeur(V,{nom:"Cliente Fatou",tel:"0505444444",zone:"Cocody",quartier:"Angré",repere:"Château d'eau",ins:"",lignes:[{desig:"Sac à main",qte:2,pu:12000}],pay:"livraison",obs:""});
   setStatut(vo,"confirmee");toPrete(vo);const lv=affecter(vo,L1.id,"");accepter(lv);priseEnCharge(lv,1);demarrer(lv);confirmer(lv,{code:lv.code,montant:vo.total,mode:"Espèces",recu_par:"Fatou"})}
+ S.avis=S.avis||[];S.livraisons.filter(l=>l.statut==="livree").forEach((l,i)=>S.avis.push({livraison_id:l.id,livreur_id:l.livreur_id,note:[5,4,5][i%3],commentaire:i===0?"Très rapide, merci !":null,ts:l.fin_at}));
  S.notifs=S.notifs.slice(-3);
  S.audit.push({ts:now(),user:"Système",role:"système",action:"Initialisation",detail:"Données de démonstration chargées"});
  save()}
@@ -342,6 +348,9 @@ const waLink=(tel,txt)=>{let t=String(tel||"").replace(/\D/g,"");if(t.length===1
 
 /* ---------- Connexion ---------- */
 function loginHTML(){return CL.on?loginHTMLCloud():loginHTMLLocal()}
+const clkT=()=>new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"}),clkD=()=>new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+const clkBox=()=>`<div class="clkbox"><b class="clk" data-k="t">${clkT()}</b><span class="clk" data-k="d">${clkD()}</span></div>`;
+setInterval(()=>{document.querySelectorAll(".clk").forEach(e=>{const k=e.dataset.k;e.textContent=k==="t"?clkT():k==="d"?clkD():new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})+" · "+clkT().slice(0,5)})},1000);
 const THEMES=[["turquoise","Turquoise (standard)","#0e7490"],["bleu","Bleu","#1a3aa8"],["emeraude","Vert émeraude","#0f7b5f"],["orange","Orange énergie","#c9500a"],["violet","Violet","#6a32c9"],["or","Nuit & or","#15171d"]];
 const themeCur=()=>document.documentElement.dataset.theme||"turquoise";
 const themeDots=()=>`<div class="themes" title="Couleur du logiciel">${THEMES.map(([k,t,c])=>`<button type="button" class="${themeCur()===k?"on":""}" style="background:${c}" data-act="theme" data-id="${k}" aria-label="${t}" title="${t}"></button>`).join("")}</div>`;
@@ -371,7 +380,7 @@ function render(){
  if(!ME){$("#app").innerHTML=loginHTML();return}
  if(ME.role==="livreur"){$("#app").innerHTML=livreurHTML();syncGPS();initMaps();return}
  const nav=NAV.filter(n=>n.r.includes(ME.role));if(!nav.find(n=>n.v===view))view=nav[0].v;
- $("#app").innerHTML=`<div class="shell"><aside><div class="brand">ANGEL'S GROUP<small>ERP · Livraisons V1</small></div>${nav.map(n=>`<a class="${n.v===view?"on":""}" data-act="nav" data-id="${n.v}">${n.i} ${n.l}</a>`).join("")}<div class="who">👤 ${esc(ME.nom)}<br><span style="opacity:.7">${ROLES[ME.role]}</span><div class="themes">${THEMES.map(([k,t,c])=>`<button type="button" class="${themeCur()===k?"on":""}" style="background:${c}" data-act="theme" data-id="${k}" title="${t}" aria-label="${t}"></button>`).join("")}</div><a data-act="logout" style="padding:6px 0">⏏ Déconnexion</a></div></aside><main>${VIEWS[view]()}</main></div>`}
+ $("#app").innerHTML=`<div class="shell"><aside><div class="brand">ANGEL'S GROUP<small>ERP · Livraisons V1</small></div>${clkBox()}${nav.map(n=>`<a class="${n.v===view?"on":""}" data-act="nav" data-id="${n.v}">${n.i} ${n.l}</a>`).join("")}<div class="who">👤 ${esc(ME.nom)}<br><span style="opacity:.7">${ROLES[ME.role]}</span><div class="themes">${THEMES.map(([k,t,c])=>`<button type="button" class="${themeCur()===k?"on":""}" style="background:${c}" data-act="theme" data-id="${k}" title="${t}" aria-label="${t}"></button>`).join("")}</div><a data-act="logout" style="padding:6px 0">⏏ Déconnexion</a></div></aside><main>${VIEWS[view]()}</main></div>`}
 
 /* ============================================================
    VUES
@@ -443,7 +452,7 @@ const hr=new Date().getHours(),hello=hr<12?"Bonjour":hr<18?"Bon après-midi":"Bo
  <h2>Alertes</h2>${al.length?al.map(a=>`<div class="al ${a.k}">${esc(a.m)}</div>`).join(""):'<div class="al">Aucune alerte.</div>'}
  <h2>Performance (période${ui.dz||ui.dl||ui.dc?" · filtrée":""})</h2><div class="grid">
  ${kpi("Commandes créées",s.cmds)}${kpi("Livrées",s.ok,"o")}${kpi("Échouées",s.ko,"e")}${kpi("Taux de réussite",s.taux.toFixed(0)+" %")}
- ${kpi("Livrées dans les délais",s.delais.toFixed(0)+" %")}${kpi("Durée moyenne",Math.round(s.duree)+" min")}${kpi("Livraisons / livreur",s.parLiv.toFixed(1))}${kpi("Tentatives / commande",s.tent.toFixed(2))}</div>
+ ${kpi("Livrées dans les délais",s.delais.toFixed(0)+" %")}${kpi("Durée moyenne",Math.round(s.duree)+" min")}${kpi("Livraisons / livreur",s.parLiv.toFixed(1))}${kpi("Tentatives / commande",s.tent.toFixed(2))}${(()=>{const a=S.avis||[];return kpi("Satisfaction client",a.length?(a.reduce((t,x)=>t+x.note,0)/a.length).toFixed(1)+" / 5 ("+a.length+")":"—","o")})()}</div>
  <div class="g2" style="margin-top:14px"><div class="card"><b>Livraisons réussies — 7 jours</b><div class="bars" style="margin-top:10px">${days.map(d=>`<div><i style="height:${d.n/mx*90}px"></i>${d.n}<br>${d.l}</div>`).join("")}</div></div>
  <div class="card"><b>Motifs d'échec fréquents</b>${s.motifs.length?`<table>${s.motifs.map(m=>`<tr><td>${esc(m[0])}</td><td><b>${m[1]}</b></td></tr>`).join("")}</table>`:'<div class="mu">Aucun échec sur la période.</div>'}</div></div>
  <h2>Indicateurs financiers (période)</h2><div class="grid">
@@ -467,7 +476,7 @@ function formCmd(){
  <div class="g2 hide" id="newcl"><label>Nom du client<input name="n_nom"></label><label>Téléphone<input name="n_tel" inputmode="tel"></label></div>
  <div class="hide" id="newadr"><div class="g3"><label>Zone<select name="a_zone">${opts(S.config.zones.map(z=>z.nom))}</select></label><label>Quartier<input name="a_q"></label><label>Point de repère<input name="a_rep"></label></div><label>Instructions d'accès<input name="a_ins"></label></div>
  <div class="sec">Produits</div><div id="lignes"></div><button type="button" class="btn sm ghost" data-act="addLigne">+ Ajouter un produit</button>
- <div class="g3"><label>Frais de livraison<input type="number" name="frais" id="f_frais" min="0" value="0"></label><label>Remise<input type="number" name="remise" id="f_remise" min="0" value="0"></label><label>Priorité<select name="priorite"><option value="normale">Normale</option><option value="urgente">Urgente</option><option value="programmee">Programmée</option></select></label></div>
+ <div class="g3"><label>Frais de livraison <span id="f_eta" class="mu sm"></span><input type="number" name="frais" id="f_frais" min="0" value="0"></label><label>Remise<input type="number" name="remise" id="f_remise" min="0" value="0"></label><label>Priorité<select name="priorite"><option value="normale">Normale</option><option value="urgente">Urgente</option><option value="programmee">Programmée</option></select></label></div>
  <div class="g3"><label>Paiement<select name="paiement" id="f_pay"><option value="livraison">À la livraison</option><option value="avance">Payé d'avance</option><option value="partiel">Paiement partiel</option></select></label>
  <label>Acompte versé<input type="number" name="acompte" id="f_acompte" min="0" value="0" disabled></label><label>Mode de paiement<select name="mode">${opts(S.config.modes)}</select></label></div>
  <div class="g2"><label>Canal<select name="canal">${opts(["Téléphone","WhatsApp","Vente en ligne","Commande directe","Autre"])}</select></label><label>Observations<input name="obs"></label></div>
@@ -495,7 +504,7 @@ function fillAdr(){const cl=cli($("#f_client").value),sel=$("#f_adr");
  $("#newcl").classList.toggle("hide",!isNew);$("#newadr").classList.toggle("hide",!(isNew||sel.value==="__new"));
  autoFrais()}
 function autoFrais(){const cl=cli($("#f_client").value),a=cl&&cl.adresses.find(x=>x.id===$("#f_adr").value);let zn=a?a.zone:null;
- if(!a&&$("#newadr:not(.hide) select"))zn=$("#newadr select").value;if(zn&&zone(zn))$("#f_frais").value=zone(zn).frais;recalc()}
+ if(!a&&$("#newadr:not(.hide) select"))zn=$("#newadr select").value;if(zn&&zone(zn))$("#f_frais").value=zone(zn).frais;const eta=$("#f_eta");if(eta)eta.textContent=zn&&zone(zn)?"· ⏱ estimé "+zone(zn).delai_min+" min":"";recalc()}
 function addLigne(){const d=document.createElement("div");d.className="lrow flex";d.style.marginBottom="6px";
  d.innerHTML=`<select class="l_prod" style="flex:2">${S.produits.filter(p=>p.actif).map(p=>`<option value="${p.id}" data-p="${p.prix}">${esc(p.nom)} (stock ${p.stock})</option>`).join("")}</select><input class="l_qte" type="number" min="1" value="1" style="width:70px"><input class="l_pu" type="number" min="0" style="width:100px"><button type="button" class="btn sm er" data-act="delLigne">✕</button>`;
  $("#lignes").appendChild(d);d.querySelector(".l_pu").value=d.querySelector(".l_prod option:checked").dataset.p;recalc()}
@@ -521,6 +530,7 @@ function cmdDetail(id){
   if(c.statut==="echouee")b.push(`<button class="btn" data-act="reprog" data-id="${c.id}">Reprogrammer</button><button class="btn wa" data-act="orgRetour" data-id="${c.id}">Organiser le retour</button>`);
   if(c.statut==="retour_cours")b.push(`<button class="btn" data-act="recepRetour" data-id="${c.id}">Réceptionner le retour</button>`)}
  if((can("admin","superviseur","commercial")&&!["livree","annulee","retour_recu","retour_cours","en_cours"].includes(c.statut))||(can("vendeur")&&["attente","confirmee"].includes(c.statut)))b.push(`<button class="btn er" data-act="cmdAnnul" data-id="${c.id}">Annuler</button>`);
+ if((can("admin","superviseur","commercial")||(can("vendeur")&&c.vendeur_id))&&!["brouillon","annulee"].includes(c.statut))b.push(`<button class="btn ghost" data-act="suiviLien" data-id="${c.id}">📡 Lien de suivi client</button>`);
  if(can("admin","preparateur","superviseur","commercial")&&["confirmee","preparation","prete","affectee","en_cours"].includes(c.statut))b.push(`<button class="btn ghost" data-act="etiq" data-id="${c.id}">🏷 Étiquettes colis${c.colis?" ("+c.colis.length+")":""}</button>`);
  {const fac=docsOf(c.id,"facture").find(d=>avoirsDe(d.id)<d.total);
   if(can("admin","commercial","caissier","superviseur")&&!["brouillon","attente","annulee"].includes(c.statut))b.push(`<button class="btn ghost" data-act="docFac" data-id="${c.id}">🧾 ${fac?"Facture "+fac.numero:"Établir la facture"}</button>`);
@@ -599,8 +609,8 @@ function prodForm(p){modal(p?"Modifier le produit":"Nouveau produit",`<div class
 
 /* ---------- Livreurs & motos ---------- */
 VIEWS.livreurs=()=>`<div class="between"><h1>Livreurs & motos</h1><div class="flex"><button class="btn" data-act="newLiv">➕ Livreur</button><button class="btn ghost" data-act="newMoto">➕ Moto</button></div></div>
- ${tbl(["Livreur","Téléphone","Zone","Moto","Statut","Dossier","Rémunération","Missions",""],S.livreurs.map(l=>{const r=l.remu||S.config.remu,u=usr(l.user_id),mo=l.moto_id&&moto(l.moto_id);
-  return`<tr><td>${avatarL(l)}<b>${esc(l.nom)}</b><br>${u&&u.actif?"":badge("compte désactivé","er")}</td><td>${esc(l.tel)}</td><td>${esc(l.zone)}</td><td>${mo?esc(mo.immat):"—"}</td><td>${l.statut==="disponible"?badge("Disponible","ok"):badge("Indisponible","er")}</td><td>${dossierBadge(l)}<br><button class="btn sm ghost" data-act="dossier" data-id="${l.id}">📁 Dossier</button></td><td class="sm">${r.type==="fixe"?fcfa(r.fixe)+"/course":r.type==="pct"?r.pct+" % des frais":fcfa(r.fixe)+" + "+r.pct+" %"}${l.remu?"":' <span class="mu">(défaut)</span>'}</td><td>${S.livraisons.filter(x=>x.livreur_id===l.id&&x.statut==="livree").length} livrées</td><td><button class="btn sm ghost" data-act="editLiv" data-id="${l.id}">Modifier</button> <button class="btn sm ghost" data-act="togLiv" data-id="${l.id}">${l.statut==="disponible"?"Marquer indisponible":"Marquer disponible"}</button></td></tr>`}))}
+ ${tbl(["Livreur","Téléphone","Zone","Moto","Statut","Dossier","Rémunération","Missions","Avis clients",""],S.livreurs.map(l=>{const r=l.remu||S.config.remu,u=usr(l.user_id),mo=l.moto_id&&moto(l.moto_id);
+  return`<tr><td>${avatarL(l)}<b>${esc(l.nom)}</b><br>${u&&u.actif?"":badge("compte désactivé","er")}</td><td>${esc(l.tel)}</td><td>${esc(l.zone)}</td><td>${mo?esc(mo.immat):"—"}</td><td>${l.statut==="disponible"?badge("Disponible","ok"):badge("Indisponible","er")}</td><td>${dossierBadge(l)}<br><button class="btn sm ghost" data-act="dossier" data-id="${l.id}">📁 Dossier</button></td><td class="sm">${r.type==="fixe"?fcfa(r.fixe)+"/course":r.type==="pct"?r.pct+" % des frais":fcfa(r.fixe)+" + "+r.pct+" %"}${l.remu?"":' <span class="mu">(défaut)</span>'}</td><td>${S.livraisons.filter(x=>x.livreur_id===l.id&&x.statut==="livree").length} livrées</td><td>${avisTxt(l.id)}</td><td><button class="btn sm ghost" data-act="editLiv" data-id="${l.id}">Modifier</button> <button class="btn sm ghost" data-act="togLiv" data-id="${l.id}">${l.statut==="disponible"?"Marquer indisponible":"Marquer disponible"}</button></td></tr>`}))}
  <h2>Motos</h2>${tbl(["Immatriculation","Modèle","Km","Prochain entretien","Statut","Affectée à","Coût d'entretien",""],S.motos.map(m=>{const l=S.livreurs.find(x=>x.moto_id===m.id),ce=S.entretiens.filter(e=>e.moto_id===m.id).reduce((a,e)=>a+e.cout,0);return`<tr><td><b>${esc(m.immat)}</b></td><td>${esc(m.modele)}</td><td>${m.km}</td><td>${m.prochain_km} km ${m.km>=m.prochain_km?badge("dû","er"):""}</td><td>${badge(m.statut,m.statut==="disponible"?"ok":"er")}</td><td>${l?esc(l.nom):"—"}</td><td>${fcfa(ce)}</td><td><button class="btn sm" data-act="entMoto" data-id="${m.id}">🔧 Entretien</button> <button class="btn sm ghost" data-act="histMoto" data-id="${m.id}">Historique</button> <button class="btn sm ghost" data-act="editMoto" data-id="${m.id}">Modifier</button></td></tr>`}))}
  <p class="mu sm">Une moto en panne ou immobilisée ne peut pas recevoir de nouvelle mission. Remettez-la au statut « disponible » après réparation.</p>`;
 /* ---------- Dossier d'identité des livreurs ---------- */
@@ -733,7 +743,7 @@ function livreurHTML(){
  const lv=livreurOf(ME);if(!lv)return`<div class="lv"><div class="card">Compte livreur non rattaché. <a data-act="logout" href="#">Déconnexion</a></div></div>`;
  const mine=S.livraisons.filter(l=>l.livreur_id===lv.id),todo=mine.filter(isActive).sort((a,b)=>(a.tournee_id?0:1)-(b.tournee_id?0:1)||(a.ordre||99)-(b.ordre||99)||new Date(a.affectee_at)-new Date(b.affectee_at)),today=new Date().toDateString(),done=mine.filter(l=>["livree","echouee"].includes(l.statut)&&new Date(l.fin_at).toDateString()===today);
  const aEnc=todo.reduce((a,l)=>a+l.montant_attendu,0),det=soldeLiv(lv.id);
- return`<div class="lv"><div class="lvh"><div class="between"><div><b style="font-size:17px">${esc(lv.nom)}</b><br><span style="opacity:.75" class="sm">${lv.statut==="disponible"?"🟢 Disponible":"🔴 Indisponible"}</span></div><div class="flex"><button class="btn sm ghost" data-act="myStatus">Statut</button><button class="btn sm ghost" data-act="logout">⏏</button></div></div>
+ return`<div class="lv"><div class="lvh"><div class="between"><div><b style="font-size:17px">${esc(lv.nom)}</b><br><span style="opacity:.75" class="sm">${lv.statut==="disponible"?"🟢 Disponible":"🔴 Indisponible"}</span><br><span class="sm" style="opacity:.85">${avisMoy(lv.id).n?"★ "+avisMoy(lv.id).m.toFixed(1)+" · "+avisMoy(lv.id).n+" avis clients":"Pas encore d'avis"}</span><br><span class="sm clk" data-k="td" style="opacity:.75">${new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})+" · "+clkT().slice(0,5)}</span></div><div class="flex"><button class="btn sm ghost" data-act="myStatus">Statut</button><button class="btn sm ghost" data-act="logout">⏏</button></div></div>
  <div class="grid" style="margin-top:10px;grid-template-columns:repeat(3,1fr)"><div><div style="font-size:20px;font-weight:800">${todo.length}</div><div class="sm" style="opacity:.75">à faire</div></div><div><div style="font-size:20px;font-weight:800">${done.filter(l=>l.statut==="livree").length}</div><div class="sm" style="opacity:.75">livrées aujourd'hui</div></div><div><div style="font-size:20px;font-weight:800">${fcfa(det)}</div><div class="sm" style="opacity:.75">à reverser</div></div></div></div>
  ${aEnc?`<div class="al warn">Montants à encaisser sur vos courses : <b>${fcfa(aEnc)}</b></div>`:""}
  ${todo.length?todo.map(missionCard).join(""):'<div class="card mu">Aucune mission pour le moment. Les nouvelles missions apparaissent ici.</div>'}
@@ -766,6 +776,8 @@ const ACT={
  nav:id=>{view=id;render()},
  dossier:id=>dossierForm(liv(id)),dosDel:k=>{if(ui.dos){ui.dos[k]=null;slotSet(k,null)}},
  theme:k=>{setTheme(k);render()},
+ suiviLien:async id=>{const c=cmd(id);let link;if(CL.on){const t=await CL.rpc("creer_lien_suivi",{p_commande:id});link=location.href.split("#")[0].split("?")[0]+"#suivi="+t}else link=location.href.split("#")[0]+"#suivi="+id;suiviModal(c,link)},
+ cpTxt:t=>{(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast("Lien copié","ok"),()=>prompt("Copiez ce lien :",t))},
  demoIn:id=>{const u=usr(id);if(!u||CL.on)return;ME=u;sessionStorage.setItem("angels_me",u.id);view=ME.role==="livreur"?view:"dashboard";audit("Connexion",u.nom);save();render()},
  tab:id=>{const[k,v]=id.split("|");ui[k]=v;render()},
  logout:()=>{if(CL.on){if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null}return CL.logout()}if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null}sessionStorage.removeItem("angels_me");ME=null;render()},
@@ -886,7 +898,7 @@ function ensureConfig(){
  if(c.mention_legale==null)c.mention_legale="Document de gestion. Si l'entreprise est assujettie à la facturation normalisée électronique, la facture réglementaire doit être émise via le dispositif officiel.";
  if(c.signature_seuil==null)c.signature_seuil=100000;
  if(c.dossier_obligatoire==null)c.dossier_obligatoire=false;if(c.etiq_scan==null)c.etiq_scan=true;if(c.etiq_montant==null)c.etiq_montant=false;if(c.etiq_tel==null)c.etiq_tel=false;
- S.docs=S.docs||[];S.notifs=S.notifs||[];S.seq=S.seq||{cmd:0,inc:0};S.seq.doc=S.seq.doc||{}}
+ S.docs=S.docs||[];S.avis=S.avis||[];S.notifs=S.notifs||[];S.seq=S.seq||{cmd:0,inc:0};S.seq.doc=S.seq.doc||{}}
 const fillTpl=(t,v)=>String(t).replace(/\{(\w+)\}/g,(_,k)=>v[k]!=null?v[k]:"");
 function notifier(c,to,note){
  const cfg=S.config;if(!cfg.notif||cfg.notif[to]!==true||!cfg.tpl[to])return;
@@ -1348,6 +1360,7 @@ async function hydrate(){
  Object.assign(N.pos,CL.pos);
  CL.vd={};dues.forEach(d=>CL.vd[d.vendeur_id]={acquis:+d.acquis,regle:+d.regle,restant:+d.restant,attente:+d.attente,elig:[]});
  elig.forEach(e=>{(CL.vd[e.vendeur_id]=CL.vd[e.vendeur_id]||{acquis:0,regle:0,restant:0,attente:0,elig:[]}).elig.push({commande_id:e.commande_id,net:+e.net,livree_le:e.livree_le})});
+ try{N.avis=(await fetchAll("avis_livraison","livraison_id")).map(a=>({livraison_id:a.livraison_id,livreur_id:a.livreur_id,note:a.note,commentaire:a.commentaire,ts:a.cree_le}))}catch(e){N.avis=[]}
  try{const [dd,ff]=await Promise.all([fetchAll("livreur_dossiers","livreur_id"),CL.sb.from("livreur_fichiers").select("livreur_id,kind,miniature").range(0,999)]);
   const byL=Object.fromEntries(dd.map(x=>[x.livreur_id,x])),fl=grp(ff.data||[],"livreur_id");
   N.livreurs.forEach(l=>{l.dossier=byL[l.id]||null;l.fichiers={};(fl[l.id]||[]).forEach(f=>{l.fichiers[f.kind]={mini:f.miniature||null,full:null}})})}catch(e){}   // dossiers : lisibles seulement par l'administrateur, le superviseur et le livreur lui-même
@@ -1443,9 +1456,69 @@ async function bootPortalCloud(token){
  try{await CL.init();const p=await CL.rpc("portail_get",{p_token:token});if(!p)throw new Error("Lien expiré ou invalide : demandez-en un nouveau.");p.cloudToken=token;S=null;renderPortal(p)}
  catch(e){$("#app").innerHTML='<div class="login"><div class="card">'+esc(fixErr(e))+'</div></div>'}}
 
+/* ---------- Suivi client en direct + avis ---------- */
+const avisMoy=lid=>{const a=(S.avis||[]).filter(x=>x.livreur_id===lid);return{n:a.length,m:a.length?a.reduce((t,x)=>t+x.note,0)/a.length:0}};
+const avisTxt=lid=>{const r=avisMoy(lid);return r.n?`<b>★ ${r.m.toFixed(1)}</b> <span class="mu sm">(${r.n} avis)</span>`:'<span class="mu">—</span>'};
+function suiviLocal(c){
+ const l=livsOf(c.id).slice(-1)[0],lv=l&&liv(l.livreur_id),z=zone(c.adr.zone),av=l&&(S.avis||[]).find(a=>a.livraison_id===l.id);
+ const pos=l&&l.statut==="en_cours"&&S.pos[l.livreur_id]&&Date.now()-new Date(S.pos[l.livreur_id].ts)<15*60000?S.pos[l.livreur_id]:null;
+ return{org:S.config.org||"ANGEL'S GROUP",w:S.config.whatsapp||"",numero:c.numero,statut:c.statut,lieu:[c.adr.zone,c.adr.quartier].filter(Boolean).join(" · "),
+  livreur:l&&["affectee","acceptee","en_cours","livree"].includes(l.statut)&&lv?lv.nom.split(" ")[0]:null,
+  eta:l&&l.statut==="en_cours"?new Date(new Date(l.depart_at||Date.now()).getTime()+(z?z.delai_min:60)*60000).toISOString():null,
+  pos:pos?{lat:pos.lat,lng:pos.lng,ts:pos.ts}:null,dest:c.adr.gps||null,hist:(c.hist||[]).map(h=>({a:h.a,ts:h.ts})),
+  avis:av?{note:av.note,commentaire:av.commentaire}:null,peut_noter:!!(l&&c.statut==="livree"&&l.statut==="livree"&&!av),
+  a_payer:l&&["affectee","acceptee","en_cours"].includes(l.statut)?l.montant_attendu:null,_lid:l&&l.id,_lvid:l&&l.livreur_id}}
+const SUIVI_TIT={brouillon:"Commande bien reçue",attente:"Commande bien reçue",confirmee:"Commande confirmée",preparation:"Votre commande est en préparation",prete:"Prête : un livreur va être désigné",affectee:"Un livreur est désigné",en_cours:"Votre livreur est en route",livree:"Livrée ✔",echouee:"Livraison non aboutie",retour_cours:"Livraison non aboutie",retour_recu:"Livraison non aboutie",annulee:"Commande annulée"};
+function suiviHTML(d){
+ const K={brouillon:0,attente:0,confirmee:1,preparation:2,prete:2,affectee:3,en_cours:4,livree:5},k=K[d.statut];
+ const ST=[["Commande reçue",["brouillon","attente"]],["Confirmée",["confirmee"]],["Préparée",["prete"]],["Livreur désigné",["affectee"]],["En route vers vous",["en_cours"]],["Livrée",["livree"]]];
+ const when=sts=>{const h=(d.hist||[]).find(x=>sts.includes(x.a));return h?new Date(h.ts).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):""};
+ const hm=t=>new Date(t).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+ const bad={echouee:"Nous n'avons pas pu vous livrer. Notre équipe vous recontacte.",retour_cours:"Nous n'avons pas pu vous livrer. Notre équipe vous recontacte.",retour_recu:"Nous n'avons pas pu vous livrer. Notre équipe vous recontacte.",annulee:"Cette commande a été annulée."}[d.statut];
+ const w=String(d.w||"").replace(/\D/g,"");
+ return`<div class="login"><div class="card"><div style="font-size:20px;font-weight:800;color:var(--b2)">${esc(d.org)}</div><div class="mu" style="margin-bottom:10px">Suivi de commande ${esc(d.numero)}</div>
+ <div style="font-size:21px;font-weight:800">${SUIVI_TIT[d.statut]||esc(d.statut)}</div>
+ ${d.eta&&d.statut==="en_cours"?`<div class="pill" style="margin-top:8px">⏱ Arrivée estimée vers <b>${hm(d.eta)}</b></div>`:""}
+ ${d.livreur?`<div class="sm" style="margin-top:8px">🏍️ Votre livreur : <b>${esc(d.livreur)}</b></div>`:""}
+ ${d.statut==="en_cours"?`<div id="sv_map" style="height:240px;border-radius:10px;overflow:hidden;background:#e8ebf5;margin-top:10px"></div><div class="sm mu" style="margin-top:4px">${d.pos?"Position mise à jour à "+hm(d.pos.ts):"Position du livreur non disponible pour le moment."}</div>`:""}
+ ${bad?`<div class="al warn" style="margin-top:10px">${bad}</div>`:`<ul class="stp">${ST.map(([t,sts],i)=>`<li class="${i<k||d.statut==="livree"?"ok":i===k?"cur":""}"><i>${i<k||d.statut==="livree"?"✓":i+1}</i>${t}<small>${when(sts)}</small></li>`).join("")}</ul>`}
+ ${d.a_payer!=null&&d.a_payer>0&&d.statut!=="livree"?`<div class="pill sm">À régler à la livraison : <b>${fcfa(d.a_payer)}</b></div>`:""}
+ ${["affectee","en_cours"].includes(d.statut)?`<div class="sm mu" style="margin-top:10px">🔐 Le code de confirmation vous a été envoyé par message. Ne le donnez au livreur qu'à la réception de votre colis.</div>`:""}
+ ${d.peut_noter?`<div class="sec">Comment s'est passée votre livraison ?</div><div class="stars" id="sv_st">${[1,2,3,4,5].map(n=>`<button type="button" data-n="${n}" aria-label="${n} sur 5">★</button>`).join("")}</div><label>Un commentaire (facultatif)<input id="sv_cm" maxlength="300"></label><button class="btn ok" id="sv_ok" style="width:100%;margin-top:10px" disabled>Envoyer mon avis</button>`:d.avis?`<div class="al" style="background:var(--okbg);margin-top:12px">Merci pour votre avis : <b>${"★".repeat(d.avis.note)}${"☆".repeat(5-d.avis.note)}</b>${d.avis.commentaire?"<br>« "+esc(d.avis.commentaire)+" »":""}</div>`:""}
+ ${w?`<a class="btn ghost" style="width:100%;margin-top:12px;display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${w.length===10?"225"+w:w}">💬 Contacter ${esc(d.org)}</a>`:""}
+ <div class="sm mu" style="margin-top:10px">${esc(d.lieu||"")} · Cette page se met à jour toute seule.</div></div></div>`}
+let SV={sig:"",note:0};
+function showSuivi(d,rate){
+ const sig=JSON.stringify(d);if(sig===SV.sig)return;SV.sig=sig;document.title=d.org+" — Suivi "+d.numero;
+ const keep={n:SV.note,c:(document.getElementById("sv_cm")||{}).value||""};
+ $("#app").innerHTML=suiviHTML(d);
+ if(d.statut==="en_cours"&&(d.pos||d.dest))mapInto($("#sv_map"),{dest:d.dest,me:d.pos,center:d.pos||d.dest});
+ if(d.peut_noter){const sts=[...document.querySelectorAll("#sv_st button")],ok=$("#sv_ok");$("#sv_cm").value=keep.c;
+  const paint=n=>{SV.note=n;sts.forEach((b,i)=>b.classList.toggle("on",i<n));ok.disabled=!n};paint(keep.n);
+  sts.forEach(b=>b.onclick=()=>paint(+b.dataset.n));
+  ok.onclick=()=>{ok.disabled=true;Promise.resolve(rate(SV.note,$("#sv_cm").value.trim())).then(r=>{SV.sig="";if(r===false)toast("Avis déjà enregistré ou impossible","err")}).catch(e=>{ok.disabled=false;toast(fixErr(e),"err")})}}}
+async function bootSuiviCloud(token){
+ try{await CL.init();
+  const pull=async()=>{const d=await CL.rpc("suivi_get",{p_token:token});if(!d)throw new Error("Lien expiré ou invalide : demandez-en un nouveau à "+(S&&S.config&&S.config.org||"votre fournisseur")+".");showSuivi(d,async(n,c)=>{await CL.rpc("suivi_noter",{p_token:token,p_note:n,p_commentaire:c||null});await pull()})};
+  await pull();setInterval(()=>pull().catch(()=>{}),15000)}
+ catch(e){$("#app").innerHTML='<div class="login"><div class="card">'+esc(fixErr(e))+'</div></div>'}}
+function bootSuiviLocal(id){
+ const pull=()=>{let d=null;try{d=JSON.parse(localStorage.getItem(KEY))}catch(e){}if(!d||d.v!==1){$("#app").innerHTML='<div class="login"><div class="card">Suivi indisponible : ouvrez ce lien sur l\'appareil de démonstration.</div></div>';return}
+  S=d;const c=(S.commandes||[]).find(x=>x.id===id);if(!c){$("#app").innerHTML='<div class="login"><div class="card">Commande introuvable.</div></div>';return}
+  const v=suiviLocal(c);showSuivi(v,(n,cm)=>{const live=JSON.parse(localStorage.getItem(KEY));live.avis=live.avis||[];if(live.avis.some(a=>a.livraison_id===v._lid))return false;
+   live.avis.push({livraison_id:v._lid,livreur_id:v._lvid,note:n,commentaire:cm||null,ts:now()});localStorage.setItem(KEY,JSON.stringify(live));pull();return true})};
+ pull();setInterval(pull,5000)}
+function suiviModal(c,link){
+ const cl=cli(c.client_id),w=cl&&String(cl.tel||"").replace(/\D/g,""),msg=`Bonjour${cl?" "+cl.nom:""}, suivez votre commande ${c.numero} en direct : ${link}`;
+ modal("Lien de suivi — "+c.numero,`<div class="sm mu">Le client voit l'avancement, le prénom du livreur, l'heure d'arrivée estimée et la carte pendant la course, puis peut noter la livraison. Le code de confirmation n'y figure jamais.</div>
+ <label>Lien<input readonly value="${esc(link)}" onfocus="this.select()"></label>
+ <div class="flex" style="margin-top:10px"><button type="button" class="btn" data-act="cpTxt" data-id="${esc(link)}">📋 Copier le lien</button>${w?`<a class="btn ok" target="_blank" rel="noopener" style="text-decoration:none" href="https://wa.me/${w.length===10?"225"+w:w}?text=${encodeURIComponent(msg)}">💬 Envoyer par WhatsApp</a>`:""}<a class="btn ghost" target="_blank" rel="noopener" style="text-decoration:none" href="${esc(link)}">👁 Voir la page</a></div>`,{label:"Fermer",onSubmit:()=>true})}
+
 /* ---------- Démarrage ---------- */
-const _ptok=(location.hash.match(/^#portail=(.+)$/)||[])[1];
-if(_ptok&&CL.on&&/^[a-f0-9]{64}$/.test(_ptok)){bootPortalCloud(_ptok)}
+const _ptok=(location.hash.match(/^#portail=(.+)$/)||[])[1],_stok=(location.hash.match(/^#suivi=(.+)$/)||[])[1];
+if(_stok&&CL.on&&/^[a-f0-9]{64}$/.test(_stok)){bootSuiviCloud(_stok)}
+else if(_stok&&!CL.on){bootSuiviLocal(_stok)}
+else if(_ptok&&CL.on&&/^[a-f0-9]{64}$/.test(_ptok)){bootPortalCloud(_ptok)}
 else if(location.hash.startsWith("#portail=")){
  try{const p=unb64(location.hash.slice(9));let d=null;try{d=JSON.parse(localStorage.getItem(KEY))}catch(e){}S=d&&d.v===1?d:null;renderPortal(p)}
  catch(e){$("#app").innerHTML='<div class="login"><div class="card">Lien invalide ou expiré. Demandez-en un nouveau.</div></div>'}
