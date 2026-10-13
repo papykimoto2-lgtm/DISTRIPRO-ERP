@@ -142,3 +142,11 @@ select t_ok(t_n(u('B'),'select count(*) from public.caisse_mouvements')=0, 'une 
 select t_fail(u('K'),$$insert into public.caisse_mouvements(org_id,caisse_id,session_id,numero,type,montant,motif) select org_id,caisse_id,id,'X','entree',1,'x' from public.caisse_sessions limit 1$$,'permission|denied','écriture directe interdite');
 select t_fail(u('A'),$$update public.caisse_mouvements set montant=1$$,'permission|denied','modification directe interdite');
 select t_fail(u('A'),$$delete from public.caisse_mouvements$$,'permission|denied','suppression interdite : un bon se rejette ou se contre-passe');
+-- 8. Règlement fournisseur en espèces : seulement depuis une caisse ouverte dont le solde couvre le montant
+select t_ok(app.caisse_especes_ok(:'org1', 1000) is null, 'caisse ouverte avec solde suffisant : paiement espèces autorisé');
+select t_ok(app.caisse_especes_ok(:'org1', 999999999) like 'Solde de caisse insuffisant%', 'montant supérieur au solde : refusé');
+select t_ok(app.caisse_especes_ok(:'org2', 5000) is null, 'autre société sans caisse : règle non appliquée');
+select id as sidx, app.caisse_solde_session(id) as sx from public.caisse_sessions where caisse_id=:'cp' and statut='ouverte' \gset
+select t_as(u('A')); select public.caisse_cloturer(:'sidx', :sx) \gset
+select t_root();
+select t_ok(app.caisse_especes_ok(:'org1', 100) like 'Aucune caisse ouverte%', 'caisse fermée : paiement espèces refusé');

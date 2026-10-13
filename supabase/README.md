@@ -102,3 +102,6 @@ Migration `20261024000000_caisse.sql` : tables `caisses`, `caisse_sessions` (une
 
 ### Alertes SOS des livreurs
 Migration `20261025000000_sos_livreurs.sql` : table `alertes_sos` (lecture seule ; une seule alerte `ouverte`/`prise` par livreur ; visible de l'administrateur, du superviseur, de la direction et du livreur concerné), fonctions `sos_declencher` (livreur ; 5 par heure ; dernière position connue si le GPS manque) et `sos_traiter` (`prendre` : une seule personne ; `cloturer` et `fausse` avec précision ; le livreur peut seulement signaler une fausse alerte sur la sienne). Tests : `tests/test_sos.sql`, `tests/banc/e2e_sos*.js`.
+
+### Règlement des fournisseurs à la caisse
+Migration `20261026000000_reglement_fournisseur_caisse.sql` : `app.caisse_especes_ok` et `regler_vendeur` refusent un paiement en espèces s'il n'y a pas de caisse ouverte ou si son solde est insuffisant (uniquement quand la société a créé au moins une caisse). Tests : `tests/test_caisse.sql` (§ 8), `tests/banc/e2e_fournisseurs_caisse*.js`.
