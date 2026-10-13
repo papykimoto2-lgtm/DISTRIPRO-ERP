@@ -1,0 +1,33 @@
+const { chromium } = require('/opt/node-tools/node_modules/playwright');const fs=require('fs');const {execSync}=require('child_process');
+const ANON=fs.readFileSync('/tmp/pgr/anon.key','utf8').trim();
+const sql=q=>execSync(`psql -h 127.0.0.1 -p 54330 -U postgres -d t -At -c "${q}"`).toString().trim();
+let ok=0,ko=0;const chk=(n,c,x)=>{c?ok++:ko++;console.log((c?'✔':'✘')+' '+n+(c?'':'  → '+(typeof x==='string'?x:JSON.stringify(x))))};
+(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});
+async function sess(u){const ctx=await b.newContext({viewport:{width:1280,height:950}});await ctx.addInitScript(k=>{window.ANGELS_CLOUD={url:'http://127.0.0.1:3011',key:k}},ANON);
+ await ctx.route('https://cdn.jsdelivr.net/npm/@supabase/**',r=>r.fulfill({path:'/tmp/pgr/sbjs/package/dist/umd/supabase.js',contentType:'application/javascript'}));
+ const pg=await ctx.newPage();pg.errs=[];pg.on('pageerror',e=>pg.errs.push(e.message));pg.on('dialog',d=>d.accept());
+ await pg.goto('file:///home/user/DISTRIPRO-ERP/index.html');await pg.waitForSelector('#lf');await pg.fill('input[name=ident]',u);await pg.fill('input[name=pwd]','pwd'+u);await pg.click('#lf button');
+ await pg.waitForFunction(()=>typeof ME!=='undefined'&&ME&&S.users.length>0,null,{timeout:8000});
+ await pg.evaluate(()=>{window.__t=[];const o=window.toast;window.toast=(m,k)=>{if(k==='err')__t.push(m);return o(m,k)}});return pg}
+
+const ISSA=sql("select id from public.livreurs where nom like 'Issa%' limit 1");
+sql(`insert into public.fonds(org_id,type,livreur_id,montant,mode) select org_id,'encaissement',id,20000,'Espèces' from public.livreurs where id='${ISSA}'`);
+const ref='WV-V'+Date.now().toString().slice(-7);
+const is=await sess('issa'),yao=await sess('yao'),ad=await sess('admin');
+await is.setViewportSize({width:420,height:900});await yao.setViewportSize({width:1300,height:950});
+await is.click('button[data-act=verserMomo]');await is.waitForSelector('input[name=ref]');await is.fill('input[name=m]','7000');await is.fill('input[name=ref]',ref);await is.click('#mf .mf .btn:not(.ghost)');await is.waitForTimeout(2500);
+chk('déclaration enregistrée « declare » côté serveur',sql(`select statut from public.versements_declares where ref='${ref.toUpperCase()}'`)==='declare');
+chk('le livreur voit « En validation »',/En validation/.test(await is.innerText('#app')));
+await yao.evaluate(()=>refresh());await yao.waitForTimeout(800);await yao.evaluate(()=>{view='finance';render()});
+chk('le caissier voit la pastille sur Finance',+(await yao.innerText('[data-act=nav][data-id=finance] .nb'))>=1);
+await yao.click('.tabs [data-id="fin|vers"]');
+chk('la déclaration est listée « ⏳ En validation » avec sa référence',/En validation/.test(await yao.innerText('main'))&&new RegExp(ref.toUpperCase()).test(await yao.innerText('main')));
+await yao.locator(`tr:has-text("${ref.toUpperCase()}") [data-act=versOk]`).click();await yao.waitForTimeout(2500);
+chk('encaissé côté serveur (statut valide, valideur, date)',sql(`select statut||'/'||(traite_le is not null)::text||'/'||(traite_par_nom is not null)::text from public.versements_declares where ref='${ref.toUpperCase()}'`)==='valide/true/true');
+chk('le reversement est enregistré avec la référence',sql(`select count(*) from public.fonds where type='reversement' and ref='${ref.toUpperCase()}'`)==='1');
+await yao.selectOption('select[data-f=vfilt]','valide');chk('liste « Encaissés »',new RegExp(ref.toUpperCase()).test(await yao.innerText('main'))&&/✅ Encaissé/.test(await yao.innerText('main')));
+await is.waitForTimeout(8000);await is.evaluate(()=>refresh().then(render));await is.waitForTimeout(500);
+chk('le livreur voit « ✅ Encaissé le … »',/Encaissé le/.test(await is.innerText('#app')),(await is.innerText('#app')).match(/Wave[^\n]*/g));
+chk('l\'administrateur voit aussi la liste (lecture et action)',await ad.evaluate(()=>{view='finance';render();return true}));
+chk('aucune erreur JS',is.errs.length===0&&yao.errs.length===0,[is.errs,yao.errs]);
+console.log(ok+' ok / '+ko+' échecs');await b.close()})();

@@ -28,7 +28,7 @@ chk('versement déclaré côté serveur',sql(`select statut||'/'||montant from p
 // caissier
 const ya=await sess('yao');await ya.evaluate(()=>{view='finance';render()});await ya.waitForTimeout(600);
 chk('le caissier voit le versement à valider',new RegExp(ref2).test(await ya.innerText('body')));
-await ya.click(`tr:has-text("${ref2}") button:has-text("Reçu — valider")`);await ya.waitForTimeout(1800);
+await ya.click(`tr:has-text("${ref2}") button[data-act=versOk]`);await ya.waitForTimeout(1800);
 chk('validation : reversement créé avec la référence',sql(`select count(*) from public.fonds where type='reversement' and ref='${ref2}' and montant=4000`)==='1'&&sql(`select statut from public.versements_declares where ref='${ref2}'`)==='valide',await ya.evaluate(()=>__t));
 // direct
 const lid2=null;

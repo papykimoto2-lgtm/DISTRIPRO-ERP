@@ -37,7 +37,7 @@ await pg.evaluate(()=>{ME=S.users.find(u=>u.role==='caissier');view="finance";re
 chk('caissier : versements à valider',/Versements Mobile Money déclarés à valider \(2\)/.test(t)&&/MP-5555/.test(t));
 chk('colonnes espèces / Mobile Money',/Encaissé en espèces/.test(t)&&/Encaissé en Mobile Money/.test(t)&&/payé direct sur le compte ANGEL/.test(t));
 const sb=await pg.evaluate(id=>soldeLiv(id),L.lv);
-await pg.click('button:has-text("Reçu — valider") >> nth=1');await pg.waitForTimeout(300);
+await pg.click('button[data-act=versOk] >> nth=1');await pg.waitForTimeout(300);
 const sa=await pg.evaluate(id=>soldeLiv(id),L.lv);chk('validation : reversement enregistré avec référence, solde réduit',sb-sa>0&&await pg.evaluate(()=>S.fonds.some(f=>f.type==='reversement'&&f.ref)),[sb,sa]);
 await pg.click('button:has-text("Rejeter")');await pg.fill('#modal textarea','SMS non reçu');await pg.click('#mf .mf .btn:not(.ghost)');await pg.waitForTimeout(300);
 chk('rejet avec motif',await pg.evaluate(()=>S.versements.some(v=>v.statut==='rejete'&&v.motif==='SMS non reçu')));
