@@ -191,3 +191,7 @@ Menu *Livreurs & motos* → **📁 Dossier** : photo, pièce d'identité (recto/
 ## Déploiement (Vercel)
 Importer le dépôt dans Vercel : aucun réglage (Framework « Other », pas de build, dossier racine = racine). Le fichier `.vercelignore` exclut `supabase/` (sources du backend, non destinées à être publiques).
 Attention : la page de connexion affiche les PIN de démonstration et les données restent dans le navigateur de chaque visiteur. C'est une démo, pas une mise en production : avant tout usage réel, brancher Supabase et retirer l'encart de démonstration.
+
+### Caisse — solde théorique à l'ouverture et à la clôture
+- **Ouverture** : un bloc affiche le *solde théorique* (= fond compté à la dernière clôture, avec rappel théorique/compté/écart de cette clôture, ou « première ouverture »). L'écart entre le fond constaté et ce solde s'affiche en direct.
+- **Clôture** : le solde théorique est affiché en grand avec sa décomposition (fond d'ouverture + entrées validées − sorties validées), puis l'écart avec le comptage réel.

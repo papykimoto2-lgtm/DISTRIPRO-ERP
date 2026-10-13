@@ -2504,12 +2504,20 @@ function cxBonForm(c,type){const ent=type==="entree",fq=cxFreq(c,type);
  {label:"💾 Enregistrer le bon",cls:ent?"ok":"er",onSubmit:d=>{const m=Math.round(+d.m);if(!(m>0))return toast("Montant invalide","err"),false;
   if(!ent&&m>cxSolde(c)&&!confirm("Cette sortie dépasse le solde de la caisse ("+fcfa(cxSolde(c))+"). Continuer ?"))return false;
   return cxRun(()=>cxBonLocal(c,type,m,d.motif,d.tiers,d.piece,d.cat),"caisse_mouvement",{p_caisse:c.id,p_type:type,p_montant:m,p_motif:d.motif,p_tiers:d.tiers,p_piece:d.piece||null,p_categorie:d.cat},can("admin")?"Bon enregistré et validé":"Bon enregistré : en attente de validation")}})}
-function cxOuvrirForm(c){const last=cxLast(c),att=last?last.fond_cloture_reel:0,ad=can("admin");
- modal("🔓 Ouverture de caisse — "+c.nom,`<div class="sm mu">Fond de caisse : ${last?"fond compté à la dernière clôture ("+fcfa(att)+").":"première ouverture de cette caisse."}</div>
- <label>Fond de caisse à l'ouverture (FCFA)<input type="number" name="f" min="0" value="${att}" ${last&&!ad?"readonly":""}></label>${last&&ad?'<label>Motif si le fond diffère du dernier comptage<input name="n"></label>':""}`,
- {label:"🔓 Ouvrir la caisse",cls:"ok",onSubmit:d=>cxRun(()=>cxOuvrirLocal(c,d.f,d.n),"caisse_ouvrir",{p_caisse:c.id,p_fond:d.f===""?null:Math.round(+d.f),p_note:d.n||null},"Caisse ouverte")})}
-function cxClotureForm(c){const s=cxOpen(c);if(!s)return;const mv=cxMvOf(s.id),att=mv.filter(m=>m.statut==="en_attente").length,th=cxSoldeS(s);
- modal("🔒 Clôture de caisse — "+c.nom,`<div class="pill">Fond d'ouverture ${fcfa(s.fond_ouverture)} · entrées ${fcfa(cxSum(mv.filter(m=>m.statut==="valide"),"entree"))} · sorties ${fcfa(cxSum(mv.filter(m=>m.statut==="valide"),"sortie"))}<br>Solde théorique : <b>${fcfa(th)}</b></div>
+function cxOuvrirForm(c){const last=cxLast(c),att=last?last.fond_cloture_reel:0,ad=can("admin"),theo=att;
+ modal("🔓 Ouverture de caisse — "+c.nom,`<div class="pill" style="text-align:center"><div class="sm mu">Solde théorique à l'ouverture</div><div style="font-size:30px;font-weight:900">${fcfa(theo)}</div>
+ <div class="sm mu">${last?`= fond compté à la dernière clôture du ${fdt(last.cloturee_le)} (théorique ${fcfa(last.fond_cloture_theorique)}, compté ${fcfa(last.fond_cloture_reel)}${last.ecart?`, écart ${fcfa(last.ecart)}${last.ecart_regularise?" régularisé":" non régularisé"}`:""})`:"première ouverture de cette caisse : aucun solde antérieur"}</div></div>
+ <div class="sm mu" style="margin:8px 0">Comptez les espèces présentes dans la caisse et comparez-les à ce montant.</div>
+ <label>Fond de caisse constaté à l'ouverture (FCFA)<input type="number" name="f" id="co_f" min="0" value="${att}" ${last&&!ad?"readonly":""}></label>
+ <div id="co_e" class="sm" style="margin:-2px 0 8px"><b style="color:var(--ok)">Conforme au solde théorique.</b></div>${last&&ad?'<label id="co_nw">Motif si le fond diffère du solde théorique<input name="n"></label>':""}`,
+ {label:"🔓 Ouvrir la caisse",cls:"ok",onSubmit:d=>cxRun(()=>cxOuvrirLocal(c,d.f,d.n),"caisse_ouvrir",{p_caisse:c.id,p_fond:d.f===""?null:Math.round(+d.f),p_note:d.n||null},"Caisse ouverte")});
+ const f=$("#co_f");f.oninput=()=>{const v=f.value===""?null:Math.round(+f.value),box=$("#co_e");if(v==null){box.innerHTML="";return}const e=v-theo;box.innerHTML=e?`<b style="color:var(--er)">Écart avec le solde théorique : ${e>0?"+":""}${fcfa(e)}</b> (${e<0?"il manque":"en trop"} par rapport au dernier comptage)`:'<b style="color:var(--ok)">Conforme au solde théorique.</b>'}}
+function cxClotureForm(c){const s=cxOpen(c);if(!s)return;const mv=cxMvOf(s.id),vl=mv.filter(m=>m.statut==="valide"),att=mv.filter(m=>m.statut==="en_attente").length,th=cxSoldeS(s);
+ modal("🔒 Clôture de caisse — "+c.nom,`<div class="pill" style="text-align:center"><div class="sm mu">Solde théorique à la clôture</div><div style="font-size:30px;font-weight:900">${fcfa(th)}</div>
+ <table style="width:100%;font-size:13px;margin-top:6px"><tr><td style="text-align:left">Fond d'ouverture${s.fond_attendu!=null&&s.fond_attendu!==s.fond_ouverture?" <span class='mu'>(théorique attendu "+fcfa(s.fond_attendu)+")</span>":""}</td><td style="text-align:right">${fcfa(s.fond_ouverture)}</td></tr>
+ <tr><td style="text-align:left">+ Entrées validées (${vl.filter(m=>m.type==="entree").length})</td><td style="text-align:right;color:var(--ok)">${fcfa(cxSum(vl,"entree"))}</td></tr>
+ <tr><td style="text-align:left">− Sorties validées (${vl.filter(m=>m.type==="sortie").length})</td><td style="text-align:right;color:var(--er)">${fcfa(cxSum(vl,"sortie"))}</td></tr>
+ <tr style="border-top:1px solid var(--bd)"><td style="text-align:left"><b>= Solde théorique</b></td><td style="text-align:right"><b>${fcfa(th)}</b></td></tr></table></div>
  ${att?`<div class="al warn sm">⚠ ${att} bon(s) en attente de validation : la clôture sera refusée tant qu'ils ne sont pas validés ou rejetés.</div>`:""}
  <label>Comptage réel du fond de caisse (FCFA) *<input type="number" name="r" id="cx_r" min="0" required></label><div id="cx_e" class="sm" style="margin:-4px 0 8px">Saisissez le montant compté.</div>
  <label id="cx_jw" class="hide">Justification de l'écart *<textarea name="j" rows="2" maxlength="300"></textarea></label>`,
