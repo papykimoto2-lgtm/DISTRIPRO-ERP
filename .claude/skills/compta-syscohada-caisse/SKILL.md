@@ -18,6 +18,9 @@ comptable équilibrée, sans ressaisie. La caisse (espèces + Mobile Money) est 
 7. **Multi-organisation** : `org_id` partout, RLS identique aux autres tables ; écriture uniquement via RPC `security definer` (convention du projet, voir `supabase/README.md`).
 8. Aucun solde ne se « saisit » : tout est recalculé depuis les écritures.
 
+## Référence ImmoSuite
+Ce module s'inspire du module comptabilité/caisse d'ImmoSuite (`papykimoto2-lgtm/ImmoSuite-ERP`). Lire `references/modele-immosuite.md` avant de concevoir : cycle caisse (session, bon, validation, clôture, ventilation par règles, régularisation d'écart), brouillard/visa des écritures, idempotence, contrôle d'intégrité, et la liste des bugs déjà rencontrés à ne pas reproduire. Différence clé : ImmoSuite calcule dans le navigateur ; DISTRIPRO le fait en SQL côté serveur.
+
 ## Journaux
 | Code | Journal | Alimenté par |
 |---|---|---|
